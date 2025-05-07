@@ -81,45 +81,41 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       
       if (!activeWord) return state;
       
-      // Start timer when first character is typed
+      // Initialize a new state with potential timer updates
+      let nextState = { ...state };
+      
+      // Start timer when first character is typed but don't return early
       if (state.input.length === 0 && newInput.length > 0 && !state.timerActive) {
-        return {
-          ...state,
+        nextState = {
+          ...nextState,
           input: newInput,
           timerActive: true,
           startTime: Date.now(),
         };
+      } else {
+        nextState.input = newInput;
       }
       
-      // Update the word's character status
-      const updatedWords = [...state.definitionWords];
-      const currentWord = {...updatedWords[state.currentWordIndex]};
-      const wordChars = Array.from(currentWord.text.trimEnd()); // Trim the trailing space
+      const updatedWords = [...nextState.definitionWords];
+      const currentWord = { ...updatedWords[nextState.currentWordIndex] };
+      const wordChars = Array.from(currentWord.text.trimEnd());
       
-      // For single character words, detect if we should auto-complete
       if (wordChars.length === 1 && newInput.length >= 1) {
         const isCorrect = newInput[0] === wordChars[0];
         
-        // If character is correct, auto-complete after a short delay
         if (isCorrect) {
-          // Mark the character as correct
           currentWord.characters = ['correct'];
-          updatedWords[state.currentWordIndex] = currentWord;
+          updatedWords[nextState.currentWordIndex] = currentWord;
           
-          // Return state with updated character status
           const stateWithUpdatedChar = {
-            ...state,
-            input: newInput,
+            ...nextState,
             definitionWords: updatedWords,
-            score: state.score + 1
+            score: nextState.score + 1
           };
           
-          // Move to next word if there's overflow or this is the exact match
-          if (newInput.length > 1 || (newInput === wordChars[0] && state.currentWordIndex === state.definitionWords.length - 1)) {
-            // Use setTimeout to advance after a short delay
+          if (newInput.length > 1 || (newInput === wordChars[0] && nextState.currentWordIndex === nextState.definitionWords.length - 1)) {
             setTimeout(() => {
-              if (state.currentWordIndex === state.definitionWords.length - 1) {
-                // Last word, complete the test
+              if (nextState.currentWordIndex === nextState.definitionWords.length - 1) {
                 dispatch({ type: 'COMPLETE_TEST' });
               } else {
                 dispatch({ type: 'MOVE_TO_NEXT_WORD' });
@@ -131,92 +127,55 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         }
       }
       
-      // Reset character statuses 
-      const updatedCharStatus: CharacterStatus[] = Array(wordChars.length).fill('untouched');
+      const updatedCharStatus = Array(wordChars.length).fill('untouched');
       
-      // Apply statuses based on input
       for (let i = 0; i < newInput.length; i++) {
         if (i < wordChars.length) {
-          // Normal character comparison
           updatedCharStatus[i] = newInput[i] === wordChars[i] ? 'correct' : 'incorrect';
         } else if (i < wordChars.length + MAX_OVERFLOW_CHARS) {
-          // Overflow characters within limit
           updatedCharStatus.push('overflow');
         }
       }
       
       currentWord.characters = updatedCharStatus;
-      updatedWords[state.currentWordIndex] = currentWord;
+      updatedWords[nextState.currentWordIndex] = currentWord;
       
-      // Check if this completes the word - match the full word exactly
-      const isExactMatch = newInput === wordChars.join('');
-      
-      // Check if this is the last word
-      const isLastWord = state.currentWordIndex === state.definitionWords.length - 1;
-      
-      // Check if the word is considered completed (exact match with no space needed for last word)
-      const isWordCompleted = newInput.length > wordChars.length || 
-        (isExactMatch && (currentWord.text.endsWith(' ') || isLastWord));
-      
-      if (isWordCompleted && isLastWord) {
-        // This was the last word and it's complete, finish the test
-        setTimeout(() => {
-          dispatch({ type: 'COMPLETE_TEST' });
-        }, 10);
-      } else if (isWordCompleted) {
-        // Word is complete but not the last one, move to next word
-        setTimeout(() => {
-          dispatch({ type: 'MOVE_TO_NEXT_WORD' });
-        }, 10);
-      }
-      
-      // Determine if new input contains correct character that needs score update
       if (newInput.length > state.input.length) {
         const newCharIndex = newInput.length - 1;
         let scoreChange = 0;
         let errorChange = 0;
         
         if (newCharIndex < wordChars.length) {
-          if (newInput[newCharIndex] === wordChars[newCharIndex]) {
-            scoreChange = 1;
-          } else {
-            errorChange = 1;
-          }
+          scoreChange = newInput[newCharIndex] === wordChars[newCharIndex] ? 1 : 0;
+          errorChange = scoreChange === 1 ? 0 : 1;
         } else {
-          // Typing overflow characters adds to errors
           errorChange = 1;
         }
         
         return {
-          ...state,
-          input: newInput,
+          ...nextState,
           definitionWords: updatedWords,
-          score: state.score + scoreChange,
-          errors: state.errors + errorChange
+          score: nextState.score + scoreChange,
+          errors: nextState.errors + errorChange,
         };
       } else if (newInput.length < state.input.length) {
-        // Backspace was pressed
-        // Update score if needed - check if the removed character was correct
         const removedIndex = state.input.length - 1;
-        
-        // Only adjust score if we're within the actual word length
         let scoreAdjustment = 0;
+        
         if (removedIndex < wordChars.length && wordChars[removedIndex] === state.input[removedIndex]) {
           scoreAdjustment = -1;
         }
         
         return {
-          ...state,
-          input: newInput,
+          ...nextState,
           definitionWords: updatedWords,
-          score: Math.max(0, state.score + scoreAdjustment)
+          score: Math.max(0, nextState.score + scoreAdjustment),
         };
       }
       
       return {
-        ...state,
-        input: newInput,
-        definitionWords: updatedWords
+        ...nextState,
+        definitionWords: updatedWords,
       };
     }
       
