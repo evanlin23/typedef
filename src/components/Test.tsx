@@ -5,7 +5,7 @@ import TestResults from './TestResults';
 import { useGame } from '../context/GameContext';
 
 const Test: React.FC = memo(() => {
-  const { state, dispatch } = useGame();
+  const { state } = useGame();
   const { words, input, testCompleted } = state;
   
   if (!words || words.length === 0) {
@@ -21,11 +21,6 @@ const Test: React.FC = memo(() => {
   const definition = wordObj?.definition || '';
   const currentPosition = input.length;
 
-  // Skip to the next word
-  const handleSkip = () => {
-    dispatch({ type: 'SKIP_CURRENT_WORD' });
-  };
-
   // Renders the definition with proper cursor positioning
   const renderDefinition = () => {
     // Split on word boundaries but keep the spaces with the preceding word
@@ -37,7 +32,7 @@ const Test: React.FC = memo(() => {
     return wordsWithSpaces.map((wordChars, wordIndex) => {
       if (!wordChars) return null;
       
-      const wordElements = wordChars.split('').map((char, charPosInWord) => {
+      const wordElements = wordChars.split('').map((char) => {
         const currentCharIndex = charIndex++;
         const shouldRenderCursor = !cursorRendered && currentCharIndex === currentPosition;
         
