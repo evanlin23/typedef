@@ -4,9 +4,8 @@ import { useGame } from '../context/GameContext';
 
 const UserInput: React.FC = () => {
   const { state, dispatch } = useGame();
-  const definition = state.words[0]?.definition || '';
   const [tabPressed, setTabPressed] = useState(false);
-
+  
   const handleKeyPress = useCallback((e: KeyboardEvent) => {
     e.preventDefault();
 
@@ -39,35 +38,44 @@ const UserInput: React.FC = () => {
     // Only handle input when game is ready
     if (state.status !== 'ready') return;
 
+    // Get current active word
+    const activeWord = state.definitionWords[state.currentWordIndex];
+    if (!activeWord) return;
+
+    // Handle space key to move to next word
+    if (e.key === ' ') {
+      // Only allow moving to next word if:
+      // 1. At least one character has been typed
+      // 2. Not already at max overflow characters
+      if (state.input.length > 0 && 
+          state.input.length <= activeWord.text.length + 19) {
+        dispatch({ type: 'MOVE_TO_NEXT_WORD' });
+      }
+      return;
+    }
+
     // Handle backspace
     if (e.key === 'Backspace') {
-      const newInput = state.input.slice(0, -1);
-      dispatch({ type: 'SET_INPUT', payload: newInput });
+      if (state.input.length > 0) {
+        const newInput = state.input.slice(0, -1);
+        dispatch({ type: 'SET_INPUT', payload: newInput });
+      }
       return;
     }
 
     // Ignore modifier keys and special commands
     if (e.ctrlKey || e.altKey || e.metaKey) return;
-    if (e.key.length > 1 && e.key !== ' ') return;
+    if (e.key.length > 1) return; // Ignore special keys
 
-    // Handle regular input
-    const newInput = [...state.input, e.key];
+    // Don't allow more than 19 extra characters per word
+    const maxLength = activeWord.text.length + 19;
+    if (state.input.length >= maxLength) return;
 
-    // Validate character
-    if (e.key === definition[state.input.length]) {
-      dispatch({ type: 'INCREMENT_SCORE' });
-    } else {
-      dispatch({ type: 'INCREMENT_ERRORS' });
-    }
-
-    // Update input state
+    // Handle regular input - add character to current input
+    const newInput = state.input + e.key;
     dispatch({ type: 'SET_INPUT', payload: newInput });
-
-    // Check if definition is completed
-    if (newInput.length === definition.length) {
-      dispatch({ type: 'COMPLETE_TEST' });
-    }
-  }, [state.input, state.status, state.testCompleted, definition, dispatch, tabPressed]);
+    
+  }, [state.input, state.status, state.testCompleted, state.definitionWords, state.currentWordIndex, dispatch, tabPressed]);
 
   // Add keyboard listener
   useEffect(() => {
@@ -81,7 +89,7 @@ const UserInput: React.FC = () => {
       type="text"
       autoFocus
       className="sr-only"
-      value={state.input.join('')}
+      value={state.input}
       onChange={() => {}}
       aria-label="Typing input"
     />

@@ -1,16 +1,20 @@
 // src/context/GameContext.tsx
 import React, { createContext, useContext, useReducer, useEffect, useRef, ReactNode } from 'react';
 import wordGenerator from '../utils/wordGenerator';
-import { GameState, GameAction, GameContextType } from '../types';
+import { GameState, GameAction, GameContextType, Word, CharacterStatus } from '../types';
 
 const GameContext = createContext<GameContextType | undefined>(undefined);
+
+const MAX_OVERFLOW_CHARS = 19;
 
 const initialState: GameState = {
   status: 'loading', // loading, ready, error
   words: [],
   nextWord: null,
   isLoadingNext: false,
-  input: [], // Flat array of characters
+  input: '', // Current input for the active word
+  currentWordIndex: 0,
+  definitionWords: [],
   time: 0,
   score: 0,
   errors: 0,
@@ -21,21 +25,41 @@ const initialState: GameState = {
   currentTestStats: null,
 };
 
+// Helper function to split definition into words
+const splitDefinitionIntoWords = (definition: string): Word[] => {
+  if (!definition) return [];
+  
+  // Split by spaces but preserve spaces with the preceding word
+  const wordTexts = definition.match(/\S+\s*/g) || [];
+  
+  return wordTexts.map((wordText, index) => ({
+    text: wordText,
+    status: index === 0 ? 'active' : 'upcoming',
+    characters: Array.from(wordText).map((): CharacterStatus => 'untouched')
+  }));
+};
+
 function gameReducer(state: GameState, action: GameAction): GameState {
   switch (action.type) {
     case 'SET_STATUS':
       return { ...state, status: action.payload };
       
-    case 'SET_WORDS':
+    case 'SET_WORDS': {
+      const definition = action.payload[0]?.definition || '';
+      const definitionWords = splitDefinitionIntoWords(definition);
+      
       return { 
         ...state, 
-        words: action.payload, 
+        words: action.payload,
+        definitionWords,
+        currentWordIndex: 0,
+        input: '',
         status: 'ready',
-        input: [],
         testCompleted: false,
         timerActive: false,
         startTime: null,
       };
+    }
       
     case 'SET_NEXT_WORD':
       return {
@@ -51,31 +75,122 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       };
       
     case 'SET_INPUT': {
+      const newInput = action.payload;
+      const activeWord = state.definitionWords[state.currentWordIndex];
+      
+      if (!activeWord) return state;
+      
       // Start timer when first character is typed
-      if (state.input.length === 0 && action.payload.length > 0 && !state.timerActive) {
+      if (state.input.length === 0 && newInput.length > 0 && !state.timerActive) {
         return {
           ...state,
-          input: action.payload,
+          input: newInput,
           timerActive: true,
           startTime: Date.now(),
         };
       }
-
-      // Handle backspace - adjust score if removing correct character
-      if (action.payload.length < state.input.length) {
-        const definitionChars = state.words[0]?.definition?.split('') || [];
+      
+      // If input is getting shorter (backspace), update score if needed
+      if (newInput.length < state.input.length) {
+        // Check if the removed character was correct
         const removedIndex = state.input.length - 1;
+        const wordText = activeWord.text;
         
-        if (definitionChars[removedIndex] === state.input[removedIndex]) {
+        // Only adjust score if we're within the actual word length
+        if (removedIndex < wordText.length && wordText[removedIndex] === state.input[removedIndex]) {
           return {
             ...state,
-            input: action.payload,
+            input: newInput,
             score: Math.max(0, state.score - 1)
           };
         }
       }
-
-      return { ...state, input: action.payload };
+      
+      // Update the word's character status
+      const updatedWords = [...state.definitionWords];
+      const currentWord = {...updatedWords[state.currentWordIndex]};
+      const wordChars = Array.from(currentWord.text);
+      
+      // Reset character statuses 
+      const updatedCharStatus: CharacterStatus[] = Array(wordChars.length).fill('untouched');
+      
+      // Apply statuses based on input
+      for (let i = 0; i < newInput.length; i++) {
+        if (i < wordChars.length) {
+          // Normal character comparison
+          updatedCharStatus[i] = newInput[i] === wordChars[i] ? 'correct' : 'incorrect';
+        } else if (i < wordChars.length + MAX_OVERFLOW_CHARS) {
+          // Overflow characters within limit
+          updatedCharStatus.push('overflow');
+        }
+      }
+      
+      currentWord.characters = updatedCharStatus;
+      updatedWords[state.currentWordIndex] = currentWord;
+      
+      // Determine if new input contains correct character that needs score update
+      if (newInput.length > state.input.length) {
+        const newCharIndex = newInput.length - 1;
+        let scoreChange = 0;
+        let errorChange = 0;
+        
+        if (newCharIndex < wordChars.length) {
+          if (newInput[newCharIndex] === wordChars[newCharIndex]) {
+            scoreChange = 1;
+          } else {
+            errorChange = 1;
+          }
+        } else {
+          // Typing overflow characters adds to errors
+          errorChange = 1;
+        }
+        
+        return {
+          ...state,
+          input: newInput,
+          definitionWords: updatedWords,
+          score: state.score + scoreChange,
+          errors: state.errors + errorChange
+        };
+      }
+      
+      return {
+        ...state,
+        input: newInput,
+        definitionWords: updatedWords
+      };
+    }
+      
+    case 'MOVE_TO_NEXT_WORD': {
+      if (state.currentWordIndex >= state.definitionWords.length - 1) {
+        // This was the last word, complete the test
+        return gameReducer(state, { type: 'COMPLETE_TEST' });
+      }
+      
+      // Update statuses of previous and next word
+      const updatedWords = [...state.definitionWords];
+      
+      // Mark current word as completed
+      updatedWords[state.currentWordIndex] = {
+        ...updatedWords[state.currentWordIndex],
+        status: 'completed'
+      };
+      
+      // Mark next word as active
+      const nextWordIndex = state.currentWordIndex + 1;
+      if (nextWordIndex < updatedWords.length) {
+        updatedWords[nextWordIndex] = {
+          ...updatedWords[nextWordIndex],
+          status: 'active'
+        };
+      }
+      
+      return {
+        ...state,
+        currentWordIndex: nextWordIndex,
+        input: '',
+        definitionWords: updatedWords
+      };
     }
       
     case 'INCREMENT_TIME':
@@ -99,9 +214,12 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       // Calculate statistics
       const endTime = Date.now();
       const elapsedTimeInSeconds = Math.max(1, Math.floor((endTime - (state.startTime || endTime)) / 1000));
-      const totalChars = currentDefinition.length || 1;
-      const accuracyValue = ((state.score / (totalChars + state.errors)) * 100).toFixed(1);
-      const wpmValue = Math.round((state.score / 5) / (elapsedTimeInSeconds / 60));
+      const totalCorrectChars = state.score;
+      const totalErrors = state.errors;
+      const totalChars = totalCorrectChars + totalErrors;
+      
+      const accuracyValue = totalChars > 0 ? ((totalCorrectChars / totalChars) * 100).toFixed(1) : "100.0";
+      const wpmValue = Math.round((totalCorrectChars / 5) / (elapsedTimeInSeconds / 60));
       
       // Build test result object
       const testResult = {
@@ -110,8 +228,8 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         time: elapsedTimeInSeconds,
         accuracy: parseFloat(accuracyValue),
         wpm: wpmValue,
-        errors: state.errors,
-        correct: state.score,
+        errors: totalErrors,
+        correct: totalCorrectChars,
         timestamp: new Date().toISOString(),
       };
       
@@ -127,14 +245,19 @@ function gameReducer(state: GameState, action: GameAction): GameState {
     case 'SKIP_CURRENT_WORD': {
       // Use the preloaded word if available
       if (state.nextWord) {
+        const definition = state.nextWord.definition || '';
+        const definitionWords = splitDefinitionIntoWords(definition);
+        
         return {
           ...state,
           words: [state.nextWord],
+          definitionWords,
           nextWord: null,
           score: 0,
           errors: 0,
           time: 0,
-          input: [],
+          input: '',
+          currentWordIndex: 0,
           testCompleted: false,
           timerActive: false,
           startTime: null,
@@ -148,7 +271,8 @@ function gameReducer(state: GameState, action: GameAction): GameState {
           score: 0,
           errors: 0,
           time: 0,
-          input: [],
+          input: '',
+          currentWordIndex: 0,
           testCompleted: false,
           timerActive: false,
           startTime: null,
@@ -161,14 +285,19 @@ function gameReducer(state: GameState, action: GameAction): GameState {
     case 'START_NEW_TEST':
       // Use the preloaded word if available
       if (state.nextWord) {
+        const definition = state.nextWord.definition || '';
+        const definitionWords = splitDefinitionIntoWords(definition);
+        
         return {
           ...state,
           words: [state.nextWord],
+          definitionWords,
           nextWord: null,
           score: 0,
           errors: 0,
           time: 0,
-          input: [],
+          input: '',
+          currentWordIndex: 0,
           testCompleted: false,
           timerActive: false,
           startTime: null,
@@ -181,7 +310,8 @@ function gameReducer(state: GameState, action: GameAction): GameState {
           score: 0,
           errors: 0,
           time: 0,
-          input: [],
+          input: '',
+          currentWordIndex: 0,
           testCompleted: false,
           timerActive: false,
           startTime: null,
