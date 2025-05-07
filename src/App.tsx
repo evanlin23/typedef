@@ -1,4 +1,4 @@
-// src/App.jsx
+// src/App.tsx
 import React from 'react';
 import { GameProvider, useGame } from './context/GameContext';
 import Header from './components/Header';
@@ -8,11 +8,11 @@ import ErrorBoundary from './components/ErrorBoundary';
 import UserInput from './components/UserInput';
 import './App.css';
 
-function GameContent() {
+const GameContent: React.FC = () => {
   const { state } = useGame();
 
   if (state.status === 'loading') {
-    return <div className="loading">Loading game resources...</div>;
+    return <div className="loading">Loading word and definition...</div>;
   }
   
   if (state.status === 'error') {
@@ -25,9 +25,9 @@ function GameContent() {
       <UserInput />
     </div>
   );
-}
+};
 
-function App() {
+const App: React.FC = () => {
   return (
     <ErrorBoundary>
       <GameProvider>
@@ -39,6 +39,6 @@ function App() {
       </GameProvider>
     </ErrorBoundary>
   );
-}
+};
 
 export default App;

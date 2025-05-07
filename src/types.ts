@@ -1,0 +1,47 @@
+// src/types.ts
+export interface WordObj {
+  word: string;
+  definition: string;
+}
+
+export interface TestResult {
+  word: string;
+  definition: string;
+  time: number;
+  accuracy: number;
+  wpm: number;
+  errors: number;
+  correct: number;
+  timestamp: string;
+}
+
+export interface GameState {
+  status: 'loading' | 'ready' | 'error';
+  words: WordObj[];
+  input: string[];
+  time: number;
+  score: number;
+  errors: number;
+  testHistory: TestResult[];
+  testCompleted: boolean;
+  timerActive: boolean;
+  startTime: number | null;
+  currentTestStats: TestResult | null;
+  error?: string;
+}
+
+export type GameAction =
+  | { type: 'SET_STATUS'; payload: GameState['status'] }
+  | { type: 'SET_WORDS'; payload: WordObj[] }
+  | { type: 'SET_INPUT'; payload: string[] }
+  | { type: 'INCREMENT_TIME' }
+  | { type: 'INCREMENT_SCORE' }
+  | { type: 'INCREMENT_ERRORS' }
+  | { type: 'SET_ERROR'; payload: string }
+  | { type: 'COMPLETE_TEST' }
+  | { type: 'START_NEW_TEST' };
+
+export interface GameContextType {
+  state: GameState;
+  dispatch: React.Dispatch<GameAction>;
+}

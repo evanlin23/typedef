@@ -1,8 +1,14 @@
-// src/components/Character.jsx
+// src/components/Character.tsx
 import React, { memo } from 'react';
 
-const Character = memo(({ character, input, charIndex }) => {
-  let state = 'untouched';
+interface CharacterProps {
+  character: string;
+  input: string[];
+  charIndex: number;
+}
+
+const Character: React.FC<CharacterProps> = memo(({ character, input, charIndex }) => {
+  let state: 'untouched' | 'correct' | 'incorrect' = 'untouched';
   
   if (input.length > charIndex) {
     state = input[charIndex] === character ? 'correct' : 'incorrect';

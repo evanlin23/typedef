@@ -1,12 +1,12 @@
-// src/components/UserInput.jsx
+// src/components/UserInput.tsx
 import React, { useCallback, useEffect } from 'react';
 import { useGame } from '../context/GameContext';
 
-const UserInput = () => {
+const UserInput: React.FC = () => {
   const { state, dispatch } = useGame();
   const definition = state.words[0]?.definition || '';
 
-  const handleKeyPress = useCallback((e) => {
+  const handleKeyPress = useCallback((e: KeyboardEvent) => {
     e.preventDefault();
 
     // For completed test, handle restart

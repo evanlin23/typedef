@@ -1,10 +1,10 @@
-// src/components/Test.jsx
+// src/components/Test.tsx
 import React, { memo } from 'react';
 import Character from './Character';
 import TestResults from './TestResults';
 import { useGame } from '../context/GameContext';
 
-const Test = memo(() => {
+const Test: React.FC = memo(() => {
   const { state } = useGame();
   const { words, input, testCompleted } = state;
   
@@ -46,7 +46,6 @@ const Test = memo(() => {
             <Character
               character={char}
               input={input}
-              wordIndex={0}
               charIndex={currentCharIndex}
             />
           </React.Fragment>

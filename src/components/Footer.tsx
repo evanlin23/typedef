@@ -1,8 +1,8 @@
-// src/components/Footer.jsx
+// src/components/Footer.tsx
 import React from 'react';
 import { useGame } from '../context/GameContext';
 
-const Footer = () => {
+const Footer: React.FC = () => {
   const { state } = useGame();
   
   return (

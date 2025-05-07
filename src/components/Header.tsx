@@ -1,7 +1,7 @@
-// src/components/Header.jsx
+// src/components/Header.tsx
 import React from 'react';
 
-const Header = () => {
+const Header: React.FC = () => {
   return (
     <header className="header">
       <h1>typedef</h1>

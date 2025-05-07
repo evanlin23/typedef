@@ -1,10 +1,11 @@
-// src/context/GameContext.jsx
-import React, { createContext, useContext, useReducer, useEffect, useRef } from 'react';
+// src/context/GameContext.tsx
+import React, { createContext, useContext, useReducer, useEffect, useRef, ReactNode } from 'react';
 import wordGenerator from '../utils/wordGenerator';
+import { GameState, GameAction, GameContextType } from '../types';
 
-const GameContext = createContext();
+const GameContext = createContext<GameContextType | undefined>(undefined);
 
-const initialState = {
+const initialState: GameState = {
   status: 'loading', // loading, ready, error
   words: [],
   input: [], // Flat array of characters
@@ -18,7 +19,7 @@ const initialState = {
   currentTestStats: null,
 };
 
-function gameReducer(state, action) {
+function gameReducer(state: GameState, action: GameAction): GameState {
   switch (action.type) {
     case 'SET_STATUS':
       return { ...state, status: action.payload };
@@ -127,7 +128,11 @@ function gameReducer(state, action) {
   }
 }
 
-export const GameProvider = ({ children }) => {
+interface GameProviderProps {
+  children: ReactNode;
+}
+
+export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
   const [state, dispatch] = useReducer(gameReducer, initialState);
   const wordLoadingInProgress = useRef(false);
 
@@ -142,7 +147,10 @@ export const GameProvider = ({ children }) => {
           dispatch({ type: 'SET_WORDS', payload: words });
         } catch (error) {
           console.error("Error loading words:", error);
-          dispatch({ type: 'SET_ERROR', payload: error.message });
+          dispatch({ 
+            type: 'SET_ERROR', 
+            payload: error instanceof Error ? error.message : 'Unknown error' 
+          });
         } finally {
           wordLoadingInProgress.current = false;
         }
@@ -154,15 +162,19 @@ export const GameProvider = ({ children }) => {
 
   // Timer effect - update time every second
   useEffect(() => {
-    let timer;
+    let timer: number | undefined;
     
     if (state.timerActive && !state.testCompleted) {
-      timer = setInterval(() => {
+      timer = window.setInterval(() => {
         dispatch({ type: 'INCREMENT_TIME' });
       }, 1000);
     }
     
-    return () => clearInterval(timer);
+    return () => {
+      if (timer !== undefined) {
+        clearInterval(timer);
+      }
+    };
   }, [state.timerActive, state.testCompleted]);
 
   return (
@@ -172,4 +184,10 @@ export const GameProvider = ({ children }) => {
   );
 };
 
-export const useGame = () => useContext(GameContext);
+export const useGame = (): GameContextType => {
+  const context = useContext(GameContext);
+  if (context === undefined) {
+    throw new Error('useGame must be used within a GameProvider');
+  }
+  return context;
+};

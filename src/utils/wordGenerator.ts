@@ -1,5 +1,15 @@
-// src/utils/wordGenerator.js
-const API_CONFIG = {
+// src/utils/wordGenerator.ts
+import { WordObj } from '../types';
+
+interface APIConfig {
+  WORD_API: string;
+  DEFINITION_API: string;
+  TIMEOUT: number;
+  MAX_RETRIES: number;
+  RETRY_DELAY: number;
+}
+
+const API_CONFIG: APIConfig = {
   WORD_API: 'https://random-word-api.herokuapp.com/word',
   DEFINITION_API: 'https://api.dictionaryapi.dev/api/v2/entries/en/',
   TIMEOUT: 5000,
@@ -10,15 +20,28 @@ const API_CONFIG = {
 // Track last word to avoid duplicates
 let lastGeneratedWord = '';
 
+interface DictionaryResponse {
+  word: string;
+  meanings: Array<{
+    partOfSpeech: string;
+    definitions: Array<{
+      definition: string;
+      synonyms: string[];
+      antonyms: string[];
+      example?: string;
+    }>;
+  }>;
+}
+
 export default {
-  async generate() {
+  async generate(): Promise<WordObj[]> {
     let retryCount = 0;
     
     while (retryCount < API_CONFIG.MAX_RETRIES) {
       try {
         // Get random word
         const wordRes = await fetch(API_CONFIG.WORD_API);
-        const [word] = await wordRes.json();
+        const [word] = await wordRes.json() as string[];
         
         if (!word) throw new Error('Invalid word response');
         
@@ -39,7 +62,7 @@ export default {
 
         if (!defRes.ok) throw new Error('Definition not found');
         
-        const data = await defRes.json();
+        const data = await defRes.json() as DictionaryResponse[];
         const definition = data[0]?.meanings[0]?.definitions[0]?.definition;
         
         if (!definition) throw new Error('Missing definition');
@@ -64,7 +87,7 @@ export default {
     throw new Error('Failed to load word. Try reloading the page.');
   },
 
-  normalize(str) {
+  normalize(str: string): string {
     return str
       .split(';')[0]  // Take only the part before the first semicolon
       .toLowerCase()

@@ -1,8 +1,8 @@
-// src/components/TestResults.jsx
+// src/components/TestResults.tsx
 import React from 'react';
 import { useGame } from '../context/GameContext';
 
-const TestResults = () => {
+const TestResults: React.FC = () => {
   const { state } = useGame();
   
   if (!state.testCompleted) {
