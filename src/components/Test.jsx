@@ -27,15 +27,22 @@ const Test = memo(({ words, input }) => {
     const wordsWithSpaces = definition.match(/\S+\s*/g) || [];
     
     let charIndex = 0;
+    let cursorRendered = false;
+    
     return wordsWithSpaces.map((wordChars, wordIndex) => {
       if (wordChars === '') return null;
       
       const wordElements = wordChars.split('').map((char, charPosInWord) => {
         const currentCharIndex = charIndex++;
+        const shouldRenderCursor = !cursorRendered && currentCharIndex === currentPosition;
         
+        if (shouldRenderCursor) {
+          cursorRendered = true;
+        }
+
         return (
           <React.Fragment key={currentCharIndex}>
-            {currentCharIndex === currentPosition && <span className="typing-cursor"></span>}
+            {shouldRenderCursor && <span className="typing-cursor"></span>}
             <Character
               character={char}
               input={input}
@@ -46,8 +53,9 @@ const Test = memo(({ words, input }) => {
         );
       });
 
-      // Add cursor after the word if needed
-      if (charIndex === currentPosition) {
+      // Add cursor after the word if needed (only if not already rendered)
+      if (!cursorRendered && charIndex === currentPosition) {
+        cursorRendered = true;
         wordElements.push(<span key={`cursor-after-${wordIndex}`} className="typing-cursor"></span>);
       }
 
@@ -71,8 +79,8 @@ const Test = memo(({ words, input }) => {
       
       <div className="definition">
         {renderDefinition()}
-        {/* If cursor is at the very end, show it there */}
-        {currentPosition === definition.length && <span className="typing-cursor"></span>}
+        {/* If cursor is at the very end, show it there (only if not already rendered) */}
+        {currentPosition === definition.length && !cursorRendered && <span className="typing-cursor"></span>}
       </div>
     </div>
   );
