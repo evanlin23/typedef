@@ -91,7 +91,7 @@ function gameReducer(state, action) {
         timestamp: new Date().toISOString(),
       };
       
-      console.log("Test completed with stats:", testResult);
+      // console.log("Test completed with stats:", testResult);
       
       return {
         ...state,
@@ -133,7 +133,7 @@ export const GameProvider = ({ children }) => {
         wordLoadingInProgress.current = true;
         
         try {
-          console.log("Fetching new word...");
+          // console.log("Fetching new word...");
           const words = await wordGenerator.generate();
           dispatch({ type: 'SET_WORDS', payload: words });
         } catch (error) {
@@ -162,12 +162,12 @@ export const GameProvider = ({ children }) => {
     return () => clearInterval(timer);
   }, [state.timerActive, state.testCompleted]);
 
-  console.log("Current state:", {
-    status: state.status,
-    testCompleted: state.testCompleted,
-    hasCurrentStats: !!state.currentTestStats,
-    wordCount: state.words.length
-  });
+  // console.log("Current state:", {
+  //   status: state.status,
+  //   testCompleted: state.testCompleted,
+  //   hasCurrentStats: !!state.currentTestStats,
+  //   wordCount: state.words.length
+  // });
 
   return (
     <GameContext.Provider value={{ state, dispatch }}>

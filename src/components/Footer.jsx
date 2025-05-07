@@ -6,11 +6,7 @@ const Footer = () => {
   const { state } = useGame();
   
   return (
-    <footer className="footer">
-      <div className="api-credits">
-        Words from Random Word API • Definitions from Free Dictionary API
-      </div>
-      
+    <footer className="footer">      
       <div className="stats">
         <div className="stat">
           <span className="label">Time:</span>
@@ -26,12 +22,14 @@ const Footer = () => {
         </div>
       </div>
 
+      <div className="api-credits">
+        Words from Random Word API • Definitions from Free Dictionary API
+      </div>
+      
       <div className="links">
-        <a href="https://github.com/yourrepo" target="_blank" rel="noopener noreferrer">
+        <a href="https://github.com/evanlin23/typedef" target="_blank" rel="noopener noreferrer">
           GitHub
         </a>
-        <a href="/about">About</a>
-        <a href="/settings">Settings</a>
       </div>
     </footer>
   );

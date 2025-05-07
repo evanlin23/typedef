@@ -12,7 +12,7 @@ const UserInput = () => {
     // If test is completed, pressing any key will load a new test
     if (state.testCompleted) {
       if (e.key === ' ' || e.key === 'Enter') {
-        console.log("Starting new test");
+        // console.log("Starting new test");
         dispatch({ type: 'START_NEW_TEST' });
       }
       return;
@@ -48,7 +48,7 @@ const UserInput = () => {
     // Check if definition is completed
     if (newInput.length === definition.length) {
       // Mark test as complete and show stats
-      console.log("Definition completed, completing test");
+      // console.log("Definition completed, completing test");
       dispatch({ type: 'COMPLETE_TEST' });
     }
   }, [state.input, state.status, state.testCompleted, definition, dispatch]);

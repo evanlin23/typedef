@@ -22,7 +22,7 @@ export default {
         
         // Skip if it's the same as the last word
         if (word === lastGeneratedWord) {
-          console.log("Skipping duplicate word:", word);
+          // console.log("Skipping duplicate word:", word);
           throw new Error('Duplicate word');
         }
 
@@ -51,7 +51,7 @@ export default {
           definition: this.normalize(definition),
         }];
         
-        console.log("Generated new word:", result);
+        // console.log("Generated new word:", result);
         return result;
 
       } catch (error) {
@@ -60,12 +60,12 @@ export default {
         
         // Exponential backoff
         await new Promise(resolve => 
-          setTimeout(resolve, 500 * Math.pow(2, retryCount))
+          setTimeout(resolve, 500)
         );
       }
     }
     
-    throw new Error('Maximum retries reached');
+    throw new Error('Maximum retries reached. Try reloading the page.');
   },
 
   normalize(str) {

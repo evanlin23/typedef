@@ -1,13 +1,29 @@
-/* Updated App.css with monospace font and cursor */
-.root {
-  height: 100%;
-  width: 100%;
+:root {
+  --bg-main: #121212;
+  --bg-secondary: #1e1e1e;
+  --text-primary: #e0e0e0;
+  --text-secondary: #aaaaaa;
+  --border-color: #2a2a2a;
+  --highlight-bg: #1a1a1a;
+  --shadow: rgba(0, 0, 0, 0.5);
+  --correct: #28a745;
+  --incorrect: #dc3545;
+  --link-color: #58a6ff;
 }
+
+.root {
+  height: 100vh;
+  width: 100vw;
+  background-color: var(--bg-main);
+  color: var(--text-primary);
+}
+
 .container {
   margin: 0 auto;
   padding: 20px;
-  font-family: 'Arial', sans-serif;
-  max-width: 80%;
+  font-family: 'Courier New', monospace;
+  width: 100vw;
+  color: var(--text-primary);
 }
 
 .header {
@@ -16,7 +32,7 @@
 }
 
 .test {
-  background-color: #f5f5f5;
+  /* background-color: var(--bg-secondary); */
   padding: 30px;
   border-radius: 8px;
   margin-bottom: 30px;
@@ -24,7 +40,6 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  width: 100%;
 }
 
 .word-display {
@@ -34,7 +49,7 @@
 
 .word-to-type {
   font-size: 2rem;
-  color: #333;
+  color: var(--text-primary);
   margin: 0;
 }
 
@@ -43,12 +58,13 @@
   font-size: 1.5rem;
   line-height: 1.8;
   letter-spacing: 0;
-  word-break: break-word;
   white-space: pre-wrap;
   padding: 20px;
-  background-color: #fff;
+  background-color: var(--bg-main);
   border-radius: 5px;
-  box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+  box-shadow: 0 2px 5px var(--shadow);
+  color: var(--text-primary);
+  width: 70vw;
 }
 
 .char {
@@ -56,7 +72,7 @@
   position: relative;
   padding: 0;
   margin: 0;
-  min-width: 0.6em; /* Ensure consistent width for monospace characters */
+  min-width: 0.6em;
 }
 
 /* Cursor styling */
@@ -67,7 +83,7 @@
   right: -1px;
   width: 2px;
   height: 100%;
-  background-color: #000;
+  background-color: #fff;
   animation: blink 1s step-end infinite;
 }
 
@@ -81,17 +97,17 @@
 }
 
 .char.untouched {
-  color: #666;
+  color: #777;
 }
 
 .char.correct {
-  color: #28a745;
+  color: var(--correct);
 }
 
 .char.incorrect {
-  color: #dc3545;
+  color: var(--incorrect);
   text-decoration: underline;
-  text-decoration-color: #dc3545;
+  text-decoration-color: var(--incorrect);
   text-decoration-thickness: 2px;
 }
 
@@ -111,7 +127,6 @@
   border-width: 0;
 }
 
-/* Remove input display since we have the cursor in the definition */
 .input-display {
   display: none;
 }
@@ -120,8 +135,7 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding-top: 20px;
-  border-top: 1px solid #eee;
+  color: var(--text-secondary);
 }
 
 .stats {
@@ -138,11 +152,12 @@
 .label {
   font-weight: bold;
   margin-right: 5px;
+  color: var(--text-secondary);
 }
 
 .api-credits {
   font-size: 0.8rem;
-  color: #888;
+  color: var(--text-secondary);
   margin-bottom: 15px;
 }
 
@@ -153,7 +168,7 @@
 
 .links a {
   margin: 0 10px;
-  color: #0366d6;
+  color: var(--link-color);
   text-decoration: none;
 }
 
@@ -162,8 +177,8 @@
 }
 
 .error {
-  background-color: #f8d7da;
-  color: #721c24;
+  background-color: #5c2b2e;
+  color: #f8d7da;
   padding: 15px;
   border-radius: 4px;
   text-align: center;
@@ -173,74 +188,25 @@
 .loading {
   text-align: center;
   font-size: 1.2rem;
-  color: #666;
+  color: var(--text-secondary);
   padding: 30px;
 }
 
-/* Add these styles to your App.css file */
-
-/* Enhanced cursor styling */
 .typing-cursor {
   display: inline-block;
   width: 2px;
-  height: 1.6em;
-  background-color: #000;
+  height: 1.2em;
+  background-color: #fff;
   margin: 0;
   position: relative;
   top: 0.2em;
   animation: blink 1s step-end infinite;
 }
 
-@keyframes blink {
-  from, to {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0;
-  }
-}
-
-/* Update character styling */
-.char {
-  display: inline-block;
-  position: relative;
-  padding: 0;
-  margin: 0;
-  min-width: 0.6em;
-}
-
-.definition {
-  font-family: 'Courier New', monospace;
-  font-size: 1.5rem;
-  line-height: 1.8;
-  letter-spacing: 0;
-  word-break: break-word;
-  white-space: pre-wrap; /* Preserve spaces */
-  padding: 20px;
-  background-color: #fff;
-  border-radius: 5px;
-  box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-}
-
-/* Updated character state classes */
-.char.untouched {
-  color: #666;
-}
-
-.char.correct {
-  color: #28a745;
-}
-
-.char.incorrect {
-  color: #dc3545;
-  text-decoration: underline;
-  text-decoration-color: #dc3545;
-  text-decoration-thickness: 2px;
-}
-
-/* Test Results Component Styling */
 .test-results {
-  background-color: #f5f5f5;
+  width: 60%;
+  margin: 0 auto;
+  background-color: var(--bg-secondary);
   padding: 30px;
   border-radius: 8px;
   margin-bottom: 30px;
@@ -256,15 +222,15 @@
 .test-results h3 {
   font-size: 1.8rem;
   margin-bottom: 20px;
-  color: #28a745;
+  color: var(--correct);
 }
 
 .word-highlight {
-  background-color: #fff;
+  background-color: var(--highlight-bg);
   padding: 15px;
   border-radius: 5px;
   margin-bottom: 25px;
-  box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+  box-shadow: 0 2px 5px var(--shadow);
   display: inline-block;
   min-width: 50%;
 }
@@ -272,12 +238,12 @@
 .word-label {
   font-weight: bold;
   margin-right: 10px;
-  color: #666;
+  color: var(--text-secondary);
 }
 
 .word-value {
   font-size: 1.5rem;
-  color: #333;
+  color: var(--text-primary);
   font-family: 'Courier New', monospace;
 }
 
@@ -289,38 +255,38 @@
 }
 
 .stat-item {
-  background-color: #fff;
+  background-color: var(--bg-main);
   padding: 15px 10px;
   border-radius: 5px;
-  box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+  box-shadow: 0 2px 5px var(--shadow);
 }
 
 .stat-value {
   font-size: 2rem;
   font-weight: bold;
   margin-bottom: 5px;
-  color: #666;
+  color: var(--text-primary);
 }
 
 .stat-label {
   font-size: 0.9rem;
-  color: #666;
+  color: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: 1px;
 }
 
 .continue-prompt {
   margin-top: 25px;
-  color: #666;
+  color: var(--text-secondary);
   font-size: 1.1rem;
 }
 
 kbd {
-  background-color: #eee;
+  background-color: #333;
   border-radius: 3px;
-  border: 1px solid #b4b4b4;
+  border: 1px solid #555;
   box-shadow: 0 1px 1px rgba(0,0,0,.2);
-  color: #333;
+  color: #eee;
   display: inline-block;
   font-size: 0.9rem;
   font-family: monospace;

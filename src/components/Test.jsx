@@ -7,14 +7,13 @@ import { useGame } from '../context/GameContext';
 const Test = memo(({ words, input }) => {
   const { state } = useGame();
   
-  // Debug: Log component state
-  useEffect(() => {
-    console.log("Test component state:", {
-      hasWords: !!words && words.length > 0,
-      testCompleted: state.testCompleted,
-      hasStats: !!state.currentTestStats,
-    });
-  }, [words, state.testCompleted, state.currentTestStats]);
+  // useEffect(() => {
+  //   console.log("Test component state:", {
+  //     hasWords: !!words && words.length > 0,
+  //     testCompleted: state.testCompleted,
+  //     hasStats: !!state.currentTestStats,
+  //   });
+  // }, [words, state.testCompleted, state.currentTestStats]);
   
   if (!words || words.length === 0) {
     return <div className="loading">Loading words...</div>;
@@ -22,7 +21,7 @@ const Test = memo(({ words, input }) => {
 
   // If test is completed and we have stats, show results
   if (state.testCompleted === true) {
-    console.log("Rendering test results");
+    // console.log("Rendering test results");
     return <TestResults />;
   }
 
