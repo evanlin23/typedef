@@ -19,6 +19,7 @@ export interface Word {
   text: string;
   status: 'active' | 'completed' | 'upcoming';
   characters: CharacterStatus[];
+  overflow?: string;
 }
 
 export type CharacterStatus = 'untouched' | 'correct' | 'incorrect' | 'overflow';

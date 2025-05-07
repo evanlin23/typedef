@@ -113,14 +113,11 @@ function gameReducer(state: GameState, action: GameAction): GameState {
             score: nextState.score + 1
           };
           
+          // Remove the setTimeout/dispatch calls and handle transition directly
           if (newInput.length > 1 || (newInput === wordChars[0] && nextState.currentWordIndex === nextState.definitionWords.length - 1)) {
-            setTimeout(() => {
-              if (nextState.currentWordIndex === nextState.definitionWords.length - 1) {
-                dispatch({ type: 'COMPLETE_TEST' });
-              } else {
-                dispatch({ type: 'MOVE_TO_NEXT_WORD' });
-              }
-            }, 10);
+            return nextState.currentWordIndex === nextState.definitionWords.length - 1 
+              ? gameReducer(stateWithUpdatedChar, { type: 'COMPLETE_TEST' })
+              : gameReducer(stateWithUpdatedChar, { type: 'MOVE_TO_NEXT_WORD' });
           }
           
           return stateWithUpdatedChar;

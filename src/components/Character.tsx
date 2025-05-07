@@ -3,7 +3,7 @@ import React, { memo } from 'react';
 
 interface CharacterProps {
   character: string;
-  status: 'untouched' | 'correct' | 'incorrect' | 'overflow';
+  status: string;
 }
 
 const Character: React.FC<CharacterProps> = memo(({ character, status }) => {
