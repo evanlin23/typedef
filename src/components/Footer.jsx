@@ -1,0 +1,40 @@
+// src/components/Footer.jsx
+import React from 'react';
+import { useGame } from '../context/GameContext';
+
+const Footer = () => {
+  const { state } = useGame();
+  
+  return (
+    <footer className="footer">
+      <div className="api-credits">
+        Words from Random Word API • Definitions from Free Dictionary API
+      </div>
+      
+      <div className="stats">
+        <div className="stat">
+          <span className="label">Time:</span>
+          <span className="value">{state.time}s</span>
+        </div>
+        <div className="stat">
+          <span className="label">Score:</span>
+          <span className="value">{state.score}</span>
+        </div>
+        <div className="stat">
+          <span className="label">Errors:</span>
+          <span className="value">{state.errors}</span>
+        </div>
+      </div>
+
+      <div className="links">
+        <a href="https://github.com/yourrepo" target="_blank" rel="noopener noreferrer">
+          GitHub
+        </a>
+        <a href="/about">About</a>
+        <a href="/settings">Settings</a>
+      </div>
+    </footer>
+  );
+};
+
+export default Footer;
