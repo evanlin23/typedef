@@ -26,13 +26,55 @@
   color: var(--text-primary);
 }
 
+/* ===== Cursor Fixes ===== */
+.char {
+  position: relative;
+  display: inline-block;
+  min-width: 0.6em;
+  text-align: center;
+  line-height: 1;
+  padding: 0;
+  margin: 0;
+}
+
+.char.space {
+  min-width: 0.3em;
+}
+
+.typing-cursor {
+  display: inline-block;
+  width: 2px;
+  height: 1.2em;
+  background-color: #fff;
+  animation: blink 1s step-end infinite;
+  position: relative;
+  margin-left: -2px;
+  vertical-align: middle;
+  pointer-events: none;
+}
+
+@keyframes blink {
+  from, to {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
+}
+
+.word-wrapper {
+  display: inline-block;
+  white-space: nowrap;
+  line-height: 1;
+}
+
+/* ===== Rest of your styles ===== */
 .header {
   text-align: center;
   margin-bottom: 30px;
 }
 
 .test {
-  /* background-color: var(--bg-secondary); */
   padding: 30px;
   border-radius: 8px;
   margin-bottom: 30px;
@@ -65,35 +107,6 @@
   box-shadow: 0 2px 5px var(--shadow);
   color: var(--text-primary);
   width: 70vw;
-}
-
-.char {
-  display: inline-block;
-  position: relative;
-  padding: 0;
-  margin: 0;
-  min-width: 0.6em;
-}
-
-/* Cursor styling */
-.char.cursor::after {
-  content: '';
-  position: absolute;
-  top: 0;
-  right: -1px;
-  width: 2px;
-  height: 100%;
-  background-color: #fff;
-  animation: blink 1s step-end infinite;
-}
-
-@keyframes blink {
-  from, to {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0;
-  }
 }
 
 .char.untouched {
@@ -192,17 +205,6 @@
   padding: 30px;
 }
 
-.typing-cursor {
-  display: inline-block;
-  width: 2px;
-  height: 1.2em;
-  background-color: #fff;
-  margin: 0;
-  position: relative;
-  top: 0.2em;
-  animation: blink 1s step-end infinite;
-}
-
 .test-results {
   width: 60%;
   margin: 0 auto;
@@ -292,9 +294,4 @@ kbd {
   font-family: monospace;
   padding: 2px 5px;
   margin: 0 3px;
-}
-
-.word-wrapper {
-  display: inline-block;
-  white-space: nowrap;
 }
