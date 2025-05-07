@@ -80,11 +80,62 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       const activeWord = state.definitionWords[state.currentWordIndex];
       
       if (!activeWord) return state;
+
+      // const isLastWord = state.currentWordIndex === state.definitionWords.length - 1;
+      // const trimmedWord = activeWord.text.trimEnd();
+      // const isFullyCorrect = newInput === trimmedWord;
+
+      // // End test immediately if last word is fully correct
+      // if (isLastWord && isFullyCorrect) {
+      //   setTimeout(() => {
+      //     dispatch({ type: 'COMPLETE_TEST' });
+      //   }, 10);
+      //   return {
+      //     ...state,
+      //     input: newInput,
+      //     definitionWords: [
+      //       ...state.definitionWords.slice(0, state.currentWordIndex),
+      //       {
+      //         ...activeWord,
+      //         characters: Array.from(trimmedWord).map(() => 'correct'),
+      //         status: 'completed'
+      //       },
+      //       ...state.definitionWords.slice(state.currentWordIndex + 1)
+      //     ],
+      //     score: state.score + 1 // or adjust as needed
+      //   };
+      // }
+
+      // // If last word, but not fully correct, wait for space (extra chars after word)
+      // if (
+      //   isLastWord &&
+      //   newInput.length > trimmedWord.length
+      // ) {
+      //   setTimeout(() => {
+      //     dispatch({ type: 'COMPLETE_TEST' });
+      //   }, 10);
+      //   return {
+      //     ...state,
+      //     input: newInput,
+      //     definitionWords: [
+      //       ...state.definitionWords.slice(0, state.currentWordIndex),
+      //       {
+      //         ...activeWord,
+      //         // Mark correct/incorrect chars as usual
+      //         characters: Array.from(trimmedWord).map((char, idx) =>
+      //           newInput[idx] === char ? 'correct' : (newInput[idx] ? 'incorrect' : 'untouched')
+      //         ),
+      //         status: 'completed'
+      //       },
+      //       ...state.definitionWords.slice(state.currentWordIndex + 1)
+      //     ]
+      //   };
+      // }
       
       // Initialize a new state with potential timer updates
       let nextState = { ...state };
       
-      // Start timer when first character is typed but don't return early
+      // Start timer when first character is typed
       if (state.input.length === 0 && newInput.length > 0 && !state.timerActive) {
         nextState = {
           ...nextState,
@@ -359,6 +410,20 @@ interface GameProviderProps {
 export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
   const [state, dispatch] = useReducer(gameReducer, initialState);
   const wordLoadingInProgress = useRef(false);
+
+  useEffect(() => {
+    const currentWord = state.definitionWords[state.currentWordIndex];
+    if (currentWord && !state.testCompleted && state.input) {
+      const trimmedWord = currentWord.text.trimEnd();
+      if (state.input === trimmedWord) {
+        if (state.currentWordIndex === state.definitionWords.length - 1) {
+          dispatch({ type: 'COMPLETE_TEST' });
+        } else {
+          dispatch({ type: 'MOVE_TO_NEXT_WORD' });
+        }
+      }
+    }
+  }, [state.input, state.currentWordIndex, state.definitionWords, state.testCompleted]);
 
   // Load words when needed
   useEffect(() => {
