@@ -29,7 +29,7 @@ const UserInput: React.FC = () => {
 
     // For completed test, handle restart
     if (state.testCompleted) {
-      if (e.key === ' ' || e.key === 'Enter') {
+      if (e.key === 'Enter') {
         dispatch({ type: 'START_NEW_TEST' });
       }
       return;

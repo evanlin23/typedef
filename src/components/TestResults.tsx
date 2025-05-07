@@ -60,7 +60,7 @@ const TestResults: React.FC = () => {
       </div>
       
       <div className="continue-prompt">
-        Press <kbd>Space</kbd> or <kbd>Enter</kbd> to continue
+        Press <kbd>Enter</kbd> to continue
       </div>
     </div>
   );
