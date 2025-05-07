@@ -47,8 +47,7 @@ const UserInput: React.FC = () => {
       // Only allow moving to next word if:
       // 1. At least one character has been typed
       // 2. Not already at max overflow characters
-      if (state.input.length > 0 && 
-          state.input.length <= activeWord.text.length + 19) {
+      if (state.input.length > 0) {
         dispatch({ type: 'MOVE_TO_NEXT_WORD' });
       }
       return;
@@ -67,8 +66,11 @@ const UserInput: React.FC = () => {
     if (e.ctrlKey || e.altKey || e.metaKey) return;
     if (e.key.length > 1) return; // Ignore special keys
 
-    // Don't allow more than 19 extra characters per word
-    const maxLength = activeWord.text.length + 19;
+    // Get the word without trailing space for length comparison
+    const wordText = activeWord.text.trimEnd();
+    
+    // Don't allow more than MAX_OVERFLOW_CHARS extra characters per word
+    const maxLength = wordText.length + 19;
     if (state.input.length >= maxLength) return;
 
     // Handle regular input - add character to current input

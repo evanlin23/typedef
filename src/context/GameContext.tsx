@@ -91,22 +91,6 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         };
       }
       
-      // If input is getting shorter (backspace), update score if needed
-      if (newInput.length < state.input.length) {
-        // Check if the removed character was correct
-        const removedIndex = state.input.length - 1;
-        const wordText = activeWord.text.trimEnd(); // Trim the trailing space
-        
-        // Only adjust score if we're within the actual word length
-        if (removedIndex < wordText.length && wordText[removedIndex] === state.input[removedIndex]) {
-          return {
-            ...state,
-            input: newInput,
-            score: Math.max(0, state.score - 1)
-          };
-        }
-      }
-      
       // Update the word's character status
       const updatedWords = [...state.definitionWords];
       const currentWord = {...updatedWords[state.currentWordIndex]};
@@ -164,12 +148,17 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       currentWord.characters = updatedCharStatus;
       updatedWords[state.currentWordIndex] = currentWord;
       
-      // Check if this completes the word - match the full word AND space at the end or last word
-      const isWordCompleted = newInput.length > wordChars.length || 
-        (newInput === wordChars.join('') && 
-          (newInput.endsWith(' ') || state.currentWordIndex === state.definitionWords.length - 1));
+      // Check if this completes the word - match the full word exactly
+      const isExactMatch = newInput === wordChars.join('');
       
-      if (isWordCompleted && state.currentWordIndex === state.definitionWords.length - 1) {
+      // Check if this is the last word
+      const isLastWord = state.currentWordIndex === state.definitionWords.length - 1;
+      
+      // Check if the word is considered completed (exact match with no space needed for last word)
+      const isWordCompleted = newInput.length > wordChars.length || 
+        (isExactMatch && (currentWord.text.endsWith(' ') || isLastWord));
+      
+      if (isWordCompleted && isLastWord) {
         // This was the last word and it's complete, finish the test
         setTimeout(() => {
           dispatch({ type: 'COMPLETE_TEST' });
@@ -205,6 +194,23 @@ function gameReducer(state: GameState, action: GameAction): GameState {
           score: state.score + scoreChange,
           errors: state.errors + errorChange
         };
+      } else if (newInput.length < state.input.length) {
+        // Backspace was pressed
+        // Update score if needed - check if the removed character was correct
+        const removedIndex = state.input.length - 1;
+        
+        // Only adjust score if we're within the actual word length
+        let scoreAdjustment = 0;
+        if (removedIndex < wordChars.length && wordChars[removedIndex] === state.input[removedIndex]) {
+          scoreAdjustment = -1;
+        }
+        
+        return {
+          ...state,
+          input: newInput,
+          definitionWords: updatedWords,
+          score: Math.max(0, state.score + scoreAdjustment)
+        };
       }
       
       return {
@@ -224,14 +230,11 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       const updatedWords = [...state.definitionWords];
       const currentWordText = updatedWords[state.currentWordIndex].text.trimEnd();
       
-      // Store overflow characters from the input
+      // Store overflow characters from the input (ensuring we don't truncate if at max)
       let overflow = '';
       if (state.input.length > currentWordText.length) {
         overflow = state.input.substring(currentWordText.length);
-        // Limit overflow to MAX_OVERFLOW_CHARS
-        if (overflow.length > MAX_OVERFLOW_CHARS) {
-          overflow = overflow.substring(0, MAX_OVERFLOW_CHARS);
-        }
+        // No need to limit overflow here as UI handles the display
       }
       
       // Mark current word as completed but preserve character statuses and add overflow

@@ -89,11 +89,13 @@ const Test: React.FC = memo(() => {
           // Show cursor at the end of the word/overflow if needed
           const showEndCursor = isActiveWord && input.length === (
             actualWord.length + 
-            (isActiveWord ? input.substring(actualWord.length).length : (wordObj.overflow || '').length)
+            (isActiveWord ? (input.substring(actualWord.length)).length : (wordObj.overflow || '').length)
           );
 
           // Add the space separately after all the renderedChars (including overflow chars)
-          const spaceChar = hasSpace ? (
+          // Only add space for non-last words or if the original text had a space
+          const isLastWord = wordIndex === definitionWords.length - 1;
+          const spaceChar = hasSpace || !isLastWord ? (
             <React.Fragment>
               {showEndCursor && <span className="typing-cursor"></span>}
               <Character 
