@@ -27,18 +27,13 @@ const Test: React.FC = memo(() => {
     const wordsWithSpaces = definition.match(/\S+\s*/g) || [];
     
     let charIndex = 0;
-    let cursorRendered = false;
     
     return wordsWithSpaces.map((wordChars, wordIndex) => {
       if (!wordChars) return null;
       
       const wordElements = wordChars.split('').map((char) => {
         const currentCharIndex = charIndex++;
-        const shouldRenderCursor = !cursorRendered && currentCharIndex === currentPosition;
-        
-        if (shouldRenderCursor) {
-          cursorRendered = true;
-        }
+        const shouldRenderCursor = currentCharIndex === currentPosition;
 
         return (
           <React.Fragment key={currentCharIndex}>
