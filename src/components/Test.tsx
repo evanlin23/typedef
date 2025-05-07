@@ -35,17 +35,21 @@ const Test: React.FC = memo(() => {
           if (wordObj.status === 'active') wordClassName += " active-word";
           if (wordObj.status === 'completed') wordClassName += " completed-word";
           
-          // For active word, we need to show cursor position
-          const renderedChars = Array.from(wordObj.text).map((char, charIndex) => {
-            // Only show cursor in active word
-            const showCursor = isActiveWord && charIndex === input.length;
-            
+          // Extract the actual word and space from the text
+          const actualWord = wordObj.text.trimEnd();
+          const hasSpace = wordObj.text.endsWith(' ');
+          
+          // For both active and completed words, we need to show characters
+          const renderedChars = Array.from(actualWord).map((char, charIndex) => {
             let status = 'untouched';
             
             // Get character status if it exists
             if (charIndex < wordObj.characters.length) {
               status = wordObj.characters[charIndex];
             }
+            
+            // Only show cursor within the word if it belongs at this position
+            const showCursor = isActiveWord && charIndex === input.length;
             
             return (
               <React.Fragment key={charIndex}>
@@ -58,45 +62,49 @@ const Test: React.FC = memo(() => {
             );
           });
           
-          // Add overflow characters for active word
-          if (isActiveWord && input.length > wordObj.text.length) {
-            const overflowCount = Math.min(
-              input.length - wordObj.text.length,
-              19 // max overflow
-            );
+          // Add overflow characters for both active and completed words
+          if ((isActiveWord && input.length > actualWord.length) || 
+              (!isActiveWord && wordObj.status === 'completed' && wordObj.overflow && wordObj.overflow.length > 0)) {
             
-            for (let i = 0; i < overflowCount; i++) {
-              const overflowIndex = wordObj.text.length + i;
-              const overflowChar = input[overflowIndex] || '';
+            const overflowText = isActiveWord ? input.substring(actualWord.length) : wordObj.overflow || '';
+            
+            for (let i = 0; i < overflowText.length; i++) {
+              const overflowChar = overflowText[i] || '';
               
-              if (overflowIndex === input.length) {
-                renderedChars.push(
-                  <React.Fragment key={`overflow-${i}`}>
-                    <span className="typing-cursor"></span>
-                    <Character 
-                      character={overflowChar}
-                      status="overflow"
-                    />
-                  </React.Fragment>
-                );
-              } else {
-                renderedChars.push(
+              // Only add cursor for active word at the right position
+              const showOverflowCursor = isActiveWord && actualWord.length + i === input.length;
+              
+              renderedChars.push(
+                <React.Fragment key={`overflow-${i}`}>
+                  {showOverflowCursor && <span className="typing-cursor"></span>}
                   <Character 
-                    key={`overflow-${i}`}
                     character={overflowChar}
                     status="overflow"
                   />
-                );
-              }
-            }
-            
-            // If cursor should be at the end of overflow
-            if (input.length === wordObj.text.length + overflowCount) {
-              renderedChars.push(
-                <span key="cursor-end" className="typing-cursor"></span>
+                </React.Fragment>
               );
             }
           }
+
+          // Show cursor at the end of the word/overflow if needed
+          const showEndCursor = isActiveWord && input.length === (
+            actualWord.length + 
+            (isActiveWord ? input.substring(actualWord.length).length : (wordObj.overflow || '').length)
+          );
+
+          // Add the space separately after all the renderedChars (including overflow chars)
+          const spaceChar = hasSpace ? (
+            <React.Fragment>
+              {showEndCursor && <span className="typing-cursor"></span>}
+              <Character 
+                key="space"
+                character=" "
+                status={wordObj.status === 'completed' ? 'correct' : 'untouched'}
+              />
+            </React.Fragment>
+          ) : (
+            showEndCursor && <span className="typing-cursor"></span>
+          );
 
           return (
             <span 
@@ -104,6 +112,7 @@ const Test: React.FC = memo(() => {
               className={wordClassName}
             >
               {renderedChars}
+              {spaceChar}
             </span>
           );
         })}

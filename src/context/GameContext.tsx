@@ -1,4 +1,4 @@
-// src/context/GameContext.tsx
+// src/context/GameContext.tsx 
 import React, { createContext, useContext, useReducer, useEffect, useRef, ReactNode } from 'react';
 import wordGenerator from '../utils/wordGenerator';
 import { GameState, GameAction, GameContextType, Word, CharacterStatus } from '../types';
@@ -35,7 +35,8 @@ const splitDefinitionIntoWords = (definition: string): Word[] => {
   return wordTexts.map((wordText, index) => ({
     text: wordText,
     status: index === 0 ? 'active' : 'upcoming',
-    characters: Array.from(wordText).map((): CharacterStatus => 'untouched')
+    characters: Array.from(wordText).map((): CharacterStatus => 'untouched'),
+    overflow: '' // Add overflow property to store extra characters
   }));
 };
 
@@ -94,7 +95,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       if (newInput.length < state.input.length) {
         // Check if the removed character was correct
         const removedIndex = state.input.length - 1;
-        const wordText = activeWord.text;
+        const wordText = activeWord.text.trimEnd(); // Trim the trailing space
         
         // Only adjust score if we're within the actual word length
         if (removedIndex < wordText.length && wordText[removedIndex] === state.input[removedIndex]) {
@@ -109,7 +110,42 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       // Update the word's character status
       const updatedWords = [...state.definitionWords];
       const currentWord = {...updatedWords[state.currentWordIndex]};
-      const wordChars = Array.from(currentWord.text);
+      const wordChars = Array.from(currentWord.text.trimEnd()); // Trim the trailing space
+      
+      // For single character words, detect if we should auto-complete
+      if (wordChars.length === 1 && newInput.length >= 1) {
+        const isCorrect = newInput[0] === wordChars[0];
+        
+        // If character is correct, auto-complete after a short delay
+        if (isCorrect) {
+          // Mark the character as correct
+          currentWord.characters = ['correct'];
+          updatedWords[state.currentWordIndex] = currentWord;
+          
+          // Return state with updated character status
+          const stateWithUpdatedChar = {
+            ...state,
+            input: newInput,
+            definitionWords: updatedWords,
+            score: state.score + 1
+          };
+          
+          // Move to next word if there's overflow or this is the exact match
+          if (newInput.length > 1 || (newInput === wordChars[0] && state.currentWordIndex === state.definitionWords.length - 1)) {
+            // Use setTimeout to advance after a short delay
+            setTimeout(() => {
+              if (state.currentWordIndex === state.definitionWords.length - 1) {
+                // Last word, complete the test
+                dispatch({ type: 'COMPLETE_TEST' });
+              } else {
+                dispatch({ type: 'MOVE_TO_NEXT_WORD' });
+              }
+            }, 10);
+          }
+          
+          return stateWithUpdatedChar;
+        }
+      }
       
       // Reset character statuses 
       const updatedCharStatus: CharacterStatus[] = Array(wordChars.length).fill('untouched');
@@ -127,6 +163,23 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       
       currentWord.characters = updatedCharStatus;
       updatedWords[state.currentWordIndex] = currentWord;
+      
+      // Check if this completes the word - match the full word AND space at the end or last word
+      const isWordCompleted = newInput.length > wordChars.length || 
+        (newInput === wordChars.join('') && 
+          (newInput.endsWith(' ') || state.currentWordIndex === state.definitionWords.length - 1));
+      
+      if (isWordCompleted && state.currentWordIndex === state.definitionWords.length - 1) {
+        // This was the last word and it's complete, finish the test
+        setTimeout(() => {
+          dispatch({ type: 'COMPLETE_TEST' });
+        }, 10);
+      } else if (isWordCompleted) {
+        // Word is complete but not the last one, move to next word
+        setTimeout(() => {
+          dispatch({ type: 'MOVE_TO_NEXT_WORD' });
+        }, 10);
+      }
       
       // Determine if new input contains correct character that needs score update
       if (newInput.length > state.input.length) {
@@ -169,11 +222,23 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       
       // Update statuses of previous and next word
       const updatedWords = [...state.definitionWords];
+      const currentWordText = updatedWords[state.currentWordIndex].text.trimEnd();
       
-      // Mark current word as completed
+      // Store overflow characters from the input
+      let overflow = '';
+      if (state.input.length > currentWordText.length) {
+        overflow = state.input.substring(currentWordText.length);
+        // Limit overflow to MAX_OVERFLOW_CHARS
+        if (overflow.length > MAX_OVERFLOW_CHARS) {
+          overflow = overflow.substring(0, MAX_OVERFLOW_CHARS);
+        }
+      }
+      
+      // Mark current word as completed but preserve character statuses and add overflow
       updatedWords[state.currentWordIndex] = {
         ...updatedWords[state.currentWordIndex],
-        status: 'completed'
+        status: 'completed',
+        overflow: overflow // Store the overflow characters
       };
       
       // Mark next word as active
