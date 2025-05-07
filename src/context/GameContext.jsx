@@ -5,17 +5,17 @@ import wordGenerator from '../utils/wordGenerator';
 const GameContext = createContext();
 
 const initialState = {
-  status: 'loading',
+  status: 'loading', // loading, ready, error
   words: [],
   input: [], // Flat array of characters
   time: 0,
   score: 0,
   errors: 0,
-  testHistory: [], // History of completed tests
-  testCompleted: false, // Flag to indicate if current test is completed
-  timerActive: false, // Track if timer is active
-  startTime: null, // When the current test started
-  currentTestStats: null, // Stats for the current test
+  testHistory: [],
+  testCompleted: false,
+  timerActive: false,
+  startTime: null,
+  currentTestStats: null,
 };
 
 function gameReducer(state, action) {
@@ -34,8 +34,8 @@ function gameReducer(state, action) {
         startTime: null,
       };
       
-    case 'SET_INPUT':
-      // When first character is typed, start the timer
+    case 'SET_INPUT': {
+      // Start timer when first character is typed
       if (state.input.length === 0 && action.payload.length > 0 && !state.timerActive) {
         return {
           ...state,
@@ -45,26 +45,25 @@ function gameReducer(state, action) {
         };
       }
 
+      // Handle backspace - adjust score if removing correct character
       if (action.payload.length < state.input.length) {
         const definitionChars = state.words[0]?.definition?.split('') || [];
-        
         const removedIndex = state.input.length - 1;
+        
         if (definitionChars[removedIndex] === state.input[removedIndex]) {
           return {
             ...state,
             input: action.payload,
-            score: Math.max(0, state.score - 1) // Ensure score doesn't go below 0
+            score: Math.max(0, state.score - 1)
           };
         }
       }
 
       return { ...state, input: action.payload };
+    }
       
     case 'INCREMENT_TIME':
-      if (state.timerActive) {
-        return { ...state, time: state.time + 1 };
-      }
-      return state;
+      return state.timerActive ? { ...state, time: state.time + 1 } : state;
       
     case 'INCREMENT_SCORE':
       return { ...state, score: state.score + 1 };
@@ -75,27 +74,22 @@ function gameReducer(state, action) {
     case 'SET_ERROR':
       return { ...state, status: 'error', error: action.payload };
       
-    case 'COMPLETE_TEST':
+    case 'COMPLETE_TEST': {
       // Get current word data
       const wordObj = state.words[0] || {};
       const word = wordObj.word || '';
       const currentDefinition = wordObj.definition || '';
       
-      // Calculate elapsed time (minimum 1 second to avoid division by zero)
+      // Calculate statistics
       const endTime = Date.now();
       const elapsedTimeInSeconds = Math.max(1, Math.floor((endTime - (state.startTime || endTime)) / 1000));
-      
-      // Calculate accuracy
-      const totalChars = currentDefinition.length || 1; // Avoid division by zero
+      const totalChars = currentDefinition.length || 1;
       const accuracyValue = ((state.score / (totalChars + state.errors)) * 100).toFixed(1);
-      
-      // Calculate WPM (words per minute)
-      // Standard: 5 characters = 1 word
       const wpmValue = Math.round((state.score / 5) / (elapsedTimeInSeconds / 60));
       
       // Build test result object
       const testResult = {
-        word: word,
+        word,
         definition: currentDefinition,
         time: elapsedTimeInSeconds,
         accuracy: parseFloat(accuracyValue),
@@ -105,8 +99,6 @@ function gameReducer(state, action) {
         timestamp: new Date().toISOString(),
       };
       
-      // console.log("Test completed with stats:", testResult);
-      
       return {
         ...state,
         testCompleted: true,
@@ -114,6 +106,7 @@ function gameReducer(state, action) {
         testHistory: [...state.testHistory, testResult],
         currentTestStats: testResult,
       };
+    }
       
     case 'START_NEW_TEST':
       return {
@@ -125,8 +118,8 @@ function gameReducer(state, action) {
         testCompleted: false,
         timerActive: false,
         startTime: null,
-        currentTestStats: null, // Clear the stats for the next test
-        status: 'loading', // Set status to loading to trigger new word fetch
+        currentTestStats: null,
+        status: 'loading',
       };
       
     default:
@@ -138,23 +131,19 @@ export const GameProvider = ({ children }) => {
   const [state, dispatch] = useReducer(gameReducer, initialState);
   const wordLoadingInProgress = useRef(false);
 
-  // Single useEffect for handling word loading
+  // Load words when needed
   useEffect(() => {
-    // Only load words if we're in loading state and not already loading
     if (state.status === 'loading' && !wordLoadingInProgress.current) {
       const loadWords = async () => {
-        // Set flag to prevent duplicate loads
         wordLoadingInProgress.current = true;
         
         try {
-          // console.log("Fetching new word...");
           const words = await wordGenerator.generate();
           dispatch({ type: 'SET_WORDS', payload: words });
         } catch (error) {
           console.error("Error loading words:", error);
           dispatch({ type: 'SET_ERROR', payload: error.message });
         } finally {
-          // Reset the flag when done
           wordLoadingInProgress.current = false;
         }
       };
@@ -163,7 +152,7 @@ export const GameProvider = ({ children }) => {
     }
   }, [state.status]);
 
-  // Timer effect - update elapsed time every second
+  // Timer effect - update time every second
   useEffect(() => {
     let timer;
     
@@ -175,13 +164,6 @@ export const GameProvider = ({ children }) => {
     
     return () => clearInterval(timer);
   }, [state.timerActive, state.testCompleted]);
-
-  // console.log("Current state:", {
-  //   status: state.status,
-  //   testCompleted: state.testCompleted,
-  //   hasCurrentStats: !!state.currentTestStats,
-  //   wordCount: state.words.length
-  // });
 
   return (
     <GameContext.Provider value={{ state, dispatch }}>

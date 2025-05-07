@@ -27,7 +27,11 @@ const Footer = () => {
       </div>
       
       <div className="links">
-        <a href="https://github.com/evanlin23/typedef" target="_blank" rel="noopener noreferrer">
+        <a 
+          href="https://github.com/evanlin23/typedef" 
+          target="_blank" 
+          rel="noopener noreferrer"
+        >
           GitHub
         </a>
       </div>

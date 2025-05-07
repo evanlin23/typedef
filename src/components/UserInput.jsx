@@ -9,10 +9,9 @@ const UserInput = () => {
   const handleKeyPress = useCallback((e) => {
     e.preventDefault();
 
-    // If test is completed, pressing any key will load a new test
+    // For completed test, handle restart
     if (state.testCompleted) {
       if (e.key === ' ' || e.key === 'Enter') {
-        // console.log("Starting new test");
         dispatch({ type: 'START_NEW_TEST' });
       }
       return;
@@ -47,8 +46,6 @@ const UserInput = () => {
 
     // Check if definition is completed
     if (newInput.length === definition.length) {
-      // Mark test as complete and show stats
-      // console.log("Definition completed, completing test");
       dispatch({ type: 'COMPLETE_TEST' });
     }
   }, [state.input, state.status, state.testCompleted, definition, dispatch]);
@@ -59,7 +56,7 @@ const UserInput = () => {
     return () => window.removeEventListener('keydown', handleKeyPress);
   }, [handleKeyPress]);
 
-  // Maintain focus for keyboard input
+  // Hidden input to maintain focus for keyboard input
   return (
     <input
       type="text"
@@ -67,6 +64,7 @@ const UserInput = () => {
       className="sr-only"
       value={state.input.join('')}
       onChange={() => {}}
+      aria-label="Typing input"
     />
   );
 };

@@ -1,20 +1,10 @@
 // src/components/TestResults.jsx
-import React, { useEffect } from 'react';
+import React from 'react';
 import { useGame } from '../context/GameContext';
 
 const TestResults = () => {
   const { state } = useGame();
   
-  // useEffect(() => {
-  //   // Debug: Log what's available in the test results
-  //   console.log("Test results component:", {
-  //     testCompleted: state.testCompleted,
-  //     hasStats: !!state.currentTestStats,
-  //     stats: state.currentTestStats
-  //   });
-  // }, [state.testCompleted, state.currentTestStats]);
-  
-  // Check if we have both test completion flag and stats
   if (!state.testCompleted) {
     return <div className="loading">Test not completed yet...</div>;
   }

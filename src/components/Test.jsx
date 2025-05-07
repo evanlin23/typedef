@@ -4,24 +4,24 @@ import Character from './Character';
 import TestResults from './TestResults';
 import { useGame } from '../context/GameContext';
 
-const Test = memo(({ words, input }) => {
+const Test = memo(() => {
   const { state } = useGame();
+  const { words, input, testCompleted } = state;
   
   if (!words || words.length === 0) {
     return <div className="loading">Loading words...</div>;
   }
 
-  if (state.testCompleted === true) {
+  if (testCompleted) {
     return <TestResults />;
   }
 
   const wordObj = words[0];
   const word = wordObj?.word || 'Loading...';
   const definition = wordObj?.definition || '';
-
   const currentPosition = input.length;
 
-  // Split the definition into words (including their trailing spaces)
+  // Renders the definition with proper cursor positioning
   const renderDefinition = () => {
     // Split on word boundaries but keep the spaces with the preceding word
     const wordsWithSpaces = definition.match(/\S+\s*/g) || [];
@@ -30,7 +30,7 @@ const Test = memo(({ words, input }) => {
     let cursorRendered = false;
     
     return wordsWithSpaces.map((wordChars, wordIndex) => {
-      if (wordChars === '') return null;
+      if (!wordChars) return null;
       
       const wordElements = wordChars.split('').map((char, charPosInWord) => {
         const currentCharIndex = charIndex++;
@@ -53,7 +53,7 @@ const Test = memo(({ words, input }) => {
         );
       });
 
-      // Add cursor after the word if needed (only if not already rendered)
+      // Add cursor at end of word if needed
       if (!cursorRendered && charIndex === currentPosition) {
         cursorRendered = true;
         wordElements.push(<span key={`cursor-after-${wordIndex}`} className="typing-cursor"></span>);
@@ -63,7 +63,6 @@ const Test = memo(({ words, input }) => {
         <span 
           key={`word-${wordIndex}`} 
           className="word-wrapper"
-          style={{ whiteSpace: 'nowrap' }}
         >
           {wordElements}
         </span>
@@ -79,8 +78,10 @@ const Test = memo(({ words, input }) => {
       
       <div className="definition">
         {renderDefinition()}
-        {/* If cursor is at the very end, show it there (only if not already rendered) */}
-        {currentPosition === definition.length && !cursorRendered && <span className="typing-cursor"></span>}
+        {/* Show cursor at the very end if not rendered elsewhere */}
+        {currentPosition === definition.length && !definition.endsWith(' ') && 
+          <span className="typing-cursor"></span>
+        }
       </div>
     </div>
   );

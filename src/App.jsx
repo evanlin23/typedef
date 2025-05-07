@@ -11,12 +11,17 @@ import './App.css';
 function GameContent() {
   const { state } = useGame();
 
-  if (state.status === 'loading') return <div className="loading">Loading game resources...</div>;
-  if (state.status === 'error') return <div className="error">Error: {state.error}</div>;
+  if (state.status === 'loading') {
+    return <div className="loading">Loading game resources...</div>;
+  }
+  
+  if (state.status === 'error') {
+    return <div className="error">Error: {state.error}</div>;
+  }
 
   return (
     <div className="content-area">
-      <Test words={state.words} input={state.input} />
+      <Test />
       <UserInput />
     </div>
   );

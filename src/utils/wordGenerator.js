@@ -2,17 +2,19 @@
 const API_CONFIG = {
   WORD_API: 'https://random-word-api.herokuapp.com/word',
   DEFINITION_API: 'https://api.dictionaryapi.dev/api/v2/entries/en/',
+  TIMEOUT: 5000,
+  MAX_RETRIES: 5,
+  RETRY_DELAY: 500,
 };
 
-// Keep a record of the last word to avoid duplicates
+// Track last word to avoid duplicates
 let lastGeneratedWord = '';
 
 export default {
   async generate() {
-    const maxRetries = 5;
     let retryCount = 0;
     
-    while (retryCount < maxRetries) {
+    while (retryCount < API_CONFIG.MAX_RETRIES) {
       try {
         // Get random word
         const wordRes = await fetch(API_CONFIG.WORD_API);
@@ -20,15 +22,14 @@ export default {
         
         if (!word) throw new Error('Invalid word response');
         
-        // Skip if it's the same as the last word
+        // Skip duplicates
         if (word === lastGeneratedWord) {
-          // console.log("Skipping duplicate word:", word);
           throw new Error('Duplicate word');
         }
 
         // Get definition with timeout
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 5000);
+        const timeoutId = setTimeout(() => controller.abort(), API_CONFIG.TIMEOUT);
         
         const defRes = await fetch(`${API_CONFIG.DEFINITION_API}${word}`, {
           signal: controller.signal
@@ -43,37 +44,32 @@ export default {
         
         if (!definition) throw new Error('Missing definition');
         
-        // Save this word to avoid duplication
+        // Save current word to prevent duplication
         lastGeneratedWord = word;
         
-        const result = [{
+        return [{
           word,
           definition: this.normalize(definition),
         }];
-        
-        // console.log("Generated new word:", result);
-        return result;
-
       } catch (error) {
-        console.warn(`Attempt ${retryCount + 1} failed:`, error.message);
         retryCount++;
         
-        // Exponential backoff
+        // Wait before retrying with exponential backoff
         await new Promise(resolve => 
-          setTimeout(resolve, 500)
+          setTimeout(resolve, API_CONFIG.RETRY_DELAY * Math.pow(1.5, retryCount))
         );
       }
     }
     
-    throw new Error('Maximum retries reached. Try reloading the page.');
+    throw new Error('Failed to load word. Try reloading the page.');
   },
 
   normalize(str) {
     return str
       .split(';')[0]  // Take only the part before the first semicolon
       .toLowerCase()
-      .replace(/[^a-z0-9\s]/g, '')
-      .replace(/\s+/g, ' ')
+      .replace(/[^a-z0-9\s]/g, '') // Remove special characters
+      .replace(/\s+/g, ' ') // Normalize spaces
       .trim();
   }
 };
