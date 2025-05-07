@@ -23,7 +23,8 @@ const Test = memo(({ words, input }) => {
 
   // Split the definition into words (including their trailing spaces)
   const renderDefinition = () => {
-    const wordsWithSpaces = definition.split(/(\s+)/);
+    // Split on word boundaries but keep the spaces with the preceding word
+    const wordsWithSpaces = definition.match(/\S+\s*/g) || [];
     
     let charIndex = 0;
     return wordsWithSpaces.map((wordChars, wordIndex) => {

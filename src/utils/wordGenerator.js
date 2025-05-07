@@ -70,6 +70,7 @@ export default {
 
   normalize(str) {
     return str
+      .split(';')[0]  // Take only the part before the first semicolon
       .toLowerCase()
       .replace(/[^a-z0-9\s]/g, '')
       .replace(/\s+/g, ' ')
