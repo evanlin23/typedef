@@ -20,12 +20,14 @@ const Footer: React.FC = () => {
           <span className="label">Errors:</span>
           <span className="value">{state.errors}</span>
         </div>
-        {state.nextWord && (
           <div className="stat">
             <span className="label">Next:</span>
-            <span className="value preloaded">Ready</span>
+            { state.nextWord ? (
+              <span className="value preloaded">Ready</span>
+            ) : (
+              <span className="value">Loading...</span>
+            )}
           </div>
-        )}
       </div>
 
       <div className="api-credits">

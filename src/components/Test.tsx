@@ -57,12 +57,6 @@ const Test: React.FC = memo(() => {
         );
       });
 
-      // Add cursor at end of word if needed
-      if (!cursorRendered && charIndex === currentPosition) {
-        cursorRendered = true;
-        wordElements.push(<span key={`cursor-after-${wordIndex}`} className="typing-cursor"></span>);
-      }
-
       return (
         <span 
           key={`word-${wordIndex}`} 
@@ -78,15 +72,11 @@ const Test: React.FC = memo(() => {
     <div className="test">
       <div className="word-display">
         <h1 className="word-to-type">{word}</h1>
-          <span className="keyboard-hint"><kbd>Tab</kbd> + <kbd>Enter</kbd> to skip</span>
+          <span className="continue-prompt"><kbd>Tab</kbd> + <kbd>Enter</kbd> to skip</span>
       </div>
       
       <div className="definition">
         {renderDefinition()}
-        {/* Show cursor at the very end if not rendered elsewhere */}
-        {currentPosition === definition.length && !definition.endsWith(' ') && 
-          <span className="typing-cursor"></span>
-        }
       </div>
     </div>
   );
