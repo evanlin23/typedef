@@ -4,7 +4,7 @@ import React from 'react';
 const Header = () => {
   return (
     <header className="header">
-      <h1>Word Typing Challenge</h1>
+      <h1>typedef</h1>
     </header>
   );
 };
