@@ -293,3 +293,8 @@ kbd {
   padding: 2px 5px;
   margin: 0 3px;
 }
+
+.word-wrapper {
+  display: inline-block;
+  white-space: nowrap;
+}
