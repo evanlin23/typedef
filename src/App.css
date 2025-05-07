@@ -42,19 +42,21 @@
 }
 
 .typing-cursor {
+  position: relative;
   display: inline-block;
   width: 2px;
   height: 1.2em;
-  background-color: #fff;
-  animation: blink 1s step-end infinite;
-  position: relative;
-  margin-left: -2px;
+  background-color: var(--text-primary);
+  animation: caretFlashSmooth 1.2s ease-in-out infinite;
   vertical-align: middle;
   pointer-events: none;
+  margin-left: -2px;
+  will-change: transform;
+  box-shadow: 0 0 3px rgba(255, 255, 255, 0.5);
 }
 
-@keyframes blink {
-  from, to {
+@keyframes caretFlashSmooth {
+  0%, 100% {
     opacity: 1;
   }
   50% {
