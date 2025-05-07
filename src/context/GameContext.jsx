@@ -44,6 +44,20 @@ function gameReducer(state, action) {
           startTime: Date.now(),
         };
       }
+
+      if (action.payload.length < state.input.length) {
+        const definitionChars = state.words[0]?.definition?.split('') || [];
+        
+        const removedIndex = state.input.length - 1;
+        if (definitionChars[removedIndex] === state.input[removedIndex]) {
+          return {
+            ...state,
+            input: action.payload,
+            score: Math.max(0, state.score - 1) // Ensure score doesn't go below 0
+          };
+        }
+      }
+
       return { ...state, input: action.payload };
       
     case 'INCREMENT_TIME':
