@@ -122,43 +122,30 @@ function gameReducer(state, action) {
 
 export const GameProvider = ({ children }) => {
   const [state, dispatch] = useReducer(gameReducer, initialState);
-  const initialLoadCompleted = useRef(false);
+  const wordLoadingInProgress = useRef(false);
 
-  // Load initial words - use useRef to prevent double loading
+  // Single useEffect for handling word loading
   useEffect(() => {
-    // Only load words if we're in loading state and haven't loaded words yet
-    if (state.status === 'loading' && !initialLoadCompleted.current) {
+    // Only load words if we're in loading state and not already loading
+    if (state.status === 'loading' && !wordLoadingInProgress.current) {
       const loadWords = async () => {
+        // Set flag to prevent duplicate loads
+        wordLoadingInProgress.current = true;
+        
         try {
-          console.log("Fetching new words...");
+          console.log("Fetching new word...");
           const words = await wordGenerator.generate();
           dispatch({ type: 'SET_WORDS', payload: words });
-          initialLoadCompleted.current = true;
         } catch (error) {
           console.error("Error loading words:", error);
           dispatch({ type: 'SET_ERROR', payload: error.message });
+        } finally {
+          // Reset the flag when done
+          wordLoadingInProgress.current = false;
         }
       };
       
       loadWords();
-    }
-  }, [state.status]);
-
-  // Handle loading new words for subsequent tests
-  useEffect(() => {
-    if (state.status === 'loading' && initialLoadCompleted.current) {
-      const loadNextWord = async () => {
-        try {
-          console.log("Loading next word...");
-          const words = await wordGenerator.generate();
-          dispatch({ type: 'SET_WORDS', payload: words });
-        } catch (error) {
-          console.error("Error loading next word:", error);
-          dispatch({ type: 'SET_ERROR', payload: error.message });
-        }
-      };
-      
-      loadNextWord();
     }
   }, [state.status]);
 
