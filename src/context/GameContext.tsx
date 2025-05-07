@@ -1,13 +1,15 @@
 // src/context/GameContext.tsx
 import React, { createContext, useContext, useReducer, useEffect, useRef, ReactNode } from 'react';
 import wordGenerator from '../utils/wordGenerator';
-import { GameState, GameAction, GameContextType } from '../types';
+import { GameState, GameAction, GameContextType, WordObj } from '../types';
 
 const GameContext = createContext<GameContextType | undefined>(undefined);
 
 const initialState: GameState = {
   status: 'loading', // loading, ready, error
   words: [],
+  nextWord: null,
+  isLoadingNext: false,
   input: [], // Flat array of characters
   time: 0,
   score: 0,
@@ -33,6 +35,19 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         testCompleted: false,
         timerActive: false,
         startTime: null,
+      };
+      
+    case 'SET_NEXT_WORD':
+      return {
+        ...state,
+        nextWord: action.payload,
+        isLoadingNext: false,
+      };
+      
+    case 'SET_LOADING_NEXT':
+      return {
+        ...state,
+        isLoadingNext: action.payload,
       };
       
     case 'SET_INPUT': {
@@ -109,19 +124,71 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       };
     }
       
+    case 'SKIP_CURRENT_WORD': {
+      // Use the preloaded word if available
+      if (state.nextWord) {
+        return {
+          ...state,
+          words: [state.nextWord],
+          nextWord: null,
+          score: 0,
+          errors: 0,
+          time: 0,
+          input: [],
+          testCompleted: false,
+          timerActive: false,
+          startTime: null,
+          currentTestStats: null,
+          status: 'ready',
+        };
+      } else {
+        // If no preloaded word, just start a new test
+        return {
+          ...state,
+          score: 0,
+          errors: 0,
+          time: 0,
+          input: [],
+          testCompleted: false,
+          timerActive: false,
+          startTime: null,
+          currentTestStats: null,
+          status: 'loading',
+        };
+      }
+    }
+      
     case 'START_NEW_TEST':
-      return {
-        ...state,
-        score: 0,
-        errors: 0,
-        time: 0,
-        input: [],
-        testCompleted: false,
-        timerActive: false,
-        startTime: null,
-        currentTestStats: null,
-        status: 'loading',
-      };
+      // Use the preloaded word if available
+      if (state.nextWord) {
+        return {
+          ...state,
+          words: [state.nextWord],
+          nextWord: null,
+          score: 0,
+          errors: 0,
+          time: 0,
+          input: [],
+          testCompleted: false,
+          timerActive: false,
+          startTime: null,
+          currentTestStats: null,
+          status: 'ready',
+        };
+      } else {
+        return {
+          ...state,
+          score: 0,
+          errors: 0,
+          time: 0,
+          input: [],
+          testCompleted: false,
+          timerActive: false,
+          startTime: null,
+          currentTestStats: null,
+          status: 'loading',
+        };
+      }
       
     default:
       return state;
@@ -159,6 +226,26 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
       loadWords();
     }
   }, [state.status]);
+
+  // Preload next word
+  useEffect(() => {
+    // Start preloading when the current word is ready and we're not already loading
+    if (state.status === 'ready' && !state.nextWord && !state.isLoadingNext && !state.testCompleted) {
+      const preloadNextWord = async () => {
+        dispatch({ type: 'SET_LOADING_NEXT', payload: true });
+        
+        try {
+          const nextWord = await wordGenerator.generate();
+          dispatch({ type: 'SET_NEXT_WORD', payload: nextWord[0] });
+        } catch (error) {
+          console.error("Error preloading next word:", error);
+          // Silently fail on preload - we'll try again later
+        }
+      };
+      
+      preloadNextWord();
+    }
+  }, [state.status, state.nextWord, state.isLoadingNext, state.testCompleted]);
 
   // Timer effect - update time every second
   useEffect(() => {

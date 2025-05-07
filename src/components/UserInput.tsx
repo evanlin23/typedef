@@ -1,13 +1,32 @@
 // src/components/UserInput.tsx
-import React, { useCallback, useEffect } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useGame } from '../context/GameContext';
 
 const UserInput: React.FC = () => {
   const { state, dispatch } = useGame();
   const definition = state.words[0]?.definition || '';
+  const [tabPressed, setTabPressed] = useState(false);
 
   const handleKeyPress = useCallback((e: KeyboardEvent) => {
     e.preventDefault();
+
+    // Handle tab key press
+    if (e.key === 'Tab') {
+      setTabPressed(true);
+      return;
+    }
+
+    // Handle tab + enter combination for skipping
+    if (tabPressed && e.key === 'Enter') {
+      dispatch({ type: 'SKIP_CURRENT_WORD' });
+      setTabPressed(false);
+      return;
+    }
+
+    // Reset tab state when any other key is pressed
+    if (tabPressed && e.key !== 'Tab') {
+      setTabPressed(false);
+    }
 
     // For completed test, handle restart
     if (state.testCompleted) {
@@ -48,7 +67,7 @@ const UserInput: React.FC = () => {
     if (newInput.length === definition.length) {
       dispatch({ type: 'COMPLETE_TEST' });
     }
-  }, [state.input, state.status, state.testCompleted, definition, dispatch]);
+  }, [state.input, state.status, state.testCompleted, definition, dispatch, tabPressed]);
 
   // Add keyboard listener
   useEffect(() => {

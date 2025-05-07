@@ -18,6 +18,8 @@ export interface TestResult {
 export interface GameState {
   status: 'loading' | 'ready' | 'error';
   words: WordObj[];
+  nextWord: WordObj | null;
+  isLoadingNext: boolean;
   input: string[];
   time: number;
   score: number;
@@ -33,12 +35,15 @@ export interface GameState {
 export type GameAction =
   | { type: 'SET_STATUS'; payload: GameState['status'] }
   | { type: 'SET_WORDS'; payload: WordObj[] }
+  | { type: 'SET_NEXT_WORD'; payload: WordObj }
+  | { type: 'SET_LOADING_NEXT'; payload: boolean }
   | { type: 'SET_INPUT'; payload: string[] }
   | { type: 'INCREMENT_TIME' }
   | { type: 'INCREMENT_SCORE' }
   | { type: 'INCREMENT_ERRORS' }
   | { type: 'SET_ERROR'; payload: string }
   | { type: 'COMPLETE_TEST' }
+  | { type: 'SKIP_CURRENT_WORD' }
   | { type: 'START_NEW_TEST' };
 
 export interface GameContextType {

@@ -89,12 +89,45 @@
 .word-display {
   text-align: center;
   margin-bottom: 20px;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
 .word-to-type {
   font-size: 2rem;
   color: var(--text-primary);
   margin: 0;
+  margin-bottom: 10px;
+}
+
+.skip-button {
+  background-color: var(--bg-secondary);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  padding: 5px 10px;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.skip-button:hover {
+  background-color: var(--highlight-bg);
+  color: var(--text-primary);
+}
+
+.keyboard-hint {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  margin-left: 8px;
+  display: inline-block;
+}
+
+.preloaded {
+  color: var(--correct);
+  font-weight: bold;
 }
 
 .definition {

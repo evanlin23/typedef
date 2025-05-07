@@ -5,7 +5,7 @@ import TestResults from './TestResults';
 import { useGame } from '../context/GameContext';
 
 const Test: React.FC = memo(() => {
-  const { state } = useGame();
+  const { state, dispatch } = useGame();
   const { words, input, testCompleted } = state;
   
   if (!words || words.length === 0) {
@@ -20,6 +20,11 @@ const Test: React.FC = memo(() => {
   const word = wordObj?.word || 'Loading...';
   const definition = wordObj?.definition || '';
   const currentPosition = input.length;
+
+  // Skip to the next word
+  const handleSkip = () => {
+    dispatch({ type: 'SKIP_CURRENT_WORD' });
+  };
 
   // Renders the definition with proper cursor positioning
   const renderDefinition = () => {
@@ -72,7 +77,8 @@ const Test: React.FC = memo(() => {
   return (
     <div className="test">
       <div className="word-display">
-        <h2 className="word-to-type">{word}</h2>
+        <h1 className="word-to-type">{word}</h1>
+          <span className="keyboard-hint"><kbd>Tab</kbd> + <kbd>Enter</kbd> to skip</span>
       </div>
       
       <div className="definition">
