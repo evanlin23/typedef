@@ -16,7 +16,11 @@ interface CharWithCursorProps {
 const CharWithCursor: React.FC<CharWithCursorProps> = memo(({ character, status, showCursor }) => {
   return (
     <>
-      {showCursor && <span className="typing-cursor"></span>}
+      {showCursor && (
+        <span className="relative inline-block w-0.5 h-5 bg-gray-200 animate-[caretFlash_1s_ease-in-out_infinite] align-middle pointer-events-none -ml-0.5 shadow-sm shadow-white/50">
+          {/* This is the cursor */}
+        </span>
+      )}
       <Character character={character} status={status} />
     </>
   );
@@ -27,7 +31,7 @@ const Test: React.FC = memo(() => {
   const { words, definitionWords, currentWordIndex, testCompleted, input } = state;
   
   if (!words?.length) {
-    return <div className="loading">Loading words...</div>;
+    return <div className="text-center py-8 text-lg text-gray-400">Loading words...</div>;
   }
 
   if (testCompleted) {
@@ -57,9 +61,9 @@ const Test: React.FC = memo(() => {
     const isActiveWord = wordIndex === currentWordIndex;
     
     // Calculate word display class
-    const wordClassName = `word-wrapper${
-      wordObj.status === 'active' ? ' active-word' : ''
-    }${wordObj.status === 'completed' ? ' completed-word' : ''}`;
+    let wordClassName = "inline-block whitespace-nowrap leading-relaxed py-0.5 mr-0 relative";
+    if (wordObj.status === 'active') wordClassName += ' active-word';
+    if (wordObj.status === 'completed') wordClassName += ' completed-word';
     
     // Extract the actual word and space from the text
     const actualWord = wordObj.text.trimEnd();
@@ -124,7 +128,7 @@ const Test: React.FC = memo(() => {
         showCursor={showEndCursor}
       />
     ) : (
-      showEndCursor && <span className="typing-cursor"></span>
+      showEndCursor && <span className="relative inline-block w-0.5 h-5 bg-gray-200 animate-[caretFlash_1s_ease-in-out_infinite] align-middle pointer-events-none -ml-0.5 shadow-sm shadow-white/50"></span>
     );
 
     return (
@@ -141,7 +145,7 @@ const Test: React.FC = memo(() => {
   // Renders the definition words
   const renderDefinition = () => {
     if (!definitionWords?.length) {
-      return <div>Loading definition...</div>;
+      return <div className="text-gray-400">Loading definition...</div>;
     }
 
     return (
@@ -154,15 +158,18 @@ const Test: React.FC = memo(() => {
   };
 
   return (
-    <div className="test">
-      <div className="word-display">
-        <h1 className="word-to-type">{word}</h1>
-        <span className="continue-prompt">
-          <kbd>{APP_CONFIG.KEYS.SKIP_WORD[0]}</kbd> + <kbd>{APP_CONFIG.KEYS.SKIP_WORD[1]}</kbd> to skip
+    <div className="p-8 rounded-lg mb-8 w-full flex flex-col items-center">
+      <div className="text-center mb-5 flex flex-col items-center">
+        <h1 className="text-3xl mb-5 text-gray-200">{word}</h1>
+        <span className="text-gray-400 text-sm">
+          <kbd className="bg-gray-700 rounded px-2 py-1 text-xs border border-gray-600 shadow mr-1">{APP_CONFIG.KEYS.SKIP_WORD[0]}</kbd> 
+          + 
+          <kbd className="bg-gray-700 rounded px-2 py-1 text-xs border border-gray-600 shadow ml-1">{APP_CONFIG.KEYS.SKIP_WORD[1]}</kbd> 
+          to skip
         </span>
       </div>
       
-      <div className="definition">
+      <div className="font-mono text-xl leading-relaxed whitespace-pre-wrap text-gray-200 w-3/5">
         {renderDefinition()}
       </div>
     </div>

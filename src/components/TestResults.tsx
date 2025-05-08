@@ -7,11 +7,11 @@ const TestResults: React.FC = memo(() => {
   const { state } = useGame();
   
   if (!state.testCompleted) {
-    return <div className="loading">Test not completed yet...</div>;
+    return <div className="text-center py-8 text-lg text-gray-400">Test not completed yet...</div>;
   }
   
   if (!state.currentTestStats) {
-    return <div className="loading">Calculating your results...</div>;
+    return <div className="text-center py-8 text-lg text-gray-400">Calculating your results...</div>;
   }
   
   // Destructure with default values to prevent errors
@@ -25,43 +25,43 @@ const TestResults: React.FC = memo(() => {
   } = state.currentTestStats;
   
   return (
-    <div className="test-results">
-      <h3>Test Completed!</h3>
+    <div className="w-3/5 mx-auto bg-gray-800 p-8 rounded-lg mb-8 text-center animate-[fadeIn_0.3s_ease-in]">
+      <h3 className="text-2xl mb-5 text-green-400">Test Completed!</h3>
       
-      <div className="word-highlight">
-        <span className="word-label">Word:</span> 
-        <span className="word-value">{word}</span>
+      <div className="bg-gray-900 p-4 rounded mb-6 inline-block min-w-52">
+        <span className="font-bold mr-2 text-gray-400">Word:</span> 
+        <span className="text-xl font-mono text-gray-200">{word}</span>
       </div>
       
-      <div className="stats-grid">
-        <div className="stat-item">
-          <div className="stat-value">{time}s</div>
-          <div className="stat-label">Time</div>
+      <div className="grid grid-cols-3 gap-5 mb-8 sm:grid-cols-5">
+        <div className="bg-gray-900 p-4 rounded shadow">
+          <div className="text-2xl font-bold mb-1 text-gray-200">{time}s</div>
+          <div className="text-sm text-gray-400 uppercase tracking-wide">Time</div>
         </div>
         
-        <div className="stat-item">
-          <div className="stat-value">{wpm}</div>
-          <div className="stat-label">WPM</div>
+        <div className="bg-gray-900 p-4 rounded shadow">
+          <div className="text-2xl font-bold mb-1 text-gray-200">{wpm}</div>
+          <div className="text-sm text-gray-400 uppercase tracking-wide">WPM</div>
         </div>
         
-        <div className="stat-item">
-          <div className="stat-value">{accuracy}%</div>
-          <div className="stat-label">Accuracy</div>
+        <div className="bg-gray-900 p-4 rounded shadow">
+          <div className="text-2xl font-bold mb-1 text-gray-200">{accuracy}%</div>
+          <div className="text-sm text-gray-400 uppercase tracking-wide">Accuracy</div>
         </div>
         
-        <div className="stat-item">
-          <div className="stat-value">{correct}</div>
-          <div className="stat-label">Correct</div>
+        <div className="bg-gray-900 p-4 rounded shadow">
+          <div className="text-2xl font-bold mb-1 text-gray-200">{correct}</div>
+          <div className="text-sm text-gray-400 uppercase tracking-wide">Correct</div>
         </div>
         
-        <div className="stat-item">
-          <div className="stat-value">{errors}</div>
-          <div className="stat-label">Errors</div>
+        <div className="bg-gray-900 p-4 rounded shadow">
+          <div className="text-2xl font-bold mb-1 text-gray-200">{errors}</div>
+          <div className="text-sm text-gray-400 uppercase tracking-wide">Errors</div>
         </div>
       </div>
       
-      <div className="continue-prompt">
-        Press <kbd>{APP_CONFIG.KEYS.NEXT_TEST.join(' or ')}</kbd> to continue
+      <div className="text-gray-400 text-lg mt-6">
+        Press <kbd className="bg-gray-700 rounded px-2 py-1 text-sm border border-gray-600 shadow mx-1">{APP_CONFIG.KEYS.NEXT_TEST.join(' or ')}</kbd> to continue
       </div>
     </div>
   );

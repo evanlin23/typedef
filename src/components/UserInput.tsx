@@ -88,7 +88,7 @@ const UserInput: React.FC = () => {
     <input
       type="text"
       autoFocus
-      className="sr-only"
+      className="hidden absolute w-0 h-0 p-0 m-[-1px] overflow-hidden clip-[rect(0,0,0,0)] whitespace-nowrap border-0"
       value={state.input}
       onChange={() => {}}
       aria-label="Typing input"

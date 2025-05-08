@@ -22,7 +22,11 @@ export default class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBo
 
   render(): ReactNode {
     if (this.state.hasError) {
-      return <div className="error">Something went wrong. Please refresh.</div>;
+      return (
+        <div className="p-4 bg-red-100 text-red-700 rounded-lg text-center my-5">
+          Something went wrong. Please refresh.
+        </div>
+      );
     }
     return this.props.children;
   }
