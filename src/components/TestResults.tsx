@@ -1,6 +1,7 @@
 // src/components/TestResults.tsx
 import React, { memo } from 'react';
 import { useGame } from '../context/GameContext';
+import StatBox from './StatBox';
 
 const TestResults: React.FC = memo(() => {
   const { state } = useGame();
@@ -33,30 +34,11 @@ const TestResults: React.FC = memo(() => {
       </div>
       
       <div className="grid grid-cols-3 gap-5 mb-8 sm:grid-cols-5">
-        <div className="bg-gray-900 p-4 rounded shadow">
-          <div className="text-2xl font-bold mb-1 text-gray-200">{time}s</div>
-          <div className="text-sm text-gray-400 uppercase tracking-wide">Time</div>
-        </div>
-        
-        <div className="bg-gray-900 p-4 rounded shadow">
-          <div className="text-2xl font-bold mb-1 text-gray-200">{wpm}</div>
-          <div className="text-sm text-gray-400 uppercase tracking-wide">WPM</div>
-        </div>
-        
-        <div className="bg-gray-900 p-4 rounded shadow">
-          <div className="text-2xl font-bold mb-1 text-gray-200">{accuracy}%</div>
-          <div className="text-sm text-gray-400 uppercase tracking-wide">Accuracy</div>
-        </div>
-        
-        <div className="bg-gray-900 p-4 rounded shadow">
-          <div className="text-2xl font-bold mb-1 text-gray-200">{correct}</div>
-          <div className="text-sm text-gray-400 uppercase tracking-wide">Correct</div>
-        </div>
-        
-        <div className="bg-gray-900 p-4 rounded shadow">
-          <div className="text-2xl font-bold mb-1 text-gray-200">{errors}</div>
-          <div className="text-sm text-gray-400 uppercase tracking-wide">Errors</div>
-        </div>
+        <StatBox value={`${time}s`} label="Time" />
+        <StatBox value={wpm} label="WPM" />
+        <StatBox value={`${accuracy}%`} label="Accuracy" />
+        <StatBox value={correct} label="Correct" />
+        <StatBox value={errors} label="Errors" />
       </div>
       
       <div className="text-gray-400 text-lg mt-6">

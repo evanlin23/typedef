@@ -1,8 +1,7 @@
 // src/context/GameContext.tsx 
 import React, { createContext, useContext, useReducer, useEffect, useRef, ReactNode } from 'react';
 import wordGenerator from '../utils/wordGenerator';
-import { GameState, GameAction, GameContextType, Word, TestResult } from '../types';
-import { CharacterStatus } from '../types';
+import { GameState, GameAction, GameContextType, Word, CharacterStatus, TestResult } from '../types';
 
 const GameContext = createContext<GameContextType | undefined>(undefined);
 

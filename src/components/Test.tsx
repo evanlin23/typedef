@@ -17,7 +17,7 @@ const CharWithCursor: React.FC<CharWithCursorProps> = memo(({ character, status,
     <>
       {showCursor && (
         <span className="relative inline-block w-0.5 h-5 bg-gray-200 animate-[caretFlash_1s_ease-in-out_infinite] align-middle pointer-events-none -ml-0.5 shadow-sm shadow-white/50">
-          {/* This is the cursor */}
+          {/* The animation still doesn't work */}
         </span>
       )}
       <Character character={character} status={status} />
