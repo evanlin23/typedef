@@ -27,33 +27,33 @@ const TestResults: React.FC = memo(() => {
     <div className="w-3/5 mx-auto bg-gray-800 p-8 rounded-lg mb-8 text-center animate-[fadeIn_0.3s_ease-in]">
       <h3 className="text-2xl mb-5 text-green-400">Test Completed!</h3>
       
-      <div className="bg-gray-900 p-4 rounded mb-6 inline-block min-w-52">
+      <div className="bg-darkgray p-4 rounded mb-6 inline-block min-w-52">
         <span className="font-bold mr-2 text-gray-400">Word:</span> 
         <span className="text-xl font-mono text-gray-200">{word}</span>
       </div>
       
       <div className="grid grid-cols-3 gap-5 mb-8 sm:grid-cols-5">
-        <div className="bg-gray-900 p-4 rounded shadow">
+        <div className="bg-darkgray p-4 rounded shadow">
           <div className="text-2xl font-bold mb-1 text-gray-200">{time}s</div>
           <div className="text-sm text-gray-400 uppercase tracking-wide">Time</div>
         </div>
         
-        <div className="bg-gray-900 p-4 rounded shadow">
+        <div className="bg-darkgray p-4 rounded shadow">
           <div className="text-2xl font-bold mb-1 text-gray-200">{wpm}</div>
           <div className="text-sm text-gray-400 uppercase tracking-wide">WPM</div>
         </div>
         
-        <div className="bg-gray-900 p-4 rounded shadow">
+        <div className="bg-darkgray p-4 rounded shadow">
           <div className="text-2xl font-bold mb-1 text-gray-200">{accuracy}%</div>
           <div className="text-sm text-gray-400 uppercase tracking-wide">Accuracy</div>
         </div>
         
-        <div className="bg-gray-900 p-4 rounded shadow">
+        <div className="bg-darkgray p-4 rounded shadow">
           <div className="text-2xl font-bold mb-1 text-gray-200">{correct}</div>
           <div className="text-sm text-gray-400 uppercase tracking-wide">Correct</div>
         </div>
         
-        <div className="bg-gray-900 p-4 rounded shadow">
+        <div className="bg-darkgray p-4 rounded shadow">
           <div className="text-2xl font-bold mb-1 text-gray-200">{errors}</div>
           <div className="text-sm text-gray-400 uppercase tracking-wide">Errors</div>
         </div>

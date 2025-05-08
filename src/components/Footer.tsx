@@ -35,7 +35,7 @@ const Footer: React.FC = memo(() => {
         />
       </div>
 
-      <div className="text-sm text-gray-500 mb-4">
+      <div className="text-sm text-gray-400 mb-4">
         Words from Random Word API • Definitions from Free Dictionary API
       </div>
       

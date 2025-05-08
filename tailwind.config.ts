@@ -1,5 +1,7 @@
-// tailwind.config.js
-module.exports = {
+// tailwind.config.ts
+import type { Config } from "tailwindcss";
+
+export default {
   content: [
     "./src/**/*.{js,jsx,ts,tsx}",
   ],
@@ -19,13 +21,10 @@ module.exports = {
           'to': { opacity: '1', transform: 'translateY(0)' },
         },
       },
-      colors: {
-        // You can add custom colors from your app.config.js here
-        // For example:
-        // correct: 'var(--theme-correct)',
-        // incorrect: 'var(--theme-incorrect)',
-      }
     },
+    colors: {
+      darkgray: '#101828'
+    }
   },
   plugins: [],
-}
+} satisfies Config;
