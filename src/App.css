@@ -5,7 +5,6 @@
   --text-primary: var(--theme-text-primary);
   --text-secondary: var(--theme-text-secondary);
   --border-color: var(--theme-border-color);
-  --highlight-bg: var(--theme-highlight-bg);
   --shadow: var(--theme-shadow);
   --correct: var(--theme-correct);
   --incorrect: var(--theme-incorrect);
@@ -124,7 +123,7 @@
 }
 
 .skip-button:hover {
-  background-color: var(--highlight-bg);
+  background-color: var(--bg-main);
   color: var(--text-primary);
 }
 
@@ -269,7 +268,7 @@
 }
 
 .word-highlight {
-  background-color: var(--highlight-bg);
+  background-color: var(--bg-main);
   padding: 15px;
   border-radius: 5px;
   margin-bottom: 25px;

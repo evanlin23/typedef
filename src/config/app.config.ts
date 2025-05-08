@@ -21,7 +21,6 @@ export const APP_CONFIG = {
     TEXT_PRIMARY: '#e0e0e0',
     TEXT_SECONDARY: '#aaaaaa',
     BORDER_COLOR: '#2a2a2a',
-    HIGHLIGHT_BG: '#121212',
     SHADOW: 'rgba(0, 0, 0, 0.5)',
     CORRECT: '#28a745',
     INCORRECT: '#dc3545',
