@@ -20,20 +20,24 @@ const API_CONFIG: APIConfig = {
 // Track last word to avoid duplicates
 let lastGeneratedWord = '';
 
-interface DictionaryResponse {
-  word: string;
-  meanings: Array<{
-    partOfSpeech: string;
-    definitions: Array<{
-      definition: string;
-      synonyms: string[];
-      antonyms: string[];
-      example?: string;
-    }>;
-  }>;
+interface Definition {
+  definition: string;
+  synonyms: string[];
+  antonyms: string[];
+  example?: string;
 }
 
-export default {
+interface Meaning {
+  partOfSpeech: string;
+  definitions: Definition[];
+}
+
+interface DictionaryResponse {
+  word: string;
+  meanings: Meaning[];
+}
+
+class WordGenerator {
   async generate(): Promise<WordObj[]> {
     let retryCount = 0;
     
@@ -41,6 +45,8 @@ export default {
       try {
         // Get random word
         const wordRes = await fetch(API_CONFIG.WORD_API);
+        if (!wordRes.ok) throw new Error('Failed to fetch word');
+        
         const [word] = await wordRes.json() as string[];
         
         if (!word) throw new Error('Invalid word response');
@@ -85,14 +91,16 @@ export default {
     }
     
     throw new Error('Failed to load word. Try reloading the page.');
-  },
+  }
 
   normalize(str: string): string {
     return str
-      .split(';')[0]  // Take only the part before the first semicolon
+      .split(';')[0]       // Take only the part before the first semicolon
       .toLowerCase()
       .replace(/[^a-z0-9\s]/g, '') // Remove special characters
-      .replace(/\s+/g, ' ') // Normalize spaces
+      .replace(/\s+/g, ' ')  // Normalize spaces
       .trim();
   }
-};
+}
+
+export default new WordGenerator();

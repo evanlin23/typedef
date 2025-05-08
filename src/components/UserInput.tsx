@@ -23,7 +23,7 @@ const UserInput: React.FC = () => {
     }
 
     // Reset tab state when any other key is pressed
-    if (tabPressed && e.key !== 'Tab') {
+    if (tabPressed) {
       setTabPressed(false);
     }
 
@@ -44,9 +44,6 @@ const UserInput: React.FC = () => {
 
     // Handle space key to move to next word
     if (e.key === ' ') {
-      // Only allow moving to next word if:
-      // 1. At least one character has been typed
-      // 2. Not already at max overflow characters
       if (state.input.length > 0) {
         dispatch({ type: 'MOVE_TO_NEXT_WORD' });
       }
@@ -63,8 +60,9 @@ const UserInput: React.FC = () => {
     }
 
     // Ignore modifier keys and special commands
-    if (e.ctrlKey || e.altKey || e.metaKey) return;
-    if (e.key.length > 1) return; // Ignore special keys
+    if (e.ctrlKey || e.altKey || e.metaKey || e.key.length > 1) {
+      return;
+    }
 
     // Get the word without trailing space for length comparison
     const wordText = activeWord.text.trimEnd();
@@ -74,8 +72,7 @@ const UserInput: React.FC = () => {
     if (state.input.length >= maxLength) return;
 
     // Handle regular input - add character to current input
-    const newInput = state.input + e.key;
-    dispatch({ type: 'SET_INPUT', payload: newInput });
+    dispatch({ type: 'SET_INPUT', payload: state.input + e.key });
     
   }, [state.input, state.status, state.testCompleted, state.definitionWords, state.currentWordIndex, dispatch, tabPressed]);
 

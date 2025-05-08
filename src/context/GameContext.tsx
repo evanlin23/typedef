@@ -1,7 +1,7 @@
 // src/context/GameContext.tsx 
 import React, { createContext, useContext, useReducer, useEffect, useRef, ReactNode } from 'react';
 import wordGenerator from '../utils/wordGenerator';
-import { GameState, GameAction, GameContextType, Word, CharacterStatus } from '../types';
+import { GameState, GameAction, GameContextType, Word, CharacterStatus, TestResult } from '../types';
 
 const GameContext = createContext<GameContextType | undefined>(undefined);
 
@@ -12,7 +12,7 @@ const initialState: GameState = {
   words: [],
   nextWord: null,
   isLoadingNext: false,
-  input: '', // Current input for the active word
+  input: '',
   currentWordIndex: 0,
   definitionWords: [],
   time: 0,
@@ -23,6 +23,7 @@ const initialState: GameState = {
   timerActive: false,
   startTime: null,
   currentTestStats: null,
+  error: null,
 };
 
 // Helper function to split definition into words
@@ -35,8 +36,8 @@ const splitDefinitionIntoWords = (definition: string): Word[] => {
   return wordTexts.map((wordText, index) => ({
     text: wordText,
     status: index === 0 ? 'active' : 'upcoming',
-    characters: Array.from(wordText).map((): CharacterStatus => 'untouched'),
-    overflow: '' // Add overflow property to store extra characters
+    characters: Array(wordText.length).fill('untouched') as CharacterStatus[],
+    overflow: ''
   }));
 };
 
@@ -59,6 +60,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         testCompleted: false,
         timerActive: false,
         startTime: null,
+        error: null,
       };
     }
       
@@ -81,31 +83,26 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       
       if (!activeWord) return state;
       
-      // Initialize a new state with potential timer updates
-      let nextState = { ...state };
-      
-      // Start timer when first character is typed
-      if (state.input.length === 0 && newInput.length > 0 && !state.timerActive) {
-        nextState = {
-          ...nextState,
-          input: newInput,
+      // Initialize timer on first character typed
+      const nextState = { 
+        ...state, 
+        input: newInput,
+        ...(state.input.length === 0 && newInput.length > 0 && !state.timerActive && {
           timerActive: true,
           startTime: Date.now(),
-        };
-      } else {
-        nextState.input = newInput;
-      }
+        }),
+      };
       
-      const updatedWords = [...nextState.definitionWords];
-      const currentWord = { ...updatedWords[nextState.currentWordIndex] };
-      const wordChars = Array.from(currentWord.text.trimEnd());
-      
-      if (wordChars.length === 1 && newInput.length >= 1) {
-        const isCorrect = newInput[0] === wordChars[0];
+      // Short circuit for single-character words
+      if (activeWord.text.trimEnd().length === 1 && newInput.length >= 1) {
+        const isCorrect = newInput[0] === activeWord.text[0];
         
         if (isCorrect) {
-          currentWord.characters = ['correct'];
-          updatedWords[nextState.currentWordIndex] = currentWord;
+          const updatedWords = [...nextState.definitionWords];
+          updatedWords[nextState.currentWordIndex] = {
+            ...activeWord,
+            characters: ['correct']
+          };
           
           const stateWithUpdatedChar = {
             ...nextState,
@@ -113,8 +110,9 @@ function gameReducer(state: GameState, action: GameAction): GameState {
             score: nextState.score + 1
           };
           
-          // Remove the setTimeout/dispatch calls and handle transition directly
-          if (newInput.length > 1 || (newInput === wordChars[0] && nextState.currentWordIndex === nextState.definitionWords.length - 1)) {
+          // Handle quick completion
+          if (newInput.length > 1 || (newInput === activeWord.text[0] && 
+              nextState.currentWordIndex === nextState.definitionWords.length - 1)) {
             return nextState.currentWordIndex === nextState.definitionWords.length - 1 
               ? gameReducer(stateWithUpdatedChar, { type: 'COMPLETE_TEST' })
               : gameReducer(stateWithUpdatedChar, { type: 'MOVE_TO_NEXT_WORD' });
@@ -124,44 +122,40 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         }
       }
       
-      const updatedCharStatus = Array(wordChars.length).fill('untouched');
+      // Process character statuses
+      const updatedWords = [...nextState.definitionWords];
+      const currentWord = { ...updatedWords[nextState.currentWordIndex] };
+      const wordChars = Array.from(currentWord.text.trimEnd());
+      
+      // Update character statuses
+      const updatedCharStatus = Array(wordChars.length).fill('untouched') as CharacterStatus[];
       
       for (let i = 0; i < newInput.length; i++) {
         if (i < wordChars.length) {
           updatedCharStatus[i] = newInput[i] === wordChars[i] ? 'correct' : 'incorrect';
-        } else if (i < wordChars.length + MAX_OVERFLOW_CHARS) {
-          updatedCharStatus.push('overflow');
         }
       }
       
       currentWord.characters = updatedCharStatus;
       updatedWords[nextState.currentWordIndex] = currentWord;
       
+      // Calculate score and error changes
       if (newInput.length > state.input.length) {
         const newCharIndex = newInput.length - 1;
-        let scoreChange = 0;
-        let errorChange = 0;
-        
-        if (newCharIndex < wordChars.length) {
-          scoreChange = newInput[newCharIndex] === wordChars[newCharIndex] ? 1 : 0;
-          errorChange = scoreChange === 1 ? 0 : 1;
-        } else {
-          errorChange = 1;
-        }
+        const isWithinWord = newCharIndex < wordChars.length;
+        const isCorrect = isWithinWord && newInput[newCharIndex] === wordChars[newCharIndex];
         
         return {
           ...nextState,
           definitionWords: updatedWords,
-          score: nextState.score + scoreChange,
-          errors: nextState.errors + errorChange,
+          score: nextState.score + (isCorrect ? 1 : 0),
+          errors: nextState.errors + (isCorrect ? 0 : 1),
         };
       } else if (newInput.length < state.input.length) {
+        // Backspace pressed - adjust score if needed
         const removedIndex = state.input.length - 1;
-        let scoreAdjustment = 0;
-        
-        if (removedIndex < wordChars.length && wordChars[removedIndex] === state.input[removedIndex]) {
-          scoreAdjustment = -1;
-        }
+        const scoreAdjustment = (removedIndex < wordChars.length && 
+                                wordChars[removedIndex] === state.input[removedIndex]) ? -1 : 0;
         
         return {
           ...nextState,
@@ -178,29 +172,25 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       
     case 'MOVE_TO_NEXT_WORD': {
       if (state.currentWordIndex >= state.definitionWords.length - 1) {
-        // This was the last word, complete the test
         return gameReducer(state, { type: 'COMPLETE_TEST' });
       }
       
-      // Update statuses of previous and next word
       const updatedWords = [...state.definitionWords];
-      const currentWordText = updatedWords[state.currentWordIndex].text.trimEnd();
+      const currentWord = updatedWords[state.currentWordIndex];
+      const currentWordText = currentWord.text.trimEnd();
       
-      // Store overflow characters from the input (ensuring we don't truncate if at max)
-      let overflow = '';
-      if (state.input.length > currentWordText.length) {
-        overflow = state.input.substring(currentWordText.length);
-        // No need to limit overflow here as UI handles the display
-      }
+      // Store overflow characters
+      const overflow = state.input.length > currentWordText.length 
+        ? state.input.substring(currentWordText.length)
+        : '';
       
-      // Mark current word as completed but preserve character statuses and add overflow
+      // Update word statuses
       updatedWords[state.currentWordIndex] = {
-        ...updatedWords[state.currentWordIndex],
+        ...currentWord,
         status: 'completed',
-        overflow: overflow // Store the overflow characters
+        overflow
       };
       
-      // Mark next word as active
       const nextWordIndex = state.currentWordIndex + 1;
       if (nextWordIndex < updatedWords.length) {
         updatedWords[nextWordIndex] = {
@@ -220,20 +210,14 @@ function gameReducer(state: GameState, action: GameAction): GameState {
     case 'INCREMENT_TIME':
       return state.timerActive ? { ...state, time: state.time + 1 } : state;
       
-    case 'INCREMENT_SCORE':
-      return { ...state, score: state.score + 1 };
-      
-    case 'INCREMENT_ERRORS':
-      return { ...state, errors: state.errors + 1 };
-      
     case 'SET_ERROR':
       return { ...state, status: 'error', error: action.payload };
       
     case 'COMPLETE_TEST': {
       // Get current word data
-      const wordObj = state.words[0] || {};
-      const word = wordObj.word || '';
-      const currentDefinition = wordObj.definition || '';
+      const wordObj = state.words[0];
+      const word = wordObj?.word || '';
+      const currentDefinition = wordObj?.definition || '';
       
       // Calculate statistics
       const endTime = Date.now();
@@ -242,16 +226,18 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       const totalErrors = state.errors;
       const totalChars = totalCorrectChars + totalErrors;
       
-      const accuracyValue = totalChars > 0 ? ((totalCorrectChars / totalChars) * 100).toFixed(1) : "100.0";
-      const wpmValue = Math.round((totalCorrectChars / 5) / (elapsedTimeInSeconds / 60));
+      const accuracy = totalChars > 0 
+        ? parseFloat(((totalCorrectChars / totalChars) * 100).toFixed(1)) 
+        : 100;
+      const wpm = Math.round((totalCorrectChars / 5) / (elapsedTimeInSeconds / 60));
       
       // Build test result object
-      const testResult = {
+      const testResult: TestResult = {
         word,
         definition: currentDefinition,
         time: elapsedTimeInSeconds,
-        accuracy: parseFloat(accuracyValue),
-        wpm: wpmValue,
+        accuracy,
+        wpm,
         errors: totalErrors,
         correct: totalCorrectChars,
         timestamp: new Date().toISOString(),
@@ -266,83 +252,40 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       };
     }
       
-    case 'SKIP_CURRENT_WORD': {
+    case 'SKIP_CURRENT_WORD':
+    case 'START_NEW_TEST': {
+      const baseState = {
+        ...state,
+        score: 0,
+        errors: 0,
+        time: 0,
+        input: '',
+        currentWordIndex: 0,
+        testCompleted: false,
+        timerActive: false,
+        startTime: null,
+        currentTestStats: null,
+      };
+      
       // Use the preloaded word if available
       if (state.nextWord) {
         const definition = state.nextWord.definition || '';
         const definitionWords = splitDefinitionIntoWords(definition);
         
         return {
-          ...state,
+          ...baseState,
           words: [state.nextWord],
           definitionWords,
           nextWord: null,
-          score: 0,
-          errors: 0,
-          time: 0,
-          input: '',
-          currentWordIndex: 0,
-          testCompleted: false,
-          timerActive: false,
-          startTime: null,
-          currentTestStats: null,
           status: 'ready',
         };
       } else {
-        // If no preloaded word, just start a new test
         return {
-          ...state,
-          score: 0,
-          errors: 0,
-          time: 0,
-          input: '',
-          currentWordIndex: 0,
-          testCompleted: false,
-          timerActive: false,
-          startTime: null,
-          currentTestStats: null,
+          ...baseState,
           status: 'loading',
         };
       }
     }
-      
-    case 'START_NEW_TEST':
-      // Use the preloaded word if available
-      if (state.nextWord) {
-        const definition = state.nextWord.definition || '';
-        const definitionWords = splitDefinitionIntoWords(definition);
-        
-        return {
-          ...state,
-          words: [state.nextWord],
-          definitionWords,
-          nextWord: null,
-          score: 0,
-          errors: 0,
-          time: 0,
-          input: '',
-          currentWordIndex: 0,
-          testCompleted: false,
-          timerActive: false,
-          startTime: null,
-          currentTestStats: null,
-          status: 'ready',
-        };
-      } else {
-        return {
-          ...state,
-          score: 0,
-          errors: 0,
-          time: 0,
-          input: '',
-          currentWordIndex: 0,
-          testCompleted: false,
-          timerActive: false,
-          startTime: null,
-          currentTestStats: null,
-          status: 'loading',
-        };
-      }
       
     default:
       return state;
@@ -357,6 +300,7 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
   const [state, dispatch] = useReducer(gameReducer, initialState);
   const wordLoadingInProgress = useRef(false);
 
+  // Handle automatic word completion when input matches word
   useEffect(() => {
     const currentWord = state.definitionWords[state.currentWordIndex];
     if (currentWord && !state.testCompleted && state.input) {
@@ -364,8 +308,6 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
       if (state.input === trimmedWord) {
         if (state.currentWordIndex === state.definitionWords.length - 1) {
           dispatch({ type: 'COMPLETE_TEST' });
-        } else {
-          dispatch({ type: 'MOVE_TO_NEXT_WORD' });
         }
       }
     }
@@ -373,63 +315,61 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
 
   // Load words when needed
   useEffect(() => {
-    if (state.status === 'loading' && !wordLoadingInProgress.current) {
-      const loadWords = async () => {
-        wordLoadingInProgress.current = true;
-        
-        try {
-          const words = await wordGenerator.generate();
-          dispatch({ type: 'SET_WORDS', payload: words });
-        } catch (error) {
-          console.error("Error loading words:", error);
-          dispatch({ 
-            type: 'SET_ERROR', 
-            payload: error instanceof Error ? error.message : 'Unknown error' 
-          });
-        } finally {
-          wordLoadingInProgress.current = false;
-        }
-      };
+    const loadWords = async () => {
+      if (state.status !== 'loading' || wordLoadingInProgress.current) return;
       
-      loadWords();
-    }
+      wordLoadingInProgress.current = true;
+      
+      try {
+        const words = await wordGenerator.generate();
+        dispatch({ type: 'SET_WORDS', payload: words });
+      } catch (error) {
+        console.error("Error loading words:", error);
+        dispatch({ 
+          type: 'SET_ERROR', 
+          payload: error instanceof Error ? error.message : 'Unknown error' 
+        });
+      } finally {
+        wordLoadingInProgress.current = false;
+      }
+    };
+    
+    loadWords();
   }, [state.status]);
 
   // Preload next word
   useEffect(() => {
-    // Start preloading when the current word is ready and we're not already loading
-    if (state.status === 'ready' && !state.nextWord && !state.isLoadingNext && !state.testCompleted) {
-      const preloadNextWord = async () => {
-        dispatch({ type: 'SET_LOADING_NEXT', payload: true });
-        
-        try {
-          const nextWord = await wordGenerator.generate();
-          dispatch({ type: 'SET_NEXT_WORD', payload: nextWord[0] });
-        } catch (error) {
-          console.error("Error preloading next word:", error);
-          // Silently fail on preload - we'll try again later
-        }
-      };
+    const shouldPreload = state.status === 'ready' && 
+                         !state.nextWord && 
+                         !state.isLoadingNext && 
+                         !state.testCompleted;
+    
+    if (!shouldPreload) return;
+    
+    const preloadNextWord = async () => {
+      dispatch({ type: 'SET_LOADING_NEXT', payload: true });
       
-      preloadNextWord();
-    }
+      try {
+        const nextWord = await wordGenerator.generate();
+        dispatch({ type: 'SET_NEXT_WORD', payload: nextWord[0] });
+      } catch (error) {
+        console.error("Error preloading next word:", error);
+        // Silently fail on preload - we'll try again later
+      }
+    };
+    
+    preloadNextWord();
   }, [state.status, state.nextWord, state.isLoadingNext, state.testCompleted]);
 
   // Timer effect - update time every second
   useEffect(() => {
-    let timer: number | undefined;
+    if (!state.timerActive || state.testCompleted) return;
     
-    if (state.timerActive && !state.testCompleted) {
-      timer = window.setInterval(() => {
-        dispatch({ type: 'INCREMENT_TIME' });
-      }, 1000);
-    }
+    const timer = setInterval(() => {
+      dispatch({ type: 'INCREMENT_TIME' });
+    }, 1000);
     
-    return () => {
-      if (timer !== undefined) {
-        clearInterval(timer);
-      }
-    };
+    return () => clearInterval(timer);
   }, [state.timerActive, state.testCompleted]);
 
   return (
