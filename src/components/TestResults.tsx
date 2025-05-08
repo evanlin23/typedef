@@ -1,7 +1,6 @@
 // src/components/TestResults.tsx
 import React, { memo } from 'react';
 import { useGame } from '../context/GameContext';
-import { APP_CONFIG } from '../config/app.config';
 
 const TestResults: React.FC = memo(() => {
   const { state } = useGame();
@@ -61,7 +60,7 @@ const TestResults: React.FC = memo(() => {
       </div>
       
       <div className="text-gray-400 text-lg mt-6">
-        Press <kbd className="bg-gray-700 rounded px-2 py-1 text-sm border border-gray-600 shadow mx-1">{APP_CONFIG.KEYS.NEXT_TEST.join(' or ')}</kbd> to continue
+        Press <kbd className="bg-gray-700 rounded px-2 py-1 text-sm border border-gray-600 shadow mx-1">Enter</kbd> to continue
       </div>
     </div>
   );

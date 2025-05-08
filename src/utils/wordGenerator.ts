@@ -1,6 +1,6 @@
 // src/utils/wordGenerator.ts
 import { WordObj } from '../types';
-import { APP_CONFIG } from '../config/app.config';
+import { API } from '../constants';
 
 // Track last word to avoid duplicates
 let lastGeneratedWord = '';
@@ -25,7 +25,6 @@ interface DictionaryResponse {
 class WordGenerator {
   async generate(): Promise<WordObj[]> {
     let retryCount = 0;
-    const { API } = APP_CONFIG;
     
     while (retryCount < API.MAX_RETRIES) {
       try {

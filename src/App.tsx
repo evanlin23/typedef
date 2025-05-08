@@ -6,16 +6,6 @@ import Test from './components/Test';
 import Footer from './components/Footer';
 import ErrorBoundary from './components/ErrorBoundary';
 import UserInput from './components/UserInput';
-import { injectThemeVariables } from './config/app.config';
-
-// Initialize theme variables
-const ThemeInitializer = () => {
-  useEffect(() => {
-    injectThemeVariables();
-  }, []);
-  
-  return null;
-};
 
 const GameContent: React.FC = memo(() => {
   const { state } = useGame();
@@ -43,7 +33,6 @@ GameContent.displayName = 'GameContent';
 const App: React.FC = () => {
   return (
     <ErrorBoundary>
-      <ThemeInitializer />
       <GameProvider>
       <div className="relative w-screen h-screen font-mono text-gray-200 bg-gray-900 overflow-hidden">
         <div className="fixed top-10 left-1/2 transform -translate-x-1/2 p-4 z-10">
