@@ -1,8 +1,9 @@
 // src/components/TestResults.tsx
-import React from 'react';
+import React, { memo } from 'react';
 import { useGame } from '../context/GameContext';
+import { APP_CONFIG } from '../config/app.config';
 
-const TestResults: React.FC = () => {
+const TestResults: React.FC = memo(() => {
   const { state } = useGame();
   
   if (!state.testCompleted) {
@@ -60,10 +61,10 @@ const TestResults: React.FC = () => {
       </div>
       
       <div className="continue-prompt">
-        Press <kbd>Enter</kbd> to continue
+        Press <kbd>{APP_CONFIG.KEYS.NEXT_TEST.join(' or ')}</kbd> to continue
       </div>
     </div>
   );
-};
+});
 
 export default TestResults;

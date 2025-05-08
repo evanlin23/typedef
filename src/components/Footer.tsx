@@ -1,33 +1,38 @@
 // src/components/Footer.tsx
-import React from 'react';
+import React, { memo } from 'react';
 import { useGame } from '../context/GameContext';
 
-const Footer: React.FC = () => {
+interface StatItemProps {
+  label: string;
+  value: React.ReactNode;
+}
+
+const StatItem: React.FC<StatItemProps> = memo(({ label, value }) => (
+  <div className="stat">
+    <span className="label">{label}:</span>
+    <span className="value">{value}</span>
+  </div>
+));
+
+StatItem.displayName = 'StatItem';
+
+const Footer: React.FC = memo(() => {
   const { state } = useGame();
   
   return (
     <footer className="footer">      
       <div className="stats">
-        <div className="stat">
-          <span className="label">Time:</span>
-          <span className="value">{state.time}s</span>
-        </div>
-        <div className="stat">
-          <span className="label">Score:</span>
-          <span className="value">{state.score}</span>
-        </div>
-        <div className="stat">
-          <span className="label">Errors:</span>
-          <span className="value">{state.errors}</span>
-        </div>
-          <div className="stat">
-            <span className="label">Next:</span>
-            { state.nextWord ? (
-              <span className="value preloaded">Ready</span>
-            ) : (
-              <span className="value">Loading...</span>
-            )}
-          </div>
+        <StatItem label="Time" value={`${state.time}s`} />
+        <StatItem label="Score" value={state.score} />
+        <StatItem label="Errors" value={state.errors} />
+        <StatItem 
+          label="Next" 
+          value={state.nextWord ? (
+            <span className="preloaded">Ready</span>
+          ) : (
+            "Loading..."
+          )} 
+        />
       </div>
 
       <div className="api-credits">
@@ -45,6 +50,8 @@ const Footer: React.FC = () => {
       </div>
     </footer>
   );
-};
+});
+
+Footer.displayName = 'Footer';
 
 export default Footer;

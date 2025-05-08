@@ -1,6 +1,7 @@
 // src/components/UserInput.tsx
 import React, { useCallback, useEffect, useState } from 'react';
 import { useGame } from '../context/GameContext';
+import { APP_CONFIG } from '../config/app.config';
 
 const UserInput: React.FC = () => {
   const { state, dispatch } = useGame();
@@ -10,13 +11,13 @@ const UserInput: React.FC = () => {
     e.preventDefault();
 
     // Handle tab key press
-    if (e.key === 'Tab') {
+    if (e.key === APP_CONFIG.KEYS.SKIP_WORD[0]) {
       setTabPressed(true);
       return;
     }
 
     // Handle tab + enter combination for skipping
-    if (tabPressed && e.key === 'Enter') {
+    if (tabPressed && e.key === APP_CONFIG.KEYS.SKIP_WORD[1]) {
       dispatch({ type: 'SKIP_CURRENT_WORD' });
       setTabPressed(false);
       return;
@@ -29,7 +30,7 @@ const UserInput: React.FC = () => {
 
     // For completed test, handle restart
     if (state.testCompleted) {
-      if (e.key === 'Enter') {
+      if (e.key === APP_CONFIG.KEYS.NEXT_TEST[0]) {
         dispatch({ type: 'START_NEW_TEST' });
       }
       return;
@@ -68,7 +69,7 @@ const UserInput: React.FC = () => {
     const wordText = activeWord.text.trimEnd();
     
     // Don't allow more than MAX_OVERFLOW_CHARS extra characters per word
-    const maxLength = wordText.length + 19;
+    const maxLength = wordText.length + APP_CONFIG.MAX_OVERFLOW_CHARS;
     if (state.input.length >= maxLength) return;
 
     // Handle regular input - add character to current input

@@ -1,5 +1,5 @@
 // src/App.tsx
-import React from 'react';
+import React, { memo } from 'react';
 import { GameProvider, useGame } from './context/GameContext';
 import Header from './components/Header';
 import Test from './components/Test';
@@ -8,7 +8,7 @@ import ErrorBoundary from './components/ErrorBoundary';
 import UserInput from './components/UserInput';
 import './App.css';
 
-const GameContent: React.FC = () => {
+const GameContent: React.FC = memo(() => {
   const { state } = useGame();
 
   if (state.status === 'loading') {
@@ -16,7 +16,7 @@ const GameContent: React.FC = () => {
   }
   
   if (state.status === 'error') {
-    return <div className="error">Error: {state.error}</div>;
+    return <div className="error">Error: {state.error || 'Unknown error occurred'}</div>;
   }
 
   return (
@@ -25,7 +25,9 @@ const GameContent: React.FC = () => {
       <UserInput />
     </div>
   );
-};
+});
+
+GameContent.displayName = 'GameContent';
 
 const App: React.FC = () => {
   return (

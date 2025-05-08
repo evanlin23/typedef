@@ -4,6 +4,23 @@ import Character from './Character';
 import TestResults from './TestResults';
 import { useGame } from '../context/GameContext';
 import { Word } from '../types';
+import { APP_CONFIG } from '../config/app.config';
+
+interface CharWithCursorProps {
+  character: string;
+  status: string;
+  showCursor: boolean;
+}
+
+// Helper component to render a character with optional cursor
+const CharWithCursor: React.FC<CharWithCursorProps> = memo(({ character, status, showCursor }) => {
+  return (
+    <>
+      {showCursor && <span className="typing-cursor"></span>}
+      <Character character={character} status={status} />
+    </>
+  );
+});
 
 const Test: React.FC = memo(() => {
   const { state } = useGame();
@@ -20,6 +37,21 @@ const Test: React.FC = memo(() => {
   const wordObj = words[0];
   const word = wordObj?.word || 'Loading...';
   
+  // Helper function to determine where to show the cursor
+  const getCursorPosition = (
+    wordIndex: number, 
+    charIndex: number
+  ): { showCursor: boolean } => {
+    if (wordIndex !== currentWordIndex) {
+      return { showCursor: false };
+    }
+    
+    const cursorPosition = input.length;
+    return { 
+      showCursor: charIndex === cursorPosition 
+    };
+  };
+  
   // Render a single word with correct character statuses and cursor
   const renderWord = (wordObj: Word, wordIndex: number) => {
     const isActiveWord = wordIndex === currentWordIndex;
@@ -35,22 +67,21 @@ const Test: React.FC = memo(() => {
     
     // For both active and completed words, we need to show characters
     const renderedChars = Array.from(actualWord).map((char, charIndex) => {
-      // Get character status if it exists
+      // Get character status
       const status = charIndex < wordObj.characters.length 
         ? wordObj.characters[charIndex] 
         : 'untouched';
       
-      // Only show cursor within the word if it belongs at this position
-      const showCursor = isActiveWord && charIndex === input.length;
+      // Determine cursor position
+      const { showCursor } = getCursorPosition(wordIndex, charIndex);
       
       return (
-        <React.Fragment key={charIndex}>
-          {showCursor && <span className="typing-cursor"></span>}
-          <Character 
-            character={char}
-            status={status}
-          />
-        </React.Fragment>
+        <CharWithCursor
+          key={charIndex}
+          character={char}
+          status={status}
+          showCursor={showCursor}
+        />
       );
     });
     
@@ -63,38 +94,35 @@ const Test: React.FC = memo(() => {
       for (let i = 0; i < overflowText.length; i++) {
         const overflowChar = overflowText[i] || '';
         
-        // Only add cursor for active word at the right position
-        const showOverflowCursor = isActiveWord && actualWord.length + i === input.length;
+        // Calculate cursor position for overflow characters
+        const charIndex = actualWord.length + i;
+        const { showCursor } = getCursorPosition(wordIndex, charIndex);
         
         renderedChars.push(
-          <React.Fragment key={`overflow-${i}`}>
-            {showOverflowCursor && <span className="typing-cursor"></span>}
-            <Character 
-              character={overflowChar}
-              status="overflow"
-            />
-          </React.Fragment>
+          <CharWithCursor
+            key={`overflow-${i}`}
+            character={overflowChar}
+            status="overflow"
+            showCursor={showCursor}
+          />
         );
       }
     }
 
-    // Show cursor at the end of the word/overflow if needed
-    const showEndCursor = isActiveWord && input.length === (
-      actualWord.length + overflowText.length
-    );
+    // Show cursor at the end position if needed
+    const finalCharIndex = actualWord.length + overflowText.length;
+    const { showCursor: showEndCursor } = getCursorPosition(wordIndex, finalCharIndex);
 
     // Add the space separately after all characters
     // Only add space for non-last words or if the original text had a space
     const isLastWord = wordIndex === definitionWords.length - 1;
     const spaceChar = hasSpace || !isLastWord ? (
-      <React.Fragment>
-        {showEndCursor && <span className="typing-cursor"></span>}
-        <Character 
-          key="space"
-          character=" "
-          status={wordObj.status === 'completed' ? 'correct' : 'untouched'}
-        />
-      </React.Fragment>
+      <CharWithCursor
+        key="space"
+        character=" "
+        status={wordObj.status === 'completed' ? 'correct' : 'untouched'}
+        showCursor={showEndCursor}
+      />
     ) : (
       showEndCursor && <span className="typing-cursor"></span>
     );
@@ -130,7 +158,7 @@ const Test: React.FC = memo(() => {
       <div className="word-display">
         <h1 className="word-to-type">{word}</h1>
         <span className="continue-prompt">
-          <kbd>Tab</kbd> + <kbd>Enter</kbd> to skip
+          <kbd>{APP_CONFIG.KEYS.SKIP_WORD[0]}</kbd> + <kbd>{APP_CONFIG.KEYS.SKIP_WORD[1]}</kbd> to skip
         </span>
       </div>
       

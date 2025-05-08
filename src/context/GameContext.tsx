@@ -1,11 +1,10 @@
 // src/context/GameContext.tsx 
 import React, { createContext, useContext, useReducer, useEffect, useRef, ReactNode } from 'react';
 import wordGenerator from '../utils/wordGenerator';
-import { GameState, GameAction, GameContextType, Word, CharacterStatus, TestResult } from '../types';
+import { GameState, GameAction, GameContextType, Word, TestResult } from '../types';
+import { CharacterStatus } from '../config/app.config';
 
 const GameContext = createContext<GameContextType | undefined>(undefined);
-
-const MAX_OVERFLOW_CHARS = 19;
 
 const initialState: GameState = {
   status: 'loading', // loading, ready, error
@@ -39,6 +38,52 @@ const splitDefinitionIntoWords = (definition: string): Word[] => {
     characters: Array(wordText.length).fill('untouched') as CharacterStatus[],
     overflow: ''
   }));
+};
+
+// Helper function to update character statuses based on input
+const updateCharacterStatuses = (input: string, wordText: string): CharacterStatus[] => {
+  const trimmedWord = wordText.trimEnd();
+  const wordChars = Array.from(trimmedWord);
+  const updatedCharStatus = Array(wordChars.length).fill('untouched') as CharacterStatus[];
+  
+  for (let i = 0; i < input.length; i++) {
+    if (i < wordChars.length) {
+      updatedCharStatus[i] = input[i] === wordChars[i] ? 'correct' : 'incorrect';
+    }
+  }
+  
+  return updatedCharStatus;
+};
+
+// Helper function to calculate score change when typing a new character
+const calculateScoreChange = (
+  input: string, 
+  prevInput: string, 
+  wordChars: string[]
+): { scoreChange: number, errorChange: number } => {
+  if (input.length > prevInput.length) {
+    // New character added
+    const newCharIndex = input.length - 1;
+    const isWithinWord = newCharIndex < wordChars.length;
+    const isCorrect = isWithinWord && input[newCharIndex] === wordChars[newCharIndex];
+    
+    return {
+      scoreChange: isCorrect ? 1 : 0,
+      errorChange: isCorrect ? 0 : 1
+    };
+  } else if (input.length < prevInput.length) {
+    // Character removed (backspace)
+    const removedIndex = prevInput.length - 1;
+    const wasCorrect = removedIndex < wordChars.length && 
+                      wordChars[removedIndex] === prevInput[removedIndex];
+    
+    return {
+      scoreChange: wasCorrect ? -1 : 0,
+      errorChange: 0
+    };
+  }
+  
+  return { scoreChange: 0, errorChange: 0 };
 };
 
 function gameReducer(state: GameState, action: GameAction): GameState {
@@ -84,18 +129,22 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       if (!activeWord) return state;
       
       // Initialize timer on first character typed
+      const timerState = state.input.length === 0 && newInput.length > 0 && !state.timerActive
+        ? { timerActive: true, startTime: Date.now() }
+        : {};
+        
       const nextState = { 
         ...state, 
         input: newInput,
-        ...(state.input.length === 0 && newInput.length > 0 && !state.timerActive && {
-          timerActive: true,
-          startTime: Date.now(),
-        }),
+        ...timerState,
       };
       
+      const trimmedWord = activeWord.text.trimEnd();
+      const wordChars = Array.from(trimmedWord);
+      
       // Short circuit for single-character words
-      if (activeWord.text.trimEnd().length === 1 && newInput.length >= 1) {
-        const isCorrect = newInput[0] === activeWord.text[0];
+      if (trimmedWord.length === 1 && newInput.length >= 1) {
+        const isCorrect = newInput[0] === trimmedWord[0];
         
         if (isCorrect) {
           const updatedWords = [...nextState.definitionWords];
@@ -111,7 +160,8 @@ function gameReducer(state: GameState, action: GameAction): GameState {
           };
           
           // Handle quick completion
-          if (newInput.length > 1 || (newInput === activeWord.text[0] && 
+          if (newInput.length > 1 || (
+              newInput === trimmedWord[0] && 
               nextState.currentWordIndex === nextState.definitionWords.length - 1)) {
             return nextState.currentWordIndex === nextState.definitionWords.length - 1 
               ? gameReducer(stateWithUpdatedChar, { type: 'COMPLETE_TEST' })
@@ -125,48 +175,23 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       // Process character statuses
       const updatedWords = [...nextState.definitionWords];
       const currentWord = { ...updatedWords[nextState.currentWordIndex] };
-      const wordChars = Array.from(currentWord.text.trimEnd());
       
       // Update character statuses
-      const updatedCharStatus = Array(wordChars.length).fill('untouched') as CharacterStatus[];
-      
-      for (let i = 0; i < newInput.length; i++) {
-        if (i < wordChars.length) {
-          updatedCharStatus[i] = newInput[i] === wordChars[i] ? 'correct' : 'incorrect';
-        }
-      }
-      
-      currentWord.characters = updatedCharStatus;
+      currentWord.characters = updateCharacterStatuses(newInput, currentWord.text);
       updatedWords[nextState.currentWordIndex] = currentWord;
       
       // Calculate score and error changes
-      if (newInput.length > state.input.length) {
-        const newCharIndex = newInput.length - 1;
-        const isWithinWord = newCharIndex < wordChars.length;
-        const isCorrect = isWithinWord && newInput[newCharIndex] === wordChars[newCharIndex];
-        
-        return {
-          ...nextState,
-          definitionWords: updatedWords,
-          score: nextState.score + (isCorrect ? 1 : 0),
-          errors: nextState.errors + (isCorrect ? 0 : 1),
-        };
-      } else if (newInput.length < state.input.length) {
-        // Backspace pressed - adjust score if needed
-        const removedIndex = state.input.length - 1;
-        const scoreAdjustment = (removedIndex < wordChars.length && 
-                                wordChars[removedIndex] === state.input[removedIndex]) ? -1 : 0;
-        
-        return {
-          ...nextState,
-          definitionWords: updatedWords,
-          score: Math.max(0, nextState.score + scoreAdjustment),
-        };
-      }
+      const { scoreChange, errorChange } = calculateScoreChange(
+        newInput, 
+        state.input, 
+        wordChars
+      );
       
       return {
         ...nextState,
         definitionWords: updatedWords,
+        score: Math.max(0, nextState.score + scoreChange),
+        errors: nextState.errors + errorChange,
       };
     }
       
@@ -303,12 +328,11 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
   // Handle automatic word completion when input matches word
   useEffect(() => {
     const currentWord = state.definitionWords[state.currentWordIndex];
+    if (state.currentWordIndex !== state.definitionWords.length - 1) return;
     if (currentWord && !state.testCompleted && state.input) {
       const trimmedWord = currentWord.text.trimEnd();
       if (state.input === trimmedWord) {
-        if (state.currentWordIndex === state.definitionWords.length - 1) {
-          dispatch({ type: 'COMPLETE_TEST' });
-        }
+        dispatch({ type: 'COMPLETE_TEST' });
       }
     }
   }, [state.input, state.currentWordIndex, state.definitionWords, state.testCompleted]);
