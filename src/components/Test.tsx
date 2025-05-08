@@ -161,9 +161,9 @@ const Test: React.FC = memo(() => {
       <div className="text-center mb-5 flex flex-col items-center">
         <h1 className="text-3xl mb-5 text-gray-200">{word}</h1>
         <span className="text-gray-400 text-sm">
-          <kbd className="bg-gray-700 rounded px-2 py-1 text-xs border border-gray-600 shadow mr-1">Tab</kbd> 
+          <kbd className="bg-gray-700 rounded px-2 py-1 text-xs border border-gray-600 shadow mx-1">Tab</kbd> 
           + 
-          <kbd className="bg-gray-700 rounded px-2 py-1 text-xs border border-gray-600 shadow ml-1">Enter</kbd> 
+          <kbd className="bg-gray-700 rounded px-2 py-1 mx-1 text-xs border border-gray-600 shadow">Enter</kbd> 
           to skip
         </span>
       </div>
