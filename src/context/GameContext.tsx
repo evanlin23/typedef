@@ -2,7 +2,7 @@
 import React, { createContext, useContext, useReducer, useEffect, useRef, ReactNode } from 'react';
 import wordGenerator from '../utils/wordGenerator';
 import { GameState, GameAction, GameContextType, Word, TestResult } from '../types';
-import { CharacterStatus } from '../config/app.config';
+import { CharacterStatus } from '../types';
 
 const GameContext = createContext<GameContextType | undefined>(undefined);
 

@@ -1,10 +1,8 @@
 // src/types.ts
 
-// Import shared types from config
-import { GameStatus, WordStatus, CharacterStatus } from './config/app.config';
-
-// Re-export for backwards compatibility
-export { GameStatus, WordStatus, CharacterStatus };
+export type GameStatus = 'loading' | 'ready' | 'error';
+export type WordStatus = 'active' | 'completed' | 'upcoming';
+export type CharacterStatus = 'untouched' | 'correct' | 'incorrect' | 'overflow';
 
 // Core data structure for a word from the API
 export interface WordObj {

@@ -1,5 +1,5 @@
 // src/App.tsx
-import React, { memo, useEffect } from 'react';
+import React, { memo } from 'react';
 import { GameProvider, useGame } from './context/GameContext';
 import Header from './components/Header';
 import Test from './components/Test';
