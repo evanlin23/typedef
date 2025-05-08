@@ -1,16 +1,17 @@
 // src/components/TestResults.tsx
-import React from 'react';
+import React, { memo } from 'react';
 import { useGame } from '../context/GameContext';
+import StatBox from './StatBox';
 
-const TestResults: React.FC = () => {
+const TestResults: React.FC = memo(() => {
   const { state } = useGame();
   
   if (!state.testCompleted) {
-    return <div className="loading">Test not completed yet...</div>;
+    return <div className="text-center py-8 text-lg text-gray-400">Test not completed yet...</div>;
   }
   
   if (!state.currentTestStats) {
-    return <div className="loading">Calculating your results...</div>;
+    return <div className="text-center py-8 text-lg text-gray-400">Calculating your results...</div>;
   }
   
   // Destructure with default values to prevent errors
@@ -24,46 +25,27 @@ const TestResults: React.FC = () => {
   } = state.currentTestStats;
   
   return (
-    <div className="test-results">
-      <h3>Test Completed!</h3>
+    <div className="w-3/5 mx-auto bg-gray-800 p-8 rounded-lg mb-8 text-center animate-fadeIn">
+      <h3 className="text-2xl mb-5 text-green-400">Test Completed!</h3>
       
-      <div className="word-highlight">
-        <span className="word-label">Word:</span> 
-        <span className="word-value">{word}</span>
+      <div className="bg-gray-900 p-4 rounded mb-6 inline-block min-w-52">
+        <span className="font-bold mr-2 text-gray-400">Word:</span> 
+        <span className="text-xl font-mono text-gray-200">{word}</span>
       </div>
       
-      <div className="stats-grid">
-        <div className="stat-item">
-          <div className="stat-value">{time}s</div>
-          <div className="stat-label">Time</div>
-        </div>
-        
-        <div className="stat-item">
-          <div className="stat-value">{wpm}</div>
-          <div className="stat-label">WPM</div>
-        </div>
-        
-        <div className="stat-item">
-          <div className="stat-value">{accuracy}%</div>
-          <div className="stat-label">Accuracy</div>
-        </div>
-        
-        <div className="stat-item">
-          <div className="stat-value">{correct}</div>
-          <div className="stat-label">Correct</div>
-        </div>
-        
-        <div className="stat-item">
-          <div className="stat-value">{errors}</div>
-          <div className="stat-label">Errors</div>
-        </div>
+      <div className="grid grid-cols-3 gap-5 mb-8 sm:grid-cols-5">
+        <StatBox value={`${time}s`} label="Time" />
+        <StatBox value={wpm} label="WPM" />
+        <StatBox value={`${accuracy}%`} label="Accuracy" />
+        <StatBox value={correct} label="Correct" />
+        <StatBox value={errors} label="Errors" />
       </div>
       
-      <div className="continue-prompt">
-        Press <kbd>Enter</kbd> to continue
+      <div className="text-gray-400 text-lg mt-6">
+        Press <kbd className="bg-gray-700 rounded px-2 py-1 text-sm border border-gray-600 shadow mx-1">Enter</kbd> to continue
       </div>
     </div>
   );
-};
+});
 
 export default TestResults;

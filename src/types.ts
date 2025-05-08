@@ -1,6 +1,5 @@
 // src/types.ts
 
-// Status types
 export type GameStatus = 'loading' | 'ready' | 'error';
 export type WordStatus = 'active' | 'completed' | 'upcoming';
 export type CharacterStatus = 'untouched' | 'correct' | 'incorrect' | 'overflow';

@@ -5,12 +5,32 @@ import TestResults from './TestResults';
 import { useGame } from '../context/GameContext';
 import { Word } from '../types';
 
+interface CharWithCursorProps {
+  character: string;
+  status: string;
+  showCursor: boolean;
+}
+
+// Helper component to render a character with optional cursor
+const CharWithCursor: React.FC<CharWithCursorProps> = memo(({ character, status, showCursor }) => {
+  return (
+    <>
+      {showCursor && (
+        <span className="relative inline-block w-0.5 h-5 bg-gray-200 animate-[caretFlash_1s_ease-in-out_infinite] align-middle pointer-events-none -ml-0.5 shadow-sm shadow-white/50">
+          {/* The animation still doesn't work */}
+        </span>
+      )}
+      <Character character={character} status={status} />
+    </>
+  );
+});
+
 const Test: React.FC = memo(() => {
   const { state } = useGame();
   const { words, definitionWords, currentWordIndex, testCompleted, input } = state;
   
   if (!words?.length) {
-    return <div className="loading">Loading words...</div>;
+    return <div className="text-center py-8 text-lg text-gray-400">Loading words...</div>;
   }
 
   if (testCompleted) {
@@ -20,14 +40,29 @@ const Test: React.FC = memo(() => {
   const wordObj = words[0];
   const word = wordObj?.word || 'Loading...';
   
+  // Helper function to determine where to show the cursor
+  const getCursorPosition = (
+    wordIndex: number, 
+    charIndex: number
+  ): { showCursor: boolean } => {
+    if (wordIndex !== currentWordIndex) {
+      return { showCursor: false };
+    }
+    
+    const cursorPosition = input.length;
+    return { 
+      showCursor: charIndex === cursorPosition 
+    };
+  };
+  
   // Render a single word with correct character statuses and cursor
   const renderWord = (wordObj: Word, wordIndex: number) => {
     const isActiveWord = wordIndex === currentWordIndex;
     
     // Calculate word display class
-    const wordClassName = `word-wrapper${
-      wordObj.status === 'active' ? ' active-word' : ''
-    }${wordObj.status === 'completed' ? ' completed-word' : ''}`;
+    let wordClassName = "inline-block whitespace-nowrap leading-relaxed py-0.5 mr-0 relative";
+    if (wordObj.status === 'active') wordClassName += ' active-word';
+    if (wordObj.status === 'completed') wordClassName += ' completed-word';
     
     // Extract the actual word and space from the text
     const actualWord = wordObj.text.trimEnd();
@@ -35,22 +70,21 @@ const Test: React.FC = memo(() => {
     
     // For both active and completed words, we need to show characters
     const renderedChars = Array.from(actualWord).map((char, charIndex) => {
-      // Get character status if it exists
+      // Get character status
       const status = charIndex < wordObj.characters.length 
         ? wordObj.characters[charIndex] 
         : 'untouched';
       
-      // Only show cursor within the word if it belongs at this position
-      const showCursor = isActiveWord && charIndex === input.length;
+      // Determine cursor position
+      const { showCursor } = getCursorPosition(wordIndex, charIndex);
       
       return (
-        <React.Fragment key={charIndex}>
-          {showCursor && <span className="typing-cursor"></span>}
-          <Character 
-            character={char}
-            status={status}
-          />
-        </React.Fragment>
+        <CharWithCursor
+          key={charIndex}
+          character={char}
+          status={status}
+          showCursor={showCursor}
+        />
       );
     });
     
@@ -63,40 +97,37 @@ const Test: React.FC = memo(() => {
       for (let i = 0; i < overflowText.length; i++) {
         const overflowChar = overflowText[i] || '';
         
-        // Only add cursor for active word at the right position
-        const showOverflowCursor = isActiveWord && actualWord.length + i === input.length;
+        // Calculate cursor position for overflow characters
+        const charIndex = actualWord.length + i;
+        const { showCursor } = getCursorPosition(wordIndex, charIndex);
         
         renderedChars.push(
-          <React.Fragment key={`overflow-${i}`}>
-            {showOverflowCursor && <span className="typing-cursor"></span>}
-            <Character 
-              character={overflowChar}
-              status="overflow"
-            />
-          </React.Fragment>
+          <CharWithCursor
+            key={`overflow-${i}`}
+            character={overflowChar}
+            status="overflow"
+            showCursor={showCursor}
+          />
         );
       }
     }
 
-    // Show cursor at the end of the word/overflow if needed
-    const showEndCursor = isActiveWord && input.length === (
-      actualWord.length + overflowText.length
-    );
+    // Show cursor at the end position if needed
+    const finalCharIndex = actualWord.length + overflowText.length;
+    const { showCursor: showEndCursor } = getCursorPosition(wordIndex, finalCharIndex);
 
     // Add the space separately after all characters
     // Only add space for non-last words or if the original text had a space
     const isLastWord = wordIndex === definitionWords.length - 1;
     const spaceChar = hasSpace || !isLastWord ? (
-      <React.Fragment>
-        {showEndCursor && <span className="typing-cursor"></span>}
-        <Character 
-          key="space"
-          character=" "
-          status={wordObj.status === 'completed' ? 'correct' : 'untouched'}
-        />
-      </React.Fragment>
+      <CharWithCursor
+        key="space"
+        character=" "
+        status={wordObj.status === 'completed' ? 'correct' : 'untouched'}
+        showCursor={showEndCursor}
+      />
     ) : (
-      showEndCursor && <span className="typing-cursor"></span>
+      showEndCursor && <span className="relative inline-block w-0.5 h-5 bg-gray-200 animate-[caretFlash_1s_ease-in-out_infinite] align-middle pointer-events-none -ml-0.5 shadow-sm shadow-white/50"></span>
     );
 
     return (
@@ -113,7 +144,7 @@ const Test: React.FC = memo(() => {
   // Renders the definition words
   const renderDefinition = () => {
     if (!definitionWords?.length) {
-      return <div>Loading definition...</div>;
+      return <div className="text-gray-400">Loading definition...</div>;
     }
 
     return (
@@ -126,15 +157,18 @@ const Test: React.FC = memo(() => {
   };
 
   return (
-    <div className="test">
-      <div className="word-display">
-        <h1 className="word-to-type">{word}</h1>
-        <span className="continue-prompt">
-          <kbd>Tab</kbd> + <kbd>Enter</kbd> to skip
+    <div className="p-8 rounded-lg mb-8 w-full flex flex-col items-center">
+      <div className="text-center mb-5 flex flex-col items-center">
+        <h1 className="text-3xl mb-5 text-gray-200">{word}</h1>
+        <span className="text-gray-400 text-sm">
+          <kbd className="bg-gray-700 rounded px-2 py-1 text-xs border border-gray-600 shadow mx-1">Tab</kbd> 
+          + 
+          <kbd className="bg-gray-700 rounded px-2 py-1 mx-1 text-xs border border-gray-600 shadow">Enter</kbd> 
+          to skip
         </span>
       </div>
       
-      <div className="definition">
+      <div className="font-mono text-xl leading-relaxed whitespace-pre-wrap text-gray-200 w-3/5">
         {renderDefinition()}
       </div>
     </div>

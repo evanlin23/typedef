@@ -1,0 +1,28 @@
+// tailwind.config.ts
+import type { Config } from "tailwindcss";
+
+export default {
+  content: [
+    "./index.html",
+    "./src/**/*.{js,jsx,ts,tsx}",
+  ],
+  theme: {
+    extend: {
+      animation: {
+        'caretFlash': 'caretFlash 1s ease-in-out infinite',
+        'fadeIn': 'fadeIn 0.3s ease-in',
+      },
+      keyframes: {
+        caretFlash: {
+          '0%, 100%': { opacity: '1' },
+          '50%': { opacity: '0' },
+        },
+        fadeIn: {
+          'from': { opacity: '0', transform: 'translateY(-10px)' },
+          'to': { opacity: '1', transform: 'translateY(0)' },
+        },
+      },
+    },
+  },
+  plugins: [],
+} satisfies Config;

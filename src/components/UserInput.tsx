@@ -1,6 +1,7 @@
 // src/components/UserInput.tsx
 import React, { useCallback, useEffect, useState } from 'react';
 import { useGame } from '../context/GameContext';
+import { MAX_OVERFLOW_CHARS } from '../constants';
 
 const UserInput: React.FC = () => {
   const { state, dispatch } = useGame();
@@ -68,7 +69,7 @@ const UserInput: React.FC = () => {
     const wordText = activeWord.text.trimEnd();
     
     // Don't allow more than MAX_OVERFLOW_CHARS extra characters per word
-    const maxLength = wordText.length + 19;
+    const maxLength = wordText.length + MAX_OVERFLOW_CHARS;
     if (state.input.length >= maxLength) return;
 
     // Handle regular input - add character to current input
@@ -87,7 +88,7 @@ const UserInput: React.FC = () => {
     <input
       type="text"
       autoFocus
-      className="sr-only"
+      className="hidden absolute w-0 h-0 p-0 m-[-1px] overflow-hidden clip-[rect(0,0,0,0)] whitespace-nowrap border-0"
       value={state.input}
       onChange={() => {}}
       aria-label="Typing input"

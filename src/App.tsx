@@ -1,41 +1,51 @@
 // src/App.tsx
-import React from 'react';
+import React, { memo } from 'react';
 import { GameProvider, useGame } from './context/GameContext';
 import Header from './components/Header';
 import Test from './components/Test';
 import Footer from './components/Footer';
 import ErrorBoundary from './components/ErrorBoundary';
 import UserInput from './components/UserInput';
-import './App.css';
 
-const GameContent: React.FC = () => {
+const GameContent: React.FC = memo(() => {
   const { state } = useGame();
 
   if (state.status === 'loading') {
-    return <div className="loading">Loading word and definition...</div>;
+    return <div className="text-center py-8 text-lg text-gray-400">Loading word and definition...</div>;
   }
   
   if (state.status === 'error') {
-    return <div className="error">Error: {state.error}</div>;
+    return <div className="p-4 bg-red-100 text-red-700 rounded-lg text-center my-5">
+      Error: {state.error || 'Unknown error occurred'}
+    </div>;
   }
 
   return (
-    <div className="content-area">
+    <div className="w-full">
       <Test />
       <UserInput />
     </div>
   );
-};
+});
+
+GameContent.displayName = 'GameContent';
 
 const App: React.FC = () => {
   return (
     <ErrorBoundary>
       <GameProvider>
-        <div className="container">
+      <div className="relative w-screen h-screen font-mono text-gray-200 bg-gray-900 overflow-hidden">
+        <div className="fixed top-10 left-1/2 transform -translate-x-1/2 p-4 z-10">
           <Header />
+        </div>
+        <div className="flex items-center justify-center h-full">
           <GameContent />
+        </div>
+        <div className="fixed bottom-10 left-1/2 transform -translate-x-1/2 p-4 z-10">
           <Footer />
         </div>
+      </div>
+
       </GameProvider>
     </ErrorBoundary>
   );

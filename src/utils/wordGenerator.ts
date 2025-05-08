@@ -1,21 +1,6 @@
 // src/utils/wordGenerator.ts
 import { WordObj } from '../types';
-
-interface APIConfig {
-  WORD_API: string;
-  DEFINITION_API: string;
-  TIMEOUT: number;
-  MAX_RETRIES: number;
-  RETRY_DELAY: number;
-}
-
-const API_CONFIG: APIConfig = {
-  WORD_API: 'https://random-word-api.herokuapp.com/word',
-  DEFINITION_API: 'https://api.dictionaryapi.dev/api/v2/entries/en/',
-  TIMEOUT: 5000,
-  MAX_RETRIES: 5,
-  RETRY_DELAY: 500,
-};
+import { API } from '../constants';
 
 // Track last word to avoid duplicates
 let lastGeneratedWord = '';
@@ -41,10 +26,10 @@ class WordGenerator {
   async generate(): Promise<WordObj[]> {
     let retryCount = 0;
     
-    while (retryCount < API_CONFIG.MAX_RETRIES) {
+    while (retryCount < API.MAX_RETRIES) {
       try {
         // Get random word
-        const wordRes = await fetch(API_CONFIG.WORD_API);
+        const wordRes = await fetch(API.WORD_API);
         if (!wordRes.ok) throw new Error('Failed to fetch word');
         
         const [word] = await wordRes.json() as string[];
@@ -58,9 +43,9 @@ class WordGenerator {
 
         // Get definition with timeout
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), API_CONFIG.TIMEOUT);
+        const timeoutId = setTimeout(() => controller.abort(), API.TIMEOUT);
         
-        const defRes = await fetch(`${API_CONFIG.DEFINITION_API}${word}`, {
+        const defRes = await fetch(`${API.DEFINITION_API}${word}`, {
           signal: controller.signal
         });
         
@@ -84,9 +69,8 @@ class WordGenerator {
         retryCount++;
         
         // Wait before retrying with exponential backoff
-        await new Promise(resolve => 
-          setTimeout(resolve, API_CONFIG.RETRY_DELAY * Math.pow(1.5, retryCount))
-        );
+        const delay = API.RETRY_DELAY * Math.pow(1.5, retryCount);
+        await new Promise(resolve => setTimeout(resolve, delay));
       }
     }
     
