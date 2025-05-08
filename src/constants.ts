@@ -1,5 +1,5 @@
 export const MAX_OVERFLOW_CHARS = 19;
-// export const CORRECT = '#28a745';
+
 export const API = {
   WORD_API: 'https://random-word-api.herokuapp.com/word',
   DEFINITION_API: 'https://api.dictionaryapi.dev/api/v2/entries/en/',
