@@ -141,36 +141,6 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       const trimmedWord = activeWord.text.trimEnd();
       const wordChars = Array.from(trimmedWord);
       
-      // Short circuit for single-character words
-      if (trimmedWord.length === 1 && newInput.length >= 1) {
-        const isCorrect = newInput[0] === trimmedWord[0];
-        
-        if (isCorrect) {
-          const updatedWords = [...nextState.definitionWords];
-          updatedWords[nextState.currentWordIndex] = {
-            ...activeWord,
-            characters: ['correct']
-          };
-          
-          const stateWithUpdatedChar = {
-            ...nextState,
-            definitionWords: updatedWords,
-            score: nextState.score + 1
-          };
-          
-          // Handle quick completion
-          if (newInput.length > 1 || (
-              newInput === trimmedWord[0] && 
-              nextState.currentWordIndex === nextState.definitionWords.length - 1)) {
-            return nextState.currentWordIndex === nextState.definitionWords.length - 1 
-              ? gameReducer(stateWithUpdatedChar, { type: 'COMPLETE_TEST' })
-              : gameReducer(stateWithUpdatedChar, { type: 'MOVE_TO_NEXT_WORD' });
-          }
-          
-          return stateWithUpdatedChar;
-        }
-      }
-      
       // Process character statuses
       const updatedWords = [...nextState.definitionWords];
       const currentWord = { ...updatedWords[nextState.currentWordIndex] };
