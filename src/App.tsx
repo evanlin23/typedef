@@ -11,7 +11,7 @@ const GameContent: React.FC = memo(() => {
   const { state } = useGame();
 
   if (state.status === 'loading') {
-    return <div className="text-center py-8 text-lg text-gray-400">Loading word and definition...</div>;
+    return <div className="text-center py-8 text-lg text-text-secondary">Loading word and definition...</div>;
   }
   
   if (state.status === 'error') {
@@ -34,7 +34,7 @@ const App: React.FC = () => {
   return (
     <ErrorBoundary>
       <GameProvider>
-      <div className="relative w-screen h-screen font-mono text-gray-200 bg-gray-900 overflow-hidden">
+      <div className="relative w-screen h-screen font-mono text-text-primary bg-bg-primary overflow-hidden">
         <div className="fixed top-10 left-1/2 transform -translate-x-1/2 p-4 z-10">
           <Header />
         </div>
