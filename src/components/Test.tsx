@@ -16,7 +16,7 @@ const CharWithCursor: React.FC<CharWithCursorProps> = memo(({ character, status,
   return (
     <>
       {showCursor && (
-        <span className="relative inline-block w-0.5 h-5 bg-gray-200 animate-[caretFlash_1s_ease-in-out_infinite] align-middle pointer-events-none -ml-0.5 shadow-sm shadow-white/50">
+        <span className="relative inline-block w-0.5 h-5 bg-text-primary animate-[caretFlash_1s_ease-in-out_infinite] align-middle pointer-events-none -ml-0.5 shadow-sm shadow-white/50">
           {/* The animation still doesn't work */}
         </span>
       )}
@@ -30,7 +30,7 @@ const Test: React.FC = memo(() => {
   const { words, definitionWords, currentWordIndex, testCompleted, input } = state;
   
   if (!words?.length) {
-    return <div className="text-center py-8 text-lg text-gray-400">Loading words...</div>;
+    return <div className="text-center py-8 text-lg text-text-secondary">Loading words...</div>;
   }
 
   if (testCompleted) {
@@ -127,7 +127,7 @@ const Test: React.FC = memo(() => {
         showCursor={showEndCursor}
       />
     ) : (
-      showEndCursor && <span className="relative inline-block w-0.5 h-5 bg-gray-200 animate-[caretFlash_1s_ease-in-out_infinite] align-middle pointer-events-none -ml-0.5 shadow-sm shadow-white/50"></span>
+      showEndCursor && <span className="relative inline-block w-0.5 h-5 bg-text-primary animate-[caretFlash_1s_ease-in-out_infinite] align-middle pointer-events-none -ml-0.5 shadow-sm shadow-white/50"></span>
     );
 
     return (
@@ -144,7 +144,7 @@ const Test: React.FC = memo(() => {
   // Renders the definition words
   const renderDefinition = () => {
     if (!definitionWords?.length) {
-      return <div className="text-gray-400">Loading definition...</div>;
+      return <div className="text-text-secondary">Loading definition...</div>;
     }
 
     return (
@@ -159,16 +159,16 @@ const Test: React.FC = memo(() => {
   return (
     <div className="p-8 rounded-lg mb-8 w-full flex flex-col items-center">
       <div className="text-center mb-5 flex flex-col items-center">
-        <h1 className="text-3xl mb-5 text-gray-200">{word}</h1>
-        <span className="text-gray-400 text-sm">
-          <kbd className="bg-gray-700 rounded px-2 py-1 text-xs border border-gray-600 shadow mx-1">Tab</kbd> 
+        <h1 className="text-3xl mb-5 text-text-primary">{word}</h1>
+        <span className="text-text-secondary text-lg">
+          <kbd className="bg-bg-secondary rounded px-2 py-1 text-sm border border-border-secondary shadow mx-2">Tab</kbd> 
           + 
-          <kbd className="bg-gray-700 rounded px-2 py-1 mx-1 text-xs border border-gray-600 shadow">Enter</kbd> 
+          <kbd className="bg-bg-secondary rounded px-2 py-1 text-sm border border-border-secondary shadow mx-2">Enter</kbd> 
           to skip
         </span>
       </div>
       
-      <div className="font-mono text-xl leading-relaxed whitespace-pre-wrap text-gray-200 w-3/5">
+      <div className="font-mono text-xl leading-relaxed whitespace-pre-wrap text-text-primary w-3/5">
         {renderDefinition()}
       </div>
     </div>

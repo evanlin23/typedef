@@ -15,19 +15,19 @@ const Character: React.FC<CharacterProps> = memo(({ character, status }) => {
   
   switch(status) {
     case 'correct':
-      statusClasses = 'text-green-400';
+      statusClasses = 'text-accent-primary';
       break;
     case 'incorrect':
-      statusClasses = 'text-red-500 line-through decoration-red-500 decoration-2';
+      statusClasses = 'text-error line-through decoration-error decoration-2';
       break;
     case 'untouched':
-      statusClasses = 'text-gray-500';
+      statusClasses = 'text-text-secondary';
       break;
     case 'overflow':
-      statusClasses = 'text-red-500 line-through decoration-red-500';
+      statusClasses = 'text-error line-through decoration-error';
       break;
     default:
-      statusClasses = 'text-gray-200';
+      statusClasses = 'text-text-primary';
   }
   
   // Add space-specific styling

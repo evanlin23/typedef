@@ -7,11 +7,11 @@ const TestResults: React.FC = memo(() => {
   const { state } = useGame();
   
   if (!state.testCompleted) {
-    return <div className="text-center py-8 text-lg text-gray-400">Test not completed yet...</div>;
+    return <div className="text-center py-8 text-lg text-text-secondary">Test not completed yet...</div>;
   }
   
   if (!state.currentTestStats) {
-    return <div className="text-center py-8 text-lg text-gray-400">Calculating your results...</div>;
+    return <div className="text-center py-8 text-lg text-text-secondary">Calculating your results...</div>;
   }
   
   // Destructure with default values to prevent errors
@@ -25,12 +25,12 @@ const TestResults: React.FC = memo(() => {
   } = state.currentTestStats;
   
   return (
-    <div className="w-3/5 mx-auto bg-gray-800 p-8 rounded-lg mb-8 text-center animate-[fadeIn_0.3s_ease-in_forwards]">
-      <h3 className="text-2xl mb-5 text-green-400">Test Completed!</h3>
+    <div className="w-3/5 mx-auto bg-bg-secondary p-8 rounded-lg mb-8 text-center animate-[fadeIn_0.3s_ease-in_forwards]">
+      <h3 className="text-2xl mb-5 text-accent-primary">Test Completed!</h3>
       
-      <div className="bg-gray-900 p-4 rounded mb-6 inline-block min-w-52">
-        <span className="font-bold mr-2 text-gray-400">Word:</span> 
-        <span className="text-xl font-mono text-gray-200">{word}</span>
+      <div className="bg-bg-primary p-4 rounded mb-6 inline-block min-w-52">
+        <span className="font-bold mr-2 text-text-secondary">Word:</span> 
+        <span className="text-xl font-mono text-text-primary">{word}</span>
       </div>
       
       <div className="grid grid-cols-3 gap-5 mb-8 sm:grid-cols-5">
@@ -41,8 +41,8 @@ const TestResults: React.FC = memo(() => {
         <StatBox value={errors} label="Errors" />
       </div>
       
-      <div className="text-gray-400 text-lg mt-6">
-        Press <kbd className="bg-gray-700 rounded px-2 py-1 text-sm border border-gray-600 shadow mx-1">Enter</kbd> to continue
+      <div className="text-text-secondary text-lg mt-6">
+        Press <kbd className="bg-bg-secondary rounded px-2 py-1 text-sm border border-border-secondary shadow mx-1">Enter</kbd> to continue
       </div>
     </div>
   );

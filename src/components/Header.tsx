@@ -5,7 +5,7 @@ const Header: React.FC = memo(() => {
   return (
     <header className="text-center mb-8">
       <h1 className="text-4xl font-bold">
-        <span className="text-green-400">type</span>
+        <span className="text-accent-primary">type</span>
         <span>def</span>
       </h1>
     </header>

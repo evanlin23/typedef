@@ -9,7 +9,7 @@ interface StatItemProps {
 
 const StatItem: React.FC<StatItemProps> = memo(({ label, value }) => (
   <div className="mx-4 text-center">
-    <span className="font-bold mr-1 text-gray-400">{label}:</span>
+    <span className="font-bold mr-1 text-text-secondary">{label}:</span>
     <span>{value}</span>
   </div>
 ));
@@ -20,7 +20,7 @@ const Footer: React.FC = memo(() => {
   const { state } = useGame();
   
   return (
-    <footer className="mt-auto flex flex-col items-center text-gray-400">      
+    <footer className="mt-auto flex flex-col items-center text-text-secondary">      
       <div className="flex justify-center my-4">
         <StatItem label="Time" value={`${state.time}s`} />
         <StatItem label="Score" value={state.score} />
@@ -28,14 +28,14 @@ const Footer: React.FC = memo(() => {
         <StatItem 
           label="Next" 
           value={state.nextWord ? (
-            <span className="text-green-400 font-bold">Ready</span>
+            <span className="text-accent-primary font-bold">Ready</span>
           ) : (
             "Loading..."
           )} 
         />
       </div>
 
-      <div className="text-sm text-gray-400 mb-4">
+      <div className="text-sm text-text-secondary mb-4">
         Words from Random Word API • Definitions from Free Dictionary API
       </div>
       
@@ -44,7 +44,7 @@ const Footer: React.FC = memo(() => {
           href="https://github.com/evanlin23/typedef" 
           target="_blank" 
           rel="noopener noreferrer"
-          className="text-blue-400 hover:underline mx-2"
+          className="text-accent-secondary hover:underline mx-2"
         >
           GitHub
         </a>
