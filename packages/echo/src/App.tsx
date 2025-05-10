@@ -1,5 +1,5 @@
 // src/App.tsx
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import type { Song } from './types';
 import { getAllSongs, addSong as addSongToDB, deleteSongFromDB } from './utils/db';
 import { Header } from './components/Header';
@@ -48,76 +48,63 @@ export default function App() {
         if (song.url && song.url.startsWith('blob:')) {
           URL.revokeObjectURL(song.url);
         }
-        if (typeof song.file === 'string' && song.file.startsWith('blob:')) {
-          URL.revokeObjectURL(song.file);
-        }
       });
     };
   }, []);
 
   // Play/pause logic
   useEffect(() => {
-    if (audioRef.current && currentSong) {
-      if (isPlaying) {
-        // Fix potential bug: always reload audio source when changing songs
-        // This ensures we're playing the correct file
-        // Get the playable URL from either url or file (if it's a string)
-        const playableUrl = currentSong.url || 
-          (typeof currentSong.file === 'string' ? currentSong.file : '');
-        
-        if (playableUrl && audioRef.current.src !== playableUrl) {
-          audioRef.current.src = playableUrl;
-        }
-        
-        audioRef.current.play().catch((error: Error) => {
-          console.error("Playback failed:", error);
-          setIsPlaying(false);
-        });
-      } else {
-        audioRef.current.pause();
+    if (!audioRef.current || !currentSong) return;
+    
+    const audio = audioRef.current;
+    
+    if (isPlaying) {
+      // Get the playable URL
+      const playableUrl = currentSong.url || 
+        (typeof currentSong.file === 'string' ? currentSong.file : '');
+      
+      if (playableUrl && audio.src !== playableUrl) {
+        audio.src = playableUrl;
       }
+      
+      audio.play().catch((error: Error) => {
+        console.error("Playback failed:", error);
+        setIsPlaying(false);
+      });
+    } else {
+      audio.pause();
     }
   }, [isPlaying, currentSong]);
 
-  // Update time as song plays
+  // Update time as song plays and handle song ending
   useEffect(() => {
     const audio = audioRef.current;
+    if (!audio) return;
     
-    const updateTime = () => {
-      if (audio) {
-        setCurrentTime(audio.currentTime);
-      }
-    };
+    const updateTime = () => setCurrentTime(audio.currentTime);
+    const handleEnded = () => playNextSong();
     
-    const handleEnded = () => {
-      playNextSong();
-    };
-    
-    if (audio) {
-      audio.addEventListener('timeupdate', updateTime);
-      audio.addEventListener('ended', handleEnded);
-    }
+    audio.addEventListener('timeupdate', updateTime);
+    audio.addEventListener('ended', handleEnded);
     
     return () => {
-      if (audio) {
-        audio.removeEventListener('timeupdate', updateTime);
-        audio.removeEventListener('ended', handleEnded);
-      }
+      audio.removeEventListener('timeupdate', updateTime);
+      audio.removeEventListener('ended', handleEnded);
     };
-  }, [currentSong]);
+  }, [/* No dependencies to avoid recreating event listeners */]);
 
-  // Handle file upload
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Handle file upload - optimized for handling multiple files properly
+  const handleFileUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
     
     setIsLoading(true);
     
-    const processFiles = async () => {
+    try {
       const newSongs: Song[] = [];
       
-      for (let i = 0; i < files.length; i++) {
-        const file = files[i];
+      // Process all files in parallel for better performance
+      await Promise.all(Array.from(files).map(async (file) => {
         try {
           // Create a blob URL for playback
           const blobUrl = URL.createObjectURL(file);
@@ -125,53 +112,55 @@ export default function App() {
           // Create audio element to get duration
           const audio = new Audio(blobUrl);
           
-          await new Promise<void>((resolve) => {
-            audio.onloadedmetadata = () => {
-              resolve();
-            };
+          // Wait for metadata to load with a timeout fallback
+          const duration = await new Promise<number>((resolve) => {
+            const timeoutId = setTimeout(() => resolve(0), 3000);
             
-            // If metadata fails to load, resolve after timeout
-            setTimeout(() => resolve(), 3000);
+            audio.onloadedmetadata = () => {
+              clearTimeout(timeoutId);
+              resolve(audio.duration || 0);
+            };
           });
           
           const newSong: Song = {
             id: crypto.randomUUID(),
             title: file.name.replace(/\.[^/.]+$/, ""), // Remove file extension
             artist: "Unknown Artist",
-            duration: audio.duration || 0,
-            file: file, // Store the actual file
+            duration,
+            file, // Store the actual file
             url: blobUrl // Store the playable URL
           };
           
-          // Store the actual file blob in IndexedDB
+          // Store in IndexedDB
           await addSongToDB(newSong, file);
           
-          // Add to our new songs array with blob URL for playback
+          // Add to our new songs array
           newSongs.push(newSong);
         } catch (error) {
           console.error(`Error processing file ${file.name}:`, error);
         }
+      }));
+      
+      if (newSongs.length > 0) {
+        // Update state once with all new songs
+        setSongs(prevSongs => [...prevSongs, ...newSongs]);
+        
+        // If no current song is selected, set the first new one
+        if (!currentSong) {
+          setCurrentSong(newSongs[0]);
+        }
       }
-      
-      // Update state once with all new songs
-      setSongs(prevSongs => [...prevSongs, ...newSongs]);
-      
-      // If no songs were loaded before and we have new songs, set the first one as current
-      if (songs.length === 0 && !currentSong && newSongs.length > 0) {
-        setCurrentSong(newSongs[0]);
-      }
-      
+    } catch (error) {
+      console.error("Error uploading files:", error);
+    } finally {
       setIsLoading(false);
-    };
-    
-    processFiles();
-    
-    // Reset the input
-    e.target.value = '';
-  };
+      // Reset the input
+      e.target.value = '';
+    }
+  }, [songs.length, currentSong]);
 
   // Delete a song
-  const deleteSong = async (id: string) => {
+  const deleteSong = useCallback(async (id: string) => {
     try {
       // If the current song is being deleted, clear it
       if (currentSong?.id === id) {
@@ -181,14 +170,8 @@ export default function App() {
       
       // Find the song to get its URL
       const songToDelete = songs.find(song => song.id === id);
-      if (songToDelete) {
-        // Clean up blob URLs
-        if (songToDelete.url && songToDelete.url.startsWith('blob:')) {
-          URL.revokeObjectURL(songToDelete.url);
-        }
-        if (typeof songToDelete.file === 'string' && songToDelete.file.startsWith('blob:')) {
-          URL.revokeObjectURL(songToDelete.file);
-        }
+      if (songToDelete?.url && songToDelete.url.startsWith('blob:')) {
+        URL.revokeObjectURL(songToDelete.url);
       }
       
       // Delete from IndexedDB
@@ -199,12 +182,10 @@ export default function App() {
     } catch (error) {
       console.error("Error deleting song:", error);
     }
-  };
+  }, [songs, currentSong]);
 
   // Play a specific song
-  const playSong = (song: Song) => {
-    // Fix bug: create a new audio element if we're having issues with the current one
-    // or if the songs are getting glitched when switching around
+  const playSong = useCallback((song: Song) => {
     if (audioRef.current) {
       audioRef.current.pause();
       audioRef.current.currentTime = 0;
@@ -212,13 +193,12 @@ export default function App() {
     
     setCurrentSong(song);
     setIsPlaying(true);
-  };
+  }, []);
 
   // Play the next song
-  const playNextSong = () => {
+  const playNextSong = useCallback(() => {
     if (songs.length === 0) return;
     
-    // Play the next song in order
     const currentIndex = currentSong 
       ? songs.findIndex(song => song.id === currentSong.id)
       : -1;
@@ -226,10 +206,10 @@ export default function App() {
     const nextIndex = (currentIndex + 1) % songs.length;
     setCurrentSong(songs[nextIndex]);
     setIsPlaying(true);
-  };
+  }, [songs, currentSong]);
 
   // Play the previous song
-  const playPrevSong = () => {
+  const playPrevSong = useCallback(() => {
     if (songs.length === 0) return;
     
     // If we're more than 3 seconds into the song, restart it
@@ -238,7 +218,6 @@ export default function App() {
       return;
     }
     
-    // Play the previous song in order
     const currentIndex = currentSong 
       ? songs.findIndex(song => song.id === currentSong.id)
       : -1;
@@ -246,10 +225,10 @@ export default function App() {
     const prevIndex = (currentIndex - 1 + songs.length) % songs.length;
     setCurrentSong(songs[prevIndex]);
     setIsPlaying(true);
-  };
+  }, [songs, currentSong]);
 
   // Seek to a specific time in the song
-  const handleSeek = (e: React.MouseEvent<HTMLDivElement>) => {
+  const handleSeek = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     if (!progressBarRef.current || !audioRef.current || !currentSong) return;
     
     const progressBar = progressBarRef.current;
@@ -259,7 +238,7 @@ export default function App() {
     
     audioRef.current.currentTime = newTime;
     setCurrentTime(newTime);
-  };
+  }, [currentSong]);
 
   return (
     <div className="min-h-screen w-full bg-gray-900 text-white flex flex-col">
