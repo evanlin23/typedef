@@ -8,8 +8,10 @@
     "build": "pnpm -r build",
     "dev:typedef": "pnpm --filter typedef dev",
     "dev:echo": "pnpm --filter echo dev",
+    "dev:struct": "pnpm --filter struct dev",
     "deploy:typedef": "cd packages/typedef && npm run deploy",
-    "deploy:echo": "cd packages/echo && npm run deploy"
+    "deploy:echo": "cd packages/echo && npm run deploy",
+    "deploy:struct": "cd packages/struct && npm run deploy"
   },
   "devDependencies": {
     "@types/fs-extra": "^11.0.4",
