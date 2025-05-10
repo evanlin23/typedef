@@ -76,23 +76,6 @@ export default function App() {
     }
   }, [isPlaying, currentSong]);
 
-  // Update time as song plays and handle song ending
-  useEffect(() => {
-    const audio = audioRef.current;
-    if (!audio) return;
-    
-    const updateTime = () => setCurrentTime(audio.currentTime);
-    const handleEnded = () => playNextSong();
-    
-    audio.addEventListener('timeupdate', updateTime);
-    audio.addEventListener('ended', handleEnded);
-    
-    return () => {
-      audio.removeEventListener('timeupdate', updateTime);
-      audio.removeEventListener('ended', handleEnded);
-    };
-  }, [/* No dependencies to avoid recreating event listeners */]);
-
   // Handle file upload - optimized for handling multiple files properly
   const handleFileUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -208,6 +191,23 @@ export default function App() {
     setIsPlaying(true);
   }, [songs, currentSong]);
 
+  // Update time as song plays and handle song ending
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    
+    const updateTime = () => setCurrentTime(audio.currentTime);
+    const handleEnded = () => playNextSong();
+    
+    audio.addEventListener('timeupdate', updateTime);
+    audio.addEventListener('ended', handleEnded);
+    
+    return () => {
+      audio.removeEventListener('timeupdate', updateTime);
+      audio.removeEventListener('ended', handleEnded);
+    };
+  }, [playNextSong]); 
+
   // Play the previous song
   const playPrevSong = useCallback(() => {
     if (songs.length === 0) return;
@@ -253,15 +253,16 @@ export default function App() {
       {/* Main content */}
       <main className="flex-1 flex flex-col md:flex-row p-4 gap-4">
         {/* Audio element (hidden) */}
-        <audio 
-          ref={audioRef} 
-          src={
-            currentSong 
-              ? (currentSong.url || (typeof currentSong.file === 'string' ? currentSong.file : ""))
-              : ""
-          }
-          key={currentSong?.id || "empty"} 
-        />
+        {currentSong && (
+          <audio 
+            ref={audioRef} 
+            src={
+              currentSong.url || 
+              (typeof currentSong.file === 'string' ? currentSong.file : "")
+            }
+            key={currentSong.id}
+          />
+        )}
         
         {/* Library panel (conditionally shown) */}
         {showLibrary && (
