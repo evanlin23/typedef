@@ -125,7 +125,7 @@ export default function App() {
           const newSong: Song = {
             id: crypto.randomUUID(),
             title: file.name.replace(/\.[^/.]+$/, ""), // Remove file extension
-            artist: "Unknown Artist",
+            artist: "Lock in",
             duration,
             file, // Store the actual file
             url: blobUrl // Store the playable URL
