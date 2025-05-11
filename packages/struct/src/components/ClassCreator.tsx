@@ -4,32 +4,34 @@ import { addClass } from '../utils/db';
 import type { Class } from '../utils/types';
 
 interface ClassCreatorProps {
-  onClassCreated: () => Promise<void>; 
-  onCreateClass: (classId: number) => void; 
+  onClassCreated: () => Promise<void>;
+  onCreateClass: (classId: string) => void; // Changed: classId is string (UUID)
 }
 
 const ClassCreator: React.FC<ClassCreatorProps> = ({ onClassCreated, onCreateClass }) => {
   const [newClassName, setNewClassName] = useState('');
   const [isCreating, setIsCreating] = useState(false);
 
-  const handleCreateClass = async() => {
+  const handleCreateClass = async () => {
     const trimmedName = newClassName.trim();
-    if (!trimmedName || isCreating) {return;}
-    
+    if (!trimmedName || isCreating) { return; }
+
     setIsCreating(true);
     try {
-      const classData: Omit<Class, 'id' | 'pdfCount' | 'doneCount' | 'progress' | 'completedItems' | 'totalItems' | 'notes'> = {
+      // Prepare data for addClass (id, pdfCount, doneCount, notes are handled by addClass)
+      const classDataForDb: Omit<Class, 'id' | 'pdfCount' | 'doneCount' | 'notes'> = {
         name: trimmedName,
         dateCreated: Date.now(),
-        isPinned: false, 
+        isPinned: false, // Default to not pinned
       };
-      const classId = await addClass(classData); // addClass in db.ts initializes notes
-      
+      const classId = await addClass(classDataForDb); // addClass now returns a string (UUID)
+
       setNewClassName('');
-      await onClassCreated(); 
-      onCreateClass(classId); 
+      await onClassCreated();
+      onCreateClass(classId); // Pass the string UUID
     } catch (error) {
       console.error('Failed to create class:', error);
+      // Optionally: alert('Failed to create class. Please try again.');
     } finally {
       setIsCreating(false);
     }

@@ -1,27 +1,27 @@
 // src/utils/types.ts
 export type PDF = {
-  id?: number; 
+  id?: number; // PDF IDs can remain auto-incrementing numbers for their own store
   name: string;
   size: number;
   lastModified: number;
   data: ArrayBuffer;
   status: 'to-study' | 'done';
   dateAdded: number;
-  classId: number; 
-  orderIndex?: number; // For custom drag-and-drop ordering
+  classId: string; // Changed: Class ID is now a string (UUID)
+  orderIndex?: number;
 };
 
 export interface Class {
-  id?: number; 
+  id: string; // Changed: ID is now a string (UUID) and always present
   name: string;
   dateCreated: number;
-  pdfCount: number; 
-  doneCount?: number; 
+  pdfCount: number;
+  doneCount?: number;
   isPinned?: boolean;
-  notes?: string; // Notes specific to this class
+  notes: string;
 
   // Client-side calculated properties for display
-  progress?: number; 
-  completedItems?: number; 
-  totalItems?: number; 
+  progress?: number;
+  completedItems?: number;
+  totalItems?: number;
 }

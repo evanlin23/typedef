@@ -1,8 +1,9 @@
 // src/utils/db.ts
 import type { PDF, Class } from './types';
+import { idbRequestToPromise, idbTransactionToPromise } from './idbUtils';
 
 const DB_NAME = 'pdf-study-app';
-const DB_VERSION = 2; // Ensure this is up-to-date if schema changes like adding indexes occur
+const DB_VERSION = 2;
 const PDF_STORE = 'pdfs';
 const CLASS_STORE = 'classes';
 
@@ -15,9 +16,9 @@ export const initDB = (): Promise<IDBDatabase> => {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, DB_VERSION);
 
-    request.onerror = (_event) => { // Changed to _event
-      console.error('IndexedDB error:', _event); // Optionally log _event
-      reject(new Error('Error opening database'));
+    request.onerror = (event) => {
+      console.error('IndexedDB error:', (event.target as IDBOpenDBRequest).error);
+      reject((event.target as IDBOpenDBRequest).error || new Error('Error opening database'));
     };
 
     request.onsuccess = (event) => {
@@ -48,372 +49,296 @@ export const initDB = (): Promise<IDBDatabase> => {
         }
       }
 
-      if (oldVersion < 2) { 
+      if (oldVersion < 2) {
         if (!db.objectStoreNames.contains(CLASS_STORE)) {
-          const classStore = db.createObjectStore(CLASS_STORE, { keyPath: 'id', autoIncrement: true });
+          const classStore = db.createObjectStore(CLASS_STORE, { keyPath: 'id' });
           classStore.createIndex('name', 'name', { unique: false });
           classStore.createIndex('dateCreated', 'dateCreated', { unique: false });
-          classStore.createIndex('isPinned', 'isPinned', { unique: false }); 
+          classStore.createIndex('isPinned', 'isPinned', { unique: false });
         }
-        if (transaction) {
-          const pdfStore = transaction.objectStore(PDF_STORE);
-          if (!pdfStore.indexNames.contains('classId')) {
-            pdfStore.createIndex('classId', 'classId', { unique: false });
-          }
-        } else {
-          console.error('Upgrade transaction not available for PDF store modification.');
+        // Ensure transaction exists for modifying pdfStore if DB was just created or version upgraded
+        const currentTransaction = transaction || db.transaction(PDF_STORE, 'readwrite');
+        const pdfStore = currentTransaction.objectStore(PDF_STORE);
+        if (!pdfStore.indexNames.contains('classId')) {
+          pdfStore.createIndex('classId', 'classId', { unique: false });
         }
       }
     };
   });
 };
 
-const _updateClassCountersInTransaction = (
+const _updateClassCountersInTransaction = async (
   classStore: IDBObjectStore,
-  classId: number,
+  classId: string,
   pdfDelta: number,
   doneDelta: number,
-): Promise<void> => new Promise((resolve, reject) => {
-  const getRequest = classStore.get(classId);
-  getRequest.onsuccess = () => {
-    const classData = getRequest.result as Class | undefined;
-    if (classData) {
-      const newPdfCount = (classData.pdfCount || 0) + pdfDelta;
-      const newDoneCount = (classData.doneCount || 0) + doneDelta;
-      const updatedClass = {
-        ...classData,
-        pdfCount: Math.max(0, newPdfCount),
-        doneCount: Math.max(0, newDoneCount),
-      };
-      const updateRequest = classStore.put(updatedClass);
-      updateRequest.onsuccess = () => resolve();
-      updateRequest.onerror = (errEvent) => {
-        console.error('Error updating class counters:', errEvent); // Log actual event
-        reject(new Error('Failed to update class counters.'));
-      };
-    } else {
-      console.warn(`Class with id ${classId} not found for counter update.`);
-      resolve(); 
-    }
-  };
-  getRequest.onerror = (errEvent) => {
-    console.error('Error fetching class for counter update:', errEvent); // Log actual event
-    reject(new Error('Failed to fetch class for counter update.'));
-  };
-});
-
-export const addClass = async(classData: Omit<Class, 'id' | 'pdfCount' | 'doneCount' | 'notes'>): Promise<number> => {
-  const db = await initDB();
-  return new Promise((resolve, reject) => {
-    const transaction = db.transaction([CLASS_STORE], 'readwrite');
-    const store = transaction.objectStore(CLASS_STORE);
-    transaction.onerror = (_event) => { // Changed to _event
-      console.error('Transaction error while adding class:', _event); // Optionally log _event
-      reject(new Error('Transaction error while adding class.'));
-    };
-
-    const newClass: Omit<Class, 'id'> = { 
+): Promise<void> => {
+  const classData = await idbRequestToPromise<Class | undefined>(classStore.get(classId));
+  if (classData) {
+    const newPdfCount = (classData.pdfCount || 0) + pdfDelta;
+    const newDoneCount = (classData.doneCount || 0) + doneDelta;
+    const updatedClass = {
       ...classData,
-      pdfCount: 0,
-      doneCount: 0,
-      isPinned: classData.isPinned || false,
-      notes: '', 
+      pdfCount: Math.max(0, newPdfCount),
+      doneCount: Math.max(0, newDoneCount),
     };
-
-    const request = store.add(newClass);
-    request.onsuccess = () => resolve(request.result as number);
-    request.onerror = (_event) => { // Changed to _event
-      console.error('Error adding class:', _event); // Optionally log _event
-      reject(new Error('Error adding class.'));
-    };
-  });
+    await idbRequestToPromise(classStore.put(updatedClass));
+  } else {
+    console.warn(`Class with id ${classId} not found for counter update.`);
+  }
 };
 
-export const getClasses = async(): Promise<Class[]> => {
+export const addClass = async (classData: Omit<Class, 'id' | 'pdfCount' | 'doneCount' | 'notes'>): Promise<string> => {
   const db = await initDB();
-  return new Promise((resolve, reject) => {
-    const transaction = db.transaction([CLASS_STORE], 'readonly');
-    const store = transaction.objectStore(CLASS_STORE);
-    transaction.onerror = (_event) => reject(new Error('Transaction error getting classes.')); // Changed
-    const request = store.getAll();
-    request.onsuccess = () => resolve(request.result as Class[]);
-    request.onerror = (_event) => reject(new Error('Error getting classes.')); // Changed
-  });
+  const transaction = db.transaction([CLASS_STORE], 'readwrite');
+  const store = transaction.objectStore(CLASS_STORE);
+  const newId = crypto.randomUUID();
+
+  const newClass: Class = {
+    id: newId,
+    ...classData,
+    pdfCount: 0,
+    doneCount: 0,
+    isPinned: classData.isPinned || false,
+    notes: '',
+  };
+
+  await idbRequestToPromise(store.add(newClass));
+  await idbTransactionToPromise(transaction);
+  return newId;
 };
 
-export const getClass = async(id: number): Promise<Class | undefined> => {
+export const getClasses = async (): Promise<Class[]> => {
   const db = await initDB();
-  return new Promise((resolve, reject) => {
-    const transaction = db.transaction([CLASS_STORE], 'readonly');
-    const store = transaction.objectStore(CLASS_STORE);
-    transaction.onerror = (_event) => reject(new Error('Transaction error getting class.')); // Changed
-    const request = store.get(id);
-    request.onsuccess = () => resolve(request.result as Class | undefined);
-    request.onerror = (_event) => reject(new Error('Error getting class.')); // Changed
-  });
+  const transaction = db.transaction([CLASS_STORE], 'readonly');
+  const store = transaction.objectStore(CLASS_STORE);
+  return idbRequestToPromise<Class[]>(store.getAll());
 };
 
-export const updateClass = async(id: number, updates: Partial<Omit<Class, 'id'>>): Promise<void> => {
+export const getClass = async (id: string): Promise<Class | undefined> => {
   const db = await initDB();
-  return new Promise((resolve, reject) => {
-    const transaction = db.transaction([CLASS_STORE], 'readwrite');
-    const store = transaction.objectStore(CLASS_STORE);
-    transaction.onerror = (_event) => reject(new Error('Transaction error updating class.')); // Changed
-
-    const getRequest = store.get(id);
-    getRequest.onsuccess = () => {
-      const classData = getRequest.result as Class | undefined;
-      if (!classData) {
-        reject(new Error(`Class with ID ${id} not found for update.`));
-        return;
-      }
-      const { id: _idFromUpdates, ...restOfUpdates } = updates as any; 
-      const updatedClass = { ...classData, ...restOfUpdates };
-      
-      const updateRequest = store.put(updatedClass);
-      updateRequest.onsuccess = () => resolve();
-      updateRequest.onerror = (_event) => reject(new Error('Error updating class data.')); // Changed
-    };
-    getRequest.onerror = (_event) => reject(new Error('Error getting class for update.')); // Changed
-  });
+  const transaction = db.transaction([CLASS_STORE], 'readonly');
+  const store = transaction.objectStore(CLASS_STORE);
+  return idbRequestToPromise<Class | undefined>(store.get(id));
 };
 
-export const deleteClass = async(id: number): Promise<void> => {
+export const updateClass = async (id: string, updates: Partial<Omit<Class, 'id'>>): Promise<void> => {
   const db = await initDB();
-  return new Promise((resolve, reject) => {
-    const transaction = db.transaction([CLASS_STORE, PDF_STORE], 'readwrite');
-    const classStore = transaction.objectStore(CLASS_STORE);
-    const pdfStore = transaction.objectStore(PDF_STORE);
-    const pdfClassIndex = pdfStore.index('classId');
+  const transaction = db.transaction([CLASS_STORE], 'readwrite');
+  const store = transaction.objectStore(CLASS_STORE);
 
-    transaction.onerror = (_event) => reject(new Error('Transaction error deleting class.')); // Changed
-    transaction.oncomplete = () => resolve();
+  const classData = await idbRequestToPromise<Class | undefined>(store.get(id));
+  if (!classData) {
+    throw new Error(`Class with ID ${id} not found for update.`);
+  }
+  const updatedClass = { ...classData, ...updates };
 
-    const cursorRequest = pdfClassIndex.openCursor(IDBKeyRange.only(id));
-    cursorRequest.onsuccess = (event) => { // Keep event if used, like (event.target as ...)
+  await idbRequestToPromise(store.put(updatedClass));
+  await idbTransactionToPromise(transaction);
+};
+
+export const deleteClass = async (id: string): Promise<void> => {
+  // console.log(`[db.ts] deleteClass: Starting deletion for class ID: ${id}`);
+  const db = await initDB();
+  const transaction = db.transaction([CLASS_STORE, PDF_STORE], 'readwrite');
+  const classStore = transaction.objectStore(CLASS_STORE);
+  const pdfStore = transaction.objectStore(PDF_STORE);
+  const pdfClassIndex = pdfStore.index('classId');
+
+  await new Promise<void>((resolveIteration, rejectIteration) => {
+    const cursorReq = pdfClassIndex.openCursor(IDBKeyRange.only(id));
+    // console.log(`[db.ts] deleteClass: Opened cursor for class ID: ${id}`);
+
+    cursorReq.onsuccess = (event) => {
       const cursor = (event.target as IDBRequest<IDBCursorWithValue | null>).result;
       if (cursor) {
-        cursor.delete();
-        cursor.continue();
-      } else { 
-        const deleteClassRequest = classStore.delete(id);
-        deleteClassRequest.onerror = (errEvent) => {
-          console.error('Error deleting class record:', errEvent);
-          transaction.abort(); 
-        };
-      }
-    };
-    cursorRequest.onerror = (errEvent) => { // Use errEvent if you log it
-      console.error('Error iterating PDFs for deletion:', errEvent);
-      transaction.abort();
-    };
-  });
-};
+        // console.log(`[db.ts] deleteClass: Found PDF with ID ${cursor.value.id} (key: ${cursor.primaryKey}) for class ${id}. Attempting delete.`);
+        const deletePdfRequest = cursor.delete();
 
-export const addPDF = async(pdfData: Omit<PDF, 'id'>): Promise<number> => {
-  const db = await initDB();
-  return new Promise((resolve, reject) => {
-    const transaction = db.transaction([PDF_STORE, CLASS_STORE], 'readwrite');
-    const pdfStore = transaction.objectStore(PDF_STORE);
-    const classStore = transaction.objectStore(CLASS_STORE);
-
-    transaction.onerror = (_event) => reject(new Error('Transaction error adding PDF.')); // Changed
-    
-    const pdfToAdd: Omit<PDF, 'id'> = {
-        ...pdfData,
-        orderIndex: undefined 
-    };
-
-    const request = pdfStore.add(pdfToAdd);
-    request.onsuccess = async() => {
-      const pdfId = request.result as number;
-      try {
-        await _updateClassCountersInTransaction(classStore, pdfData.classId, 1, 0);
-        resolve(pdfId);
-      } catch (error) {
-        console.error("Error updating class counters after adding PDF", error);
-        resolve(pdfId); 
-      }
-    };
-    request.onerror = (_event) => reject(new Error('Error adding PDF record.')); // Changed
-  });
-};
-
-export const getClassPDFs = async(classId: number): Promise<PDF[]> => {
-  const db = await initDB();
-  return new Promise((resolve, reject) => {
-    const transaction = db.transaction([PDF_STORE], 'readonly');
-    const store = transaction.objectStore(PDF_STORE);
-    const index = store.index('classId');
-    transaction.onerror = (_event) => reject(new Error('Transaction error getting class PDFs.')); // Changed
-    const request = index.getAll(IDBKeyRange.only(classId));
-    request.onsuccess = () => {
-        const pdfs = request.result as PDF[];
-        pdfs.sort((a, b) => {
-            const aHasOrder = a.orderIndex !== undefined && a.orderIndex !== null;
-            const bHasOrder = b.orderIndex !== undefined && b.orderIndex !== null;
-            if (aHasOrder && bHasOrder) return a.orderIndex! - b.orderIndex!;
-            if (aHasOrder) return -1; 
-            if (bHasOrder) return 1;  
-            return a.name.localeCompare(b.name);
+        new Promise<void>((resolveDelete, rejectDelete) => {
+          deletePdfRequest.onsuccess = () => {
+            // console.log(`[db.ts] deleteClass: Successfully deleted PDF with key ${cursor.primaryKey}.`);
+            resolveDelete();
+          };
+          deletePdfRequest.onerror = (e) => {
+            console.error(`[db.ts] deleteClass: Error deleting PDF with key ${cursor.primaryKey}:`, (e.target as IDBRequest).error);
+            rejectDelete((e.target as IDBRequest).error);
+          };
+        })
+        .then(() => {
+          cursor.continue();
+        })
+        .catch(err => {
+          // console.error(`[db.ts] deleteClass: Catching error from PDF delete promise for class ${id}. Aborting transaction.`, err);
+          if (!transaction.error) { // Check if transaction already has an error
+            try { transaction.abort(); } catch (abortErr) { console.warn("Error aborting transaction in deleteClass PDFs loop:", abortErr); }
+          }
+          rejectIteration(err);
         });
-        resolve(pdfs);
-    };
-    request.onerror = (_event) => reject(new Error('Error getting class PDFs from DB.')); // Changed
-  });
-};
-
-export const getPDF = async(id: number): Promise<PDF | undefined> => {
-  const db = await initDB();
-  return new Promise((resolve, reject) => {
-    const transaction = db.transaction([PDF_STORE], 'readonly');
-    const store = transaction.objectStore(PDF_STORE);
-    transaction.onerror = (_event) => reject(new Error('Transaction error getting PDF.')); // Changed
-    const request = store.get(id);
-    request.onsuccess = () => resolve(request.result as PDF | undefined);
-    request.onerror = (_event) => reject(new Error('Error getting PDF from DB.')); // Changed
-  });
-};
-
-export const updatePDFStatus = async(pdfId: number, newStatus: 'to-study' | 'done'): Promise<void> => {
-  const db = await initDB();
-  const pdf = await getPDF(pdfId); 
-  if (!pdf) return Promise.reject(new Error(`PDF with ID ${pdfId} not found.`));
-  if (pdf.status === newStatus) return Promise.resolve(); 
-
-  return new Promise((resolve, reject) => {
-    const transaction = db.transaction([PDF_STORE, CLASS_STORE], 'readwrite');
-    const pdfStore = transaction.objectStore(PDF_STORE);
-    const classStore = transaction.objectStore(CLASS_STORE);
-    transaction.onerror = (_event) => reject(new Error('Transaction error updating PDF status.')); // Changed
-
-    const updatedPDFData = { ...pdf, status: newStatus };
-    const request = pdfStore.put(updatedPDFData);
-    request.onsuccess = async() => {
-      try {
-        const doneDelta = newStatus === 'done' ? 1 : (pdf.status === 'done' ? -1 : 0);
-        if (doneDelta !== 0) { 
-             await _updateClassCountersInTransaction(classStore, pdf.classId, 0, doneDelta);
-        }
-        resolve();
-      } catch (error) { reject(error); }
-    };
-    request.onerror = (_event) => reject(new Error('Error updating PDF status in DB.')); // Changed
-  });
-};
-
-export const deletePDF = async(pdfId: number): Promise<void> => {
-  const db = await initDB();
-  const pdf = await getPDF(pdfId); 
-  if (!pdf) { console.warn(`PDF with ID ${pdfId} not found for deletion.`); return Promise.resolve(); }
-
-  return new Promise((resolve, reject) => {
-    const transaction = db.transaction([PDF_STORE, CLASS_STORE], 'readwrite');
-    const pdfStore = transaction.objectStore(PDF_STORE);
-    const classStore = transaction.objectStore(CLASS_STORE);
-    transaction.onerror = (_event) => reject(new Error('Transaction error deleting PDF.')); // Changed
-
-    const request = pdfStore.delete(pdfId);
-    request.onsuccess = async() => {
-      try {
-        const doneDelta = pdf.status === 'done' ? -1 : 0;
-        await _updateClassCountersInTransaction(classStore, pdf.classId, -1, doneDelta);
-        resolve();
-      } catch (error) { reject(error); }
-    };
-    request.onerror = (_event) => reject(new Error('Error deleting PDF from DB.')); // Changed
-  });
-};
-
-export const updateMultiplePDFOrders = async(updates: Array<{ id: number; orderIndex: number }>): Promise<void> => {
-  const db = await initDB();
-  return new Promise<void>((resolve, reject) => {
-    if (updates.length === 0) { resolve(); return; }
-
-    const transaction = db.transaction([PDF_STORE], 'readwrite');
-    const store = transaction.objectStore(PDF_STORE);
-    let operationsPending = updates.length;
-
-    transaction.oncomplete = () => {
-      console.log("PDF order update transaction completed.");
-      resolve();
-    };
-    transaction.onerror = (event) => { // Keep event for logging
-      console.error('Transaction error while updating PDF orders:', (event.target as IDBRequest).error);
-      reject(new Error('Transaction error while updating PDF orders.'));
-    };
-    transaction.onabort = () => {
-      console.warn('PDF order update transaction aborted.');
-      reject(new Error('PDF order update transaction aborted.'));
+      } else {
+        // console.log(`[db.ts] deleteClass: No more PDFs found for class ID: ${id}. PDF deletion part complete.`);
+        resolveIteration();
+      }
     };
 
-    updates.forEach(update => {
-      const getRequest = store.get(update.id);
-      getRequest.onsuccess = () => {
-        const pdf = getRequest.result as PDF | undefined;
-        if (pdf) {
-          const updatedPDF = { ...pdf, orderIndex: update.orderIndex };
-          const putRequest = store.put(updatedPDF);
-          putRequest.onsuccess = () => {
-            operationsPending--;
-          };
-          putRequest.onerror = (event) => { // Keep event for logging
-            console.error(`Error updating order for PDF ID ${update.id}:`, (event.target as IDBRequest).error);
-            if (!transaction.error) transaction.abort(); 
-          };
-        } else {
-          console.warn(`PDF with ID ${update.id} not found for order update.`);
-          operationsPending--;
-        }
-      };
-      getRequest.onerror = (event) => { // Keep event for logging
-        console.error(`Error fetching PDF ID ${update.id} for order update:`, (event.target as IDBRequest).error);
-        if (!transaction.error) transaction.abort();
-      };
-    });
-  });
-};
-
-export const toggleClassPin = async(id: number): Promise<void> => {
-  const db = await initDB();
-  return new Promise((resolve, reject) => {
-    const transaction = db.transaction([CLASS_STORE], 'readwrite');
-    const store = transaction.objectStore(CLASS_STORE);
-    transaction.onerror = (_event) => reject(new Error('Transaction error toggling pin.')); // Changed
-    const getRequest = store.get(id);
-    getRequest.onsuccess = () => {
-      const classData = getRequest.result as Class | undefined;
-      if (!classData) { reject(new Error(`Class ${id} not found.`)); return; }
-      const updatedClass = { ...classData, isPinned: !classData.isPinned };
-      const updateRequest = store.put(updatedClass);
-      updateRequest.onsuccess = () => resolve();
-      updateRequest.onerror = (_event) => reject(new Error('Error updating pin.')); // Changed
+    cursorReq.onerror = (event) => {
+      const error = (event.target as IDBRequest).error;
+      console.error(`[db.ts] deleteClass: Error opening/iterating cursor for class ID ${id}:`, error);
+      if (!transaction.error) {
+         try { transaction.abort(); } catch (abortErr) { console.warn("Error aborting transaction in deleteClass cursor onerror:", abortErr); }
+      }
+      rejectIteration(error);
     };
-    getRequest.onerror = (_event) => reject(new Error('Error getting class for pin.')); // Changed
   });
+
+  // console.log(`[db.ts] deleteClass: PDF iteration finished for class ID: ${id}. Attempting to delete class object.`);
+  const deleteClassReq = classStore.delete(id);
+  await idbRequestToPromise(deleteClassReq).catch(err => {
+      console.error(`[db.ts] deleteClass: Error during classStore.delete for class ID ${id}:`, err);
+      if(!transaction.error) { // Check if transaction already has an error
+          try { transaction.abort(); } catch (abortErr) { console.warn("Error aborting transaction in deleteClass class delete catch:", abortErr); }
+      }
+      throw err;
+  });
+  // console.log(`[db.ts] deleteClass: Class object for ID ${id} delete request sent.`);
+
+  await idbTransactionToPromise(transaction);
+  // console.log(`[db.ts] deleteClass: Transaction completed for class ID: ${id}.`);
 };
 
-export const getPinnedClasses = async(): Promise<Class[]> => {
+export const addPDF = async (pdfData: Omit<PDF, 'id'>): Promise<number> => {
   const db = await initDB();
-  return new Promise((resolve, reject) => {
-    const transaction = db.transaction([CLASS_STORE], 'readonly');
-    const store = transaction.objectStore(CLASS_STORE);
-    const index = store.index('isPinned');
-    transaction.onerror = (_event) => reject(new Error('Transaction error getting pinned classes.')); // Changed
-    const request = index.getAll(IDBKeyRange.only(true));
-    request.onsuccess = () => resolve(request.result as Class[]);
-    request.onerror = (_event) => reject(new Error('Error getting pinned classes.')); // Changed
-  });
+  const transaction = db.transaction([PDF_STORE, CLASS_STORE], 'readwrite');
+  const pdfStore = transaction.objectStore(PDF_STORE);
+  const classStore = transaction.objectStore(CLASS_STORE);
+
+  const pdfToAdd: Omit<PDF, 'id'> = {
+    ...pdfData,
+    orderIndex: pdfData.orderIndex
+  };
+
+  const addedKey = await idbRequestToPromise(pdfStore.add(pdfToAdd)); // Returns IDBValidKey
+
+  if (typeof addedKey !== 'number') {
+    console.error('Error in addPDF: Expected a numeric key from pdfStore.add, but received:', addedKey);
+    if (!transaction.error) {
+        try { transaction.abort(); } catch (e) { console.warn("Error aborting transaction in addPDF key check:", e); }
+    }
+    throw new Error('Failed to add PDF: received non-numeric key.');
+  }
+  const pdfId: number = addedKey;
+
+  await _updateClassCountersInTransaction(classStore, pdfData.classId, 1, 0);
+  await idbTransactionToPromise(transaction);
+  return pdfId;
 };
 
-export const getAllPDFs = async(): Promise<PDF[]> => {
+export const getClassPDFs = async (classId: string): Promise<PDF[]> => {
   const db = await initDB();
-  return new Promise((resolve, reject) => {
-    const transaction = db.transaction([PDF_STORE], 'readonly');
-    const store = transaction.objectStore(PDF_STORE);
-    transaction.onerror = (_event) => reject(new Error('Transaction error getting all PDFs.')); // Changed
-    const request = store.getAll();
-    request.onsuccess = () => resolve(request.result as PDF[]);
-    request.onerror = (_event) => reject(new Error('Error getting all PDFs from DB.')); // Changed
+  const transaction = db.transaction([PDF_STORE], 'readonly');
+  const store = transaction.objectStore(PDF_STORE);
+  const index = store.index('classId');
+  const pdfs = await idbRequestToPromise<PDF[]>(index.getAll(IDBKeyRange.only(classId)));
+
+  pdfs.sort((a, b) => {
+    const aHasOrder = a.orderIndex !== undefined && a.orderIndex !== null;
+    const bHasOrder = b.orderIndex !== undefined && b.orderIndex !== null;
+    if (aHasOrder && bHasOrder) return a.orderIndex! - b.orderIndex!;
+    if (aHasOrder) return -1;
+    if (bHasOrder) return 1;
+    return a.name.localeCompare(b.name);
   });
+  return pdfs;
+};
+
+export const getPDF = async (id: number): Promise<PDF | undefined> => {
+  const db = await initDB();
+  const transaction = db.transaction([PDF_STORE], 'readonly');
+  const store = transaction.objectStore(PDF_STORE);
+  return idbRequestToPromise<PDF | undefined>(store.get(id));
+};
+
+export const updatePDFStatus = async (pdfId: number, newStatus: 'to-study' | 'done'): Promise<void> => {
+  const db = await initDB();
+  const pdf = await getPDF(pdfId);
+  if (!pdf) { throw new Error(`PDF with ID ${pdfId} not found.`); }
+  if (pdf.status === newStatus) return;
+
+  const transaction = db.transaction([PDF_STORE, CLASS_STORE], 'readwrite');
+  const pdfStore = transaction.objectStore(PDF_STORE);
+  const classStore = transaction.objectStore(CLASS_STORE);
+
+  const updatedPDFData = { ...pdf, status: newStatus };
+  await idbRequestToPromise(pdfStore.put(updatedPDFData));
+
+  const doneDelta = newStatus === 'done' ? 1 : (pdf.status === 'done' ? -1 : 0);
+  if (doneDelta !== 0) {
+    await _updateClassCountersInTransaction(classStore, pdf.classId, 0, doneDelta);
+  }
+  await idbTransactionToPromise(transaction);
+};
+
+export const deletePDF = async (pdfId: number): Promise<void> => {
+  const db = await initDB();
+  const pdf = await getPDF(pdfId);
+  if (!pdf) {
+    console.warn(`PDF with ID ${pdfId} not found for deletion.`);
+    return;
+  }
+
+  const transaction = db.transaction([PDF_STORE, CLASS_STORE], 'readwrite');
+  const pdfStore = transaction.objectStore(PDF_STORE);
+  const classStore = transaction.objectStore(CLASS_STORE);
+
+  await idbRequestToPromise(pdfStore.delete(pdfId));
+  const doneDelta = pdf.status === 'done' ? -1 : 0;
+  await _updateClassCountersInTransaction(classStore, pdf.classId, -1, doneDelta);
+  await idbTransactionToPromise(transaction);
+};
+
+export const updateMultiplePDFOrders = async (updates: Array<{ id: number; orderIndex: number }>): Promise<void> => {
+  if (updates.length === 0) return;
+
+  const db = await initDB();
+  const transaction = db.transaction([PDF_STORE], 'readwrite');
+  const store = transaction.objectStore(PDF_STORE);
+
+  for (const update of updates) {
+    const pdf = await idbRequestToPromise<PDF | undefined>(store.get(update.id));
+    if (pdf) {
+      const updatedPDF = { ...pdf, orderIndex: update.orderIndex };
+      await idbRequestToPromise(store.put(updatedPDF));
+    } else {
+      console.warn(`PDF with ID ${update.id} not found for order update.`);
+    }
+  }
+  await idbTransactionToPromise(transaction);
+};
+
+export const toggleClassPin = async (id: string): Promise<void> => {
+  const db = await initDB();
+  const transaction = db.transaction([CLASS_STORE], 'readwrite');
+  const store = transaction.objectStore(CLASS_STORE);
+
+  const classData = await idbRequestToPromise<Class | undefined>(store.get(id));
+  if (!classData) { throw new Error(`Class ${id} not found.`); }
+
+  const updatedClass = { ...classData, isPinned: !classData.isPinned };
+  await idbRequestToPromise(store.put(updatedClass));
+  await idbTransactionToPromise(transaction);
+};
+
+export const getPinnedClasses = async (): Promise<Class[]> => {
+  const db = await initDB();
+  const transaction = db.transaction([CLASS_STORE], 'readonly');
+  const store = transaction.objectStore(CLASS_STORE);
+  const index = store.index('isPinned');
+  return idbRequestToPromise<Class[]>(index.getAll(IDBKeyRange.only(true as any)));
+};
+
+export const getAllPDFs = async (): Promise<PDF[]> => {
+  const db = await initDB();
+  const transaction = db.transaction([PDF_STORE], 'readonly');
+  const store = transaction.objectStore(PDF_STORE);
+  return idbRequestToPromise<PDF[]>(store.getAll());
 };

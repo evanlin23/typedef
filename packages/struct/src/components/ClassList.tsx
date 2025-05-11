@@ -2,17 +2,16 @@
 import React from 'react';
 import type { Class } from '../utils/types';
 import ClassCard from './ClassCard';
-import PinIcon from './PinIcon'; // Assuming PinIcon is also used for the filter button
+import PinIcon from './PinIcon';
 import EmptyClassList from './EmptyClassList';
-// LoadingSpinner is handled by parent (ClassManagement)
 
 interface ClassListProps {
   classes: Class[];
   showOnlyPinned: boolean;
   onTogglePinnedFilter: () => void;
-  onSelectClass: (classId: number) => void;
-  onRequestDelete: (classId: number) => void; // To ask parent to confirm deletion
-  onDataChanged: () => Promise<void>; // To allow ClassCard to trigger list refresh
+  onSelectClass: (classId: string) => void; // Changed: number to string
+  onRequestDelete: (classId: string) => void; // Changed: number to string
+  onDataChanged: () => Promise<void>;
 }
 
 const ClassList: React.FC<ClassListProps> = ({
@@ -34,8 +33,8 @@ const ClassList: React.FC<ClassListProps> = ({
         <button
           onClick={onTogglePinnedFilter}
           className={`flex items-center px-3 py-1.5 rounded-md text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-900 focus:ring-green-500 ${
-            showOnlyPinned 
-              ? 'bg-green-500 text-white hover:bg-green-600' 
+            showOnlyPinned
+              ? 'bg-green-500 text-white hover:bg-green-600'
               : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
           }`}
           aria-pressed={showOnlyPinned}
@@ -44,16 +43,16 @@ const ClassList: React.FC<ClassListProps> = ({
           {showOnlyPinned ? 'Show All Classes' : 'Show Pinned Only'}
         </button>
       </div>
-      
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"> {/* Increased gap slightly */}
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {classes.map((cls) => (
           <ClassCard
-            key={cls.id} // Assuming cls.id is defined and unique
+            key={cls.id} // cls.id is now string (UUID)
             classData={cls}
-            onSelect={() => { if(cls.id) {onSelectClass(cls.id);}}}
-            onRequestDelete={(e) => { // Pass MouseEvent for stopPropagation if needed
-              e.stopPropagation(); // Prevent card selection when clicking delete icon
-              if (cls.id) {onRequestDelete(cls.id);}
+            onSelect={() => { if (cls.id) { onSelectClass(cls.id); } }} // cls.id is string
+            onRequestDelete={(e) => {
+              e.stopPropagation();
+              if (cls.id) { onRequestDelete(cls.id); } // cls.id is string
             }}
             onDataChanged={onDataChanged}
           />

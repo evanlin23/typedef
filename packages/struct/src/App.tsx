@@ -1,122 +1,60 @@
 // src/App.tsx
 import { useEffect, useState, useCallback, useRef } from 'react';
-import { initDB, addPDF, updatePDFStatus, deletePDF, getClass, getClassPDFs, updateClass, updateMultiplePDFOrders } from './utils/db';
+import { addPDF, updatePDFStatus, deletePDF, updateClass, updateMultiplePDFOrders } from './utils/db';
 import Header from './components/Header';
 import FileUpload from './components/FileUpload';
 import PDFList from './components/PDFList';
 import ProgressStats from './components/ProgressStats';
 import ClassManagement from './components/ClassManagement';
-import type { PDF, Class } from './utils/types';
+import type { PDF } from './utils/types';
 import Footer from './components/Footer';
-import LoadingSpinner from './components/LoadingSpinner'; 
+import LoadingSpinner from './components/LoadingSpinner';
 import PDFViewer from './components/PDFViewer';
 
+import { useDBInitialization } from './hooks/useDBInitialization';
+import { useClassData } from './hooks/useClassData';
+
 function App() {
-  const [pdfs, setPdfs] = useState<PDF[]>([]);
-  const [isLoading, setIsLoading] = useState(true); // General loading, includes DB init and class data loading
-  const [isDBInitialized, setIsDBInitialized] = useState(false);
+  const { isDBInitialized, dbError, isInitializing: isDBInitializing } = useDBInitialization();
+  const {
+    selectedClassId, setSelectedClassId, // selectedClassId is now string | null
+    selectedClass, setSelectedClass,
+    pdfs, setPdfs,
+    isLoadingClassData,
+    classDataError,
+    refreshData
+  } = useClassData(isDBInitialized);
+
+  const [isProcessing, setIsProcessing] = useState(false);
   const [activeTab, setActiveTab] = useState<'to-study' | 'done' | 'notes'>('to-study');
-  const [selectedClassId, setSelectedClassId] = useState<number | null>(null);
-  const [selectedClass, setSelectedClass] = useState<Class | null>(null);
   const [viewingPDF, setViewingPDF] = useState<PDF | null>(null);
 
   const notesUpdateDebounceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const currentSelectedClassIdRef = useRef<number | null>(null); 
+  const currentSelectedClassIdRef = useRef<string | null>(null); // Changed
 
   useEffect(() => {
     currentSelectedClassIdRef.current = selectedClassId;
   }, [selectedClassId]);
 
-
   useEffect(() => {
-    const setupDatabase = async() => {
-      // setIsLoading(true) is already default
-      try {
-        await initDB();
-        setIsDBInitialized(true);
-      } catch (error) {
-        console.error('Failed to initialize database:', error);
-        // Potentially set a global error state for UI feedback
-      } finally {
-        setIsLoading(false); // DB init done, or failed. Subsequent loading is for class data.
-      }
-    };
-    setupDatabase();
-  }, []);
-
-  const refreshData = useCallback(async (keepLoadingState = false) => {
-    if (!isDBInitialized) { // DB not ready, defer refresh
-        console.log("DB not initialized, refreshData deferred.");
-        return;
+    if (classDataError && classDataError.message.includes("not found") && selectedClassId !== null) {
+        console.warn("Class not found due to error, navigating back to class management.");
+        setSelectedClassId(null);
     }
-    if (selectedClassId === null) { // No class selected, clear data
-      setSelectedClass(null);
-      setPdfs([]);
-      return;
-    }
-
-    console.log(`Refreshing data for class ID: ${selectedClassId}, keepLoadingState: ${keepLoadingState}`);
-    if (!keepLoadingState) {
-        setIsLoading(true);
-    }
-
-    try {
-      const clsData = await getClass(selectedClassId);
-      if (clsData) {
-        setSelectedClass(clsData);
-        const classPDFsData = await getClassPDFs(selectedClassId); 
-        setPdfs(classPDFsData);
-      } else {
-        // Class not found (e.g., was deleted)
-        console.warn(`Class with ID ${selectedClassId} not found during refresh. Navigating back.`);
-        setSelectedClass(null); 
-        setPdfs([]);
-        setSelectedClassId(null); // This will trigger navigation to ClassManagement
-      }
-    } catch (error) {
-      console.error(`Error loading data for class ID ${selectedClassId}:`, error);
-      // On error, clear data and navigate back to prevent inconsistent state
-      setSelectedClass(null); 
-      setPdfs([]);
-      setSelectedClassId(null); // Navigate back
-      // Optionally, display an error message to the user
-    } finally {
-      if (!keepLoadingState) {
-        setIsLoading(false);
-      }
-    }
-  }, [selectedClassId, isDBInitialized]); // Removed refreshData from its own deps
-
-  useEffect(() => {
-    // This effect handles loading class data when selectedClassId changes,
-    // or clearing data if selectedClassId becomes null.
-    if (selectedClassId !== null) {
-        if (isDBInitialized) {
-            refreshData();
-        } else {
-            console.log("Waiting for DB initialization to refresh class data...");
-            // setIsLoading(true); // Ensure loading indicator is on if DB isn't ready
-        }
-    } else {
-        // selectedClassId is null, means we are in ClassManagement view or navigating there.
-        // Clear out any existing class-specific data.
-        setSelectedClass(null);
-        setPdfs([]);
-        // setIsLoading(false); // Not loading a specific class anymore
-    }
-  }, [selectedClassId, isDBInitialized, refreshData]); // refreshData is stable due to useCallback
+  }, [classDataError, selectedClassId, setSelectedClassId]);
 
   const handleFileUpload = async (files: FileList) => {
     if (selectedClassId === null) {
       alert('Please select a class before uploading files.');
       return;
     }
-  
+
     const fileArray = Array.from(files);
     if (fileArray.length === 0) return;
-  
-    setIsLoading(true); // Indicate loading for uploads
-  
+
+    setIsProcessing(true);
+    let successfullyAddedCount = 0;
+
     try {
       const skippedFiles: string[] = [];
       const pdfUploadOperations = fileArray
@@ -126,7 +64,7 @@ function App() {
           skippedFiles.push(file.name);
           return false;
         })
-        .map((file) => async () => { 
+        .map((file) => async () => {
           try {
             const arrayBuffer = await file.arrayBuffer();
             const pdfData: Omit<PDF, 'id'> = {
@@ -136,96 +74,100 @@ function App() {
               data: arrayBuffer,
               status: 'to-study',
               dateAdded: Date.now(),
-              classId: selectedClassId,
-              orderIndex: undefined, 
+              classId: selectedClassId, // This is now a string (UUID)
             };
             await addPDF(pdfData);
+            successfullyAddedCount++;
             return { name: file.name, status: 'fulfilled' as const };
           } catch (error) {
             console.error(`Error processing file ${file.name}:`, error);
             return { name: file.name, status: 'rejected' as const, error };
           }
         });
-  
+
       if (pdfUploadOperations.length === 0) {
-        if (skippedFiles.length > 0) alert(`All selected files were skipped as they are not PDFs: ${skippedFiles.join(', ')}`);
-        // No actual PDF processing to do. Reset loading only if it was set for this operation.
-        // The finally block will handle setIsLoading(false) if refreshData is called.
-        // For now, if no PDF ops, we expect refreshData NOT to run, so manage loading here.
-        setIsLoading(false); 
+        if (skippedFiles.length > 0) alert(`All selected files were skipped: ${skippedFiles.join(', ')}`);
+        setIsProcessing(false);
         return;
       }
-      
+
       const results = await Promise.allSettled(pdfUploadOperations.map(op => op()));
       let successfulUploads = 0;
       let failedUploads = 0;
-  
+
       results.forEach(result => {
         if (result.status === 'fulfilled' && result.value.status === 'fulfilled') successfulUploads++;
         else failedUploads++;
       });
-  
+
       if (failedUploads > 0) {
-        alert(`${failedUploads} PDF file(s) could not be uploaded. ${successfulUploads} PDF(s) uploaded successfully. ${skippedFiles.length > 0 ? skippedFiles.length + ' non-PDF file(s) were skipped.' : ''}`);
+        alert(`${failedUploads} PDF(s) failed. ${successfulUploads} PDF(s) uploaded. ${skippedFiles.length > 0 ? skippedFiles.length + ' non-PDFs skipped.' : ''}`);
       } else if (skippedFiles.length > 0) {
-        alert(`${successfulUploads} PDF file(s) uploaded successfully. ${skippedFiles.length} non-PDF file(s) were skipped.`);
+        alert(`${successfulUploads} PDF(s) uploaded. ${skippedFiles.length} non-PDFs skipped.`);
       }
-  
+
     } catch (error) {
-      console.error('Error during file upload setup or batch processing:', error);
-      alert('An unexpected error occurred during file upload. Please check the console.');
+      console.error('Error during file upload batch processing:', error);
+      alert('An unexpected error occurred during file upload.');
     } finally {
-      // Refresh data only if there were potential changes (successful uploads)
-      // and a class is still selected.
-      if (selectedClassId !== null && pdfs.length + fileArray.filter(f => f.type === 'application/pdf').length > pdfs.length) { // crude check if new PDFs were added
-        await refreshData(); // This will set isLoading appropriately
-      } else {
-        setIsLoading(false); // Explicitly turn off if no refreshData call
+      if (selectedClassId !== null && successfullyAddedCount > 0) {
+        await refreshData();
       }
+      setIsProcessing(false);
     }
   };
 
-  const handleStatusChange = async(id: number, newStatus: 'to-study' | 'done') => {
+  const handleStatusChange = async (id: number, newStatus: 'to-study' | 'done') => {
+    setIsProcessing(true);
     try {
-      await updatePDFStatus(id, newStatus);
-      await refreshData(true); 
+      setPdfs(prevPdfs => prevPdfs.map(p => p.id === id ? { ...p, status: newStatus } : p));
       if (viewingPDF && viewingPDF.id === id) {
         setViewingPDF(prev => prev ? { ...prev, status: newStatus } : null);
       }
+      await updatePDFStatus(id, newStatus);
+      await refreshData(true);
     } catch (error) {
       console.error('Error updating PDF status:', error);
+      await refreshData(true);
+    } finally {
+      setIsProcessing(false);
     }
   };
 
-  const handleDeletePDF = async(id: number) => {
+  const handleDeletePDF = async (id: number) => {
+    setIsProcessing(true);
     try {
-      await deletePDF(id);
-      await refreshData(true); // Keep loading state if already loading something, then refresh
+      setPdfs(prevPdfs => prevPdfs.filter(p => p.id !== id));
       if (viewingPDF && viewingPDF.id === id) {
-        setViewingPDF(null); 
+        setViewingPDF(null);
       }
+      await deletePDF(id);
+      await refreshData(true);
     } catch (error) {
       console.error('Error deleting PDF:', error);
+      await refreshData(true);
+    } finally {
+      setIsProcessing(false);
     }
   };
 
-  const handleSelectClass = (classId: number) => {
-    setActiveTab('to-study'); 
-    // Setting selectedClassId will trigger the useEffect to load data
-    if (selectedClassId !== classId) { // Avoid redundant processing if same class clicked
-        setSelectedClassId(classId);
-    } else if (!selectedClass) { // Same class ID, but class data might be missing (e.g. after error)
-        refreshData();
+  const handleSelectClass = (classId: string) => { // Changed
+    setActiveTab('to-study');
+    if (selectedClassId !== classId) {
+      setSelectedClassId(classId);
+    } else if (!selectedClass && isDBInitialized) {
+      refreshData();
     }
   };
 
   const handleBackToClasses = () => {
-    setSelectedClassId(null); 
+    setSelectedClassId(null);
+    setViewingPDF(null);
   };
 
-  const handleCreateAndSelectClass = (classId: number) => {
+  const handleCreateAndSelectClass = (classId: string) => { // Changed
     setActiveTab('to-study');
-    setSelectedClassId(classId); 
+    setSelectedClassId(classId);
   };
 
   const handleViewPDF = (pdf: PDF) => {
@@ -236,36 +178,38 @@ function App() {
     setViewingPDF(null);
   };
 
-  const saveNotesToDB = useCallback(async (classId: number, notesToSave: string) => {
+  const saveNotesToDB = useCallback(async (classId: string, notesToSave: string) => { // Changed classId type
     try {
       await updateClass(classId, { notes: notesToSave });
       console.log("Notes saved for class ID:", classId);
     } catch (error) {
       console.error('Failed to save class notes to DB:', error);
     }
-  }, []); 
+  }, []);
 
   const handleClassNotesChange = useCallback((newNotes: string) => {
-    setSelectedClass(prevClass => {
-      if (prevClass && prevClass.id === currentSelectedClassIdRef.current) {
-        return { ...prevClass, notes: newNotes };
-      }
-      return prevClass;
-    });
+    if (selectedClass && selectedClass.id === currentSelectedClassIdRef.current) { // currentSelectedClassIdRef.current is string
+      setSelectedClass(prevClass => {
+        if (prevClass && prevClass.id === currentSelectedClassIdRef.current) {
+          return { ...prevClass, notes: newNotes };
+        }
+        return prevClass;
+      });
+    }
 
     if (notesUpdateDebounceTimeoutRef.current) {
       clearTimeout(notesUpdateDebounceTimeoutRef.current);
     }
 
     notesUpdateDebounceTimeoutRef.current = setTimeout(() => {
-      if (currentSelectedClassIdRef.current !== null) {
+      if (currentSelectedClassIdRef.current !== null) { // currentSelectedClassIdRef.current is string
         saveNotesToDB(currentSelectedClassIdRef.current, newNotes);
       }
     }, 750);
-  }, [saveNotesToDB]); 
+  }, [saveNotesToDB, selectedClass]);
 
   useEffect(() => {
-    return () => { 
+    return () => {
       if (notesUpdateDebounceTimeoutRef.current) {
         clearTimeout(notesUpdateDebounceTimeoutRef.current);
       }
@@ -274,7 +218,7 @@ function App() {
 
   const handlePDFOrderChange = async (orderedPDFsInActiveTab: PDF[]) => {
     if (!selectedClassId) return;
-    const allCurrentPdfsForClass = [...pdfs]; 
+    const allCurrentPdfsForClass = [...pdfs];
     let combinedPdfs: PDF[];
 
     if (activeTab === 'to-study') {
@@ -289,20 +233,20 @@ function App() {
         pdf.id !== undefined && index === self.findIndex((p) => p.id === pdf.id)
     );
 
-    const finalUpdates = uniqueCombinedPdfs.map((pdf, index) => ({ id: pdf.id!, orderIndex: index, }));
+    const finalUpdates = uniqueCombinedPdfs.map((pdf, index) => ({ id: pdf.id!, orderIndex: index }));
 
+    setIsProcessing(true);
     try {
-        setIsLoading(true); 
-        setPdfs(uniqueCombinedPdfs); // Optimistic update
-        await updateMultiplePDFOrders(finalUpdates);
-        await refreshData(true); 
+      setPdfs(uniqueCombinedPdfs.map(p => ({...p, orderIndex: finalUpdates.find(u => u.id === p.id)?.orderIndex ?? p.orderIndex })));
+      await updateMultiplePDFOrders(finalUpdates);
+      await refreshData(true);
     } catch (error) {
-        console.error('Error updating PDF order:', error);
-        await refreshData(true); 
+      console.error('Error updating PDF order:', error);
+      await refreshData(true);
     } finally {
-        setIsLoading(false);
+      setIsProcessing(false);
     }
-};
+  };
 
   const toStudyPDFs = pdfs.filter(pdf => pdf.status === 'to-study');
   const donePDFs = pdfs.filter(pdf => pdf.status === 'done');
@@ -313,31 +257,37 @@ function App() {
     done: selectedClass?.doneCount || 0,
   };
   
-  // Render Logic
-  if (!isDBInitialized) { // DB not yet initialized (could be initial load or error during init)
+  if (isDBInitializing) {
     return (
       <div className="flex flex-col min-h-screen bg-gray-900 justify-center items-center">
         <LoadingSpinner />
         <p className="text-gray-400 mt-4">Initializing Application...</p>
-        {/* Optionally show error message if DB init failed */}
       </div>
     );
   }
 
-  if (selectedClassId === null) { 
-    // No class selected, show ClassManagement screen
+  if (dbError) {
+    return (
+      <div className="flex flex-col min-h-screen bg-gray-900 justify-center items-center p-4 text-center">
+        <h2 className="text-2xl text-red-400 mb-4">Database Error</h2>
+        <p className="text-gray-300 mb-2">Could not initialize the application database.</p>
+        <p className="text-gray-400 text-sm">{dbError.message}</p>
+        <p className="text-gray-400 text-sm mt-4">Please try refreshing the page.</p>
+      </div>
+    );
+  }
+
+  if (selectedClassId === null || !isDBInitialized) {
     return <ClassManagement onSelectClass={handleSelectClass} onCreateClass={handleCreateAndSelectClass} />;
   }
 
-  // A class is selected (selectedClassId is not null)
-  // Show loading spinner if data is being fetched for this class or if selectedClass is not yet populated
-  if (isLoading || !selectedClass) {
+  if (isLoadingClassData || (!selectedClass && !classDataError)) {
     return (
       <div className="flex flex-col min-h-screen bg-gray-900 text-gray-200">
-        <Header 
-            className={selectedClass?.name || "Loading Class..."} // Show name if available, else loading text
-            onBackClick={handleBackToClasses} 
-            showBackButton={true} 
+        <Header
+          pageTitle={selectedClass?.name || "Loading Class..."}
+          onBackClick={handleBackToClasses}
+          showBackButton={true}
         />
         <main className="flex-1 container mx-auto px-4 py-6 flex justify-center items-center">
           <LoadingSpinner size="large" />
@@ -347,12 +297,43 @@ function App() {
     );
   }
 
-  // If we reach here, selectedClassId is set, selectedClass is populated, and isLoading is false for class data
+  if (classDataError && !selectedClass) {
+      return (
+          <div className="flex flex-col min-h-screen bg-gray-900 text-gray-200">
+              <Header
+                  pageTitle="Error"
+                  onBackClick={handleBackToClasses}
+                  showBackButton={true}
+              />
+              <main className="flex-1 container mx-auto px-4 py-6 flex flex-col justify-center items-center">
+                  <h2 className="text-2xl text-red-400 mb-4">Error Loading Class Data</h2>
+                  <p className="text-gray-300 mb-4">{classDataError.message}</p>
+                  <button
+                      onClick={handleBackToClasses}
+                      className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+                  >
+                      Go to Class Management
+                  </button>
+              </main>
+              <Footer />
+          </div>
+      );
+  }
+  
+  if (!selectedClass) {
+       return (
+          <div className="flex flex-col min-h-screen bg-gray-900 justify-center items-center">
+              <p className="text-gray-400">An unexpected error occurred loading class data. Please try again.</p>
+              <button onClick={handleBackToClasses} className="mt-4 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">Go Back</button>
+          </div>
+      );
+  }
+
   return (
     <div className="flex flex-col min-h-screen bg-gray-900 text-gray-200">
-      <Header 
-        className={selectedClass.name} 
-        onBackClick={handleBackToClasses} 
+      <Header
+        pageTitle={selectedClass.name}
+        onBackClick={handleBackToClasses}
         showBackButton={true}
       />
       <main className="flex-1 container mx-auto px-4 py-6">
@@ -387,7 +368,7 @@ function App() {
                 >
                   Done ({donePDFs.length})
                 </button>
-                <button 
+                <button
                   aria-current={activeTab === 'notes'}
                   className={`px-4 py-2 text-lg transition-colors ${
                     activeTab === 'notes'
@@ -400,11 +381,7 @@ function App() {
                 </button>
               </div>
               
-              {/* Loading spinner for PDF list content if isLoading is true (e.g. during file upload) 
-                  AND the list itself is empty, to avoid showing spinner over existing content.
-                  This `isLoading` here is the general one, might be true during uploads.
-              */}
-              {isLoading && (activeTab !== 'notes' && !pdfs.length) ? ( 
+              {isProcessing && (activeTab !== 'notes' && pdfs.length === 0) ? (
                 <LoadingSpinner />
               ) : (
                 <>
@@ -413,7 +390,7 @@ function App() {
                       <textarea
                         value={selectedClass?.notes || ''}
                         onChange={(e) => handleClassNotesChange(e.target.value)}
-                        placeholder="Class notes will appear here. You can also edit them in the PDF viewer."
+                        placeholder="Class notes will appear here..."
                         className="w-full h-full p-3 bg-gray-900 text-gray-200 border border-gray-700 rounded-md resize-none focus:ring-2 focus:ring-green-400 focus:border-green-400 outline-none"
                         aria-label="Class notes editor"
                       />
@@ -421,7 +398,7 @@ function App() {
                   ) : (
                     <PDFList
                       pdfs={activeTab === 'to-study' ? toStudyPDFs : donePDFs}
-                      listType={activeTab}
+                      listType={activeTab as 'to-study' | 'done'}
                       onStatusChange={handleStatusChange}
                       onDelete={handleDeletePDF}
                       onViewPDF={handleViewPDF}
@@ -438,8 +415,8 @@ function App() {
         <PDFViewer
           pdf={viewingPDF}
           onClose={handleClosePDFViewer}
-          onStatusChange={handleStatusChange} 
-          classNotes={selectedClass.notes} 
+          onStatusChange={handleStatusChange}
+          classNotes={selectedClass.notes}
           onClassNotesChange={handleClassNotesChange}
         />
       )}

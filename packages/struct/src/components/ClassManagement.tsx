@@ -1,57 +1,53 @@
 // src/components/ClassManagement.tsx
 import React, { useState, useEffect, useCallback } from 'react';
 import type { Class } from '../utils/types';
-import { getClasses, deleteClass as dbDeleteClass } from '../utils/db'; // Renamed to avoid conflict
+import { getClasses, deleteClass as dbDeleteClass } from '../utils/db';
 import ClassCreator from './ClassCreator';
 import ClassList from './ClassList';
 import ConfirmationModal from './ConfirmationModal';
 import Footer from './Footer';
-import Header from './Header'; // Assuming a generic header might be wanted here too
+import Header from './Header';
 import LoadingSpinner from './LoadingSpinner';
 
 interface ClassManagementProps {
-  onSelectClass: (classId: number) => void;
-  onCreateClass: (classId: number) => void; // Used by ClassCreator to auto-select new class
+  onSelectClass: (classId: string) => void;
+  onCreateClass: (classId: string) => void;
 }
 
 const ClassManagement: React.FC<ClassManagementProps> = ({ onSelectClass, onCreateClass }) => {
   const [classes, setClasses] = useState<Class[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [confirmDelete, setConfirmDelete] = useState<{ isOpen: boolean; classId: number | null }>({
+  const [isDeletingClass, setIsDeletingClass] = useState(false); // For delete operation
+  const [confirmDelete, setConfirmDelete] = useState<{ isOpen: boolean; classId: string | null }>({
     isOpen: false,
     classId: null,
   });
   const [showOnlyPinned, setShowOnlyPinned] = useState(false);
-  
-  const loadClasses = useCallback(async() => {
+
+  const loadClasses = useCallback(async () => {
     setIsLoading(true);
     try {
       const classData = await getClasses();
-      
       const classesWithCalculatedProgress = classData.map(cls => {
         const doneCount = cls.doneCount || 0;
-        const totalPdfs = cls.pdfCount || 0; // pdfCount is the authoritative source from DB
+        const totalPdfs = cls.pdfCount || 0;
         const progress = totalPdfs > 0 ? Math.round((doneCount / totalPdfs) * 100) : 0;
-        
         return {
           ...cls,
           progress,
           completedItems: doneCount,
-          totalItems: totalPdfs, // Use pdfCount from DB as totalItems
+          totalItems: totalPdfs,
         };
       });
-      
-      // Sort classes: pinned first, then by name
       const sortedClasses = classesWithCalculatedProgress.sort((a, b) => {
-        if (a.isPinned && !b.isPinned) {return -1;}
-        if (!a.isPinned && b.isPinned) {return 1;}
+        if (a.isPinned && !b.isPinned) { return -1; }
+        if (!a.isPinned && b.isPinned) { return 1; }
         return a.name.localeCompare(b.name);
       });
-      
       setClasses(sortedClasses);
     } catch (error) {
       console.error('Failed to load classes:', error);
-      // Optionally, set an error state to display to the user
+      // Optionally set an error state for UI
     } finally {
       setIsLoading(false);
     }
@@ -61,25 +57,37 @@ const ClassManagement: React.FC<ClassManagementProps> = ({ onSelectClass, onCrea
     loadClasses();
   }, [loadClasses]);
 
-  const requestDeleteConfirmation = (classId: number) => {
+  const requestDeleteConfirmation = (classId: string) => {
+    if (isDeletingClass) return; // Prevent opening new modal if one delete is in progress
     setConfirmDelete({ isOpen: true, classId });
   };
 
-  const handleDeleteClass = async() => {
-    if (confirmDelete.classId === null) {return;}
+  const handleDeleteClass = async () => {
+    if (confirmDelete.classId === null || isDeletingClass) {
+      return;
+    }
     
+    // console.log(`[ClassManagement] handleDeleteClass called for ID: ${confirmDelete.classId}`);
+    setIsDeletingClass(true);
+
     try {
       await dbDeleteClass(confirmDelete.classId);
-      setConfirmDelete({ isOpen: false, classId: null });
-      await loadClasses(); // Refresh list after deletion
+      // console.log(`[ClassManagement] Class ${confirmDelete.classId} deleted successfully from DB.`);
+      // State updates will be batched by React
+      setConfirmDelete({ isOpen: false, classId: null }); 
+      await loadClasses(); // Refresh list
+      // console.log(`[ClassManagement] Classes reloaded after deletion.`);
     } catch (error) {
-      console.error('Failed to delete class:', error);
+      console.error('[ClassManagement] Failed to delete class:', error);
       setConfirmDelete({ isOpen: false, classId: null }); // Still close modal on error
-      // Optionally, show an error notification
+      alert(`Failed to delete class: ${error instanceof Error ? error.message : String(error)}\nSee console for details.`);
+    } finally {
+      setIsDeletingClass(false);
     }
   };
 
   const handleCancelDelete = () => {
+    if (isDeletingClass) return; // Don't allow cancel if deletion is mid-flight
     setConfirmDelete({ isOpen: false, classId: null });
   };
 
@@ -87,45 +95,41 @@ const ClassManagement: React.FC<ClassManagementProps> = ({ onSelectClass, onCrea
     setShowOnlyPinned(prev => !prev);
   };
 
-  const filteredClasses = showOnlyPinned 
-    ? classes.filter(cls => cls.isPinned) 
+  const filteredClasses = showOnlyPinned
+    ? classes.filter(cls => cls.isPinned)
     : classes;
-    
+
   return (
     <div className="bg-gray-900 text-gray-200 min-h-screen flex flex-col">
-      {/* Background div for consistent bg, good for overlays or complex layouts */}
       <div className="fixed inset-0 bg-gray-900 -z-10" aria-hidden="true"></div>
-      
-      {/* Using the standard Header component */}
-      <Header showBackButton={false} /> 
-
+      <Header showBackButton={false} />
       <div className="container mx-auto px-4 pb-16 flex-grow pt-8">
         <ClassCreator onClassCreated={loadClasses} onCreateClass={onCreateClass} />
-        
         {isLoading ? (
           <LoadingSpinner />
         ) : (
-          <ClassList 
+          <ClassList
             classes={filteredClasses}
             showOnlyPinned={showOnlyPinned}
             onTogglePinnedFilter={handleTogglePinnedFilter}
             onSelectClass={onSelectClass}
             onRequestDelete={requestDeleteConfirmation}
-            onDataChanged={loadClasses} // For ClassCard to trigger refresh
+            onDataChanged={loadClasses}
           />
         )}
       </div>
-
       <Footer />
-
       <ConfirmationModal
         isOpen={confirmDelete.isOpen}
         title="Delete Class"
         message="Are you sure you want to delete this class? All PDFs associated with this class will also be deleted. This action cannot be undone."
-        confirmText="Delete"
+        confirmText={isDeletingClass ? "Deleting..." : "Delete"}
         cancelText="Cancel"
         onConfirm={handleDeleteClass}
         onCancel={handleCancelDelete}
+        isConfirmDisabled={isDeletingClass} // Pass disabled state to modal
+        isCancelDisabled={isDeletingClass}  // Optionally disable cancel too
+        confirmButtonClass="bg-red-600 hover:bg-red-700" // Base class, disabled styles handled by modal
       />
     </div>
   );
