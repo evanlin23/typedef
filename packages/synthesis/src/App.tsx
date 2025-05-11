@@ -15,10 +15,7 @@ function App() {
           <Game />
         </main>
         
-        <footer className="p-4 mt-8 text-center text-text-secondary text-sm border-t border-border-primary"> {/* mt-8 for spacing */}
-          <p>
-            Created by [Your Name/Alias Here if you wish, or remove this line]. Game version from provided code.
-          </p>
+        <footer className="p-4 mt-8 text-center text-text-secondary text-sm border-t border-border-primary">
           <div className="flex justify-center mt-2">
             <a 
               href="https://github.com/evanlin23/typedef" 
