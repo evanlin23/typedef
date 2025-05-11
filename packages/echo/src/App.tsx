@@ -7,8 +7,6 @@ import { LibraryPanel } from './components/LibraryPanel';
 import { MusicPlayer } from './components/MusicPlayer';
 import { Footer } from './components/Footer';
 
-// this is a test
-
 export default function App() {
   // State for song list, current song, playback status, etc.
   const [songs, setSongs] = useState<Song[]>([]);
@@ -110,7 +108,7 @@ export default function App() {
           const newSong: Song = {
             id: crypto.randomUUID(),
             title: file.name.replace(/\.[^/.]+$/, ""), // Remove file extension
-            artist: "Lock in",
+            artist: "You gotta lock in",
             duration,
             file, // Store the actual file
             url: blobUrl // Store the playable URL
