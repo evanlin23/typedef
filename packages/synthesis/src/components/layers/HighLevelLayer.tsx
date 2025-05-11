@@ -1,5 +1,5 @@
 // src/components/layers/HighLevelLayer.tsx
-import React, { useCallback } from 'react'; // Removed useState
+import React, { useCallback } from 'react';
 import { type GameState, CODE_COST_HIGHLEVEL_PER_CHAR, calculateActualMaxMemory } from '../../types/gameState';
 
 interface HighLevelLayerProps {
@@ -20,85 +20,106 @@ const HighLevelLayer: React.FC<HighLevelLayerProps> = ({
   const { highLevelCode, highLevelOutput } = gameState.layerSpecificStates;
   const actualMaxMemory = calculateActualMaxMemory(gameState);
   const codeCost = highLevelCode.length * CODE_COST_HIGHLEVEL_PER_CHAR;
+  const canExecute = codeCost <= actualMaxMemory;
+
+  const unitTestCost = 15; // Defined here for clarity and display
 
   const handleRunCode = useCallback(() => {
-    if (codeCost > actualMaxMemory) {
-      onOutputSet(`ERROR: Memory capacity exceeded. Required: ${codeCost.toFixed(1)} CU, Available: ${actualMaxMemory.toFixed(0)} CU`);
+    if (!canExecute) {
+      onOutputSet(`ERROR: Memory capacity (${actualMaxMemory.toFixed(0)} CU) exceeded. Required: ${codeCost.toFixed(1)} CU.`);
       return;
     }
     
+    // runCode in Game.tsx will use gameState.layerSpecificStates.highLevelCode
     const result = runCode(highLevelCode, 'highLevel');
     
     if (result.success) {
-      onOutputSet(`SUCCESS: Generated ${result.ticksGenerated} ticks.\n\n// Simulated execution:\nCompiling...\nExecuting...\nProgram completed.`);
+      onOutputSet(`SUCCESS: Compilation and execution generated ${result.ticksGenerated} Ticks.\n\n// Simulated execution log:\nSource code analyzed...\nBytecode compilation complete...\nVirtual machine executing...\nProgram finished successfully.`);
     } else {
-      onOutputSet(`ERROR: Code execution failed.\nGenerated only ${result.ticksGenerated} ticks.\n\n// Debug info:\nError at line ${Math.floor(Math.random() * highLevelCode.split('\n').length) + 1}.`);
+      const errorLine = Math.floor(Math.random() * highLevelCode.split('\n').length) + 1;
+      onOutputSet(`ERROR: Code execution failed due to runtime exception or logical error.\nGenerated only ${result.ticksGenerated} Ticks.\n\n// Debug trace (simulated):\nException: NullReferenceError on line ${errorLine}.\nStack trace available (simulated).`);
     }
-  }, [highLevelCode, runCode, actualMaxMemory, codeCost, onOutputSet]);
+  }, [highLevelCode, runCode, actualMaxMemory, codeCost, onOutputSet, canExecute]);
 
   const handleRunTests = useCallback(() => {
+     if (gameState.resources.ticks < unitTestCost) {
+      onOutputSet(`// Not enough Ticks to run unit tests. Cost: ${unitTestCost} Ticks.\nCheck global notifications for error details.`);
+    } else {
+      onOutputSet(`// Unit test suite initiated for High-Level Language Layer...\nCheck global notifications for results.`);
+    }
     runUnitTests('highLevel');
-    onOutputSet(`// Unit test suite initiated for High-Level Language Layer...\nCheck global notifications for results.`);
-  }, [runUnitTests, onOutputSet]);
+  }, [runUnitTests, onOutputSet, gameState.resources.ticks, unitTestCost]);
 
   return (
     <div className="animate-fadeIn">
-      <h3 className="text-xl mb-4 text-accent-primary">High-Level Language Layer</h3>
-      <div className="bg-background-secondary p-4 rounded border border-border-primary shadow-md mb-4">
-        <p className="mb-4 text-text-secondary">
-          Utilize pseudo high-level languages for more abstract and powerful code. 
-          Achieve greater tick generation, but beware of higher-level bugs and memory footprint.
+      <h3 className="text-xl font-semibold mb-4 text-accent-primary">High-Level Language Environment</h3>
+      <div className="bg-gray-900 p-4 rounded border border-border-secondary shadow-md mb-4">
+        <p className="mb-4 text-text-secondary text-sm">
+          Utilize a pseudo high-level language (JavaScript-like syntax) for more abstract and powerful algorithms.
+          Achieve greater tick generation through complex logic, but beware of higher-level bugs, increased entropy from failures, and larger memory footprints.
         </p>
         
         <div className="flex flex-col md:flex-row gap-4">
-          <div className="md:w-1/2">
+          {/* Code Editor Section */}
+          <div className="md:w-1/2 flex flex-col">
             <div className="mb-2 flex justify-between items-center">
-              <label htmlFor="hll-code" className="font-medium text-text-primary">High-Level Code:</label>
-              <span className={`text-xs ${codeCost > actualMaxMemory ? "text-error-primary" : "text-text-secondary"}`}>
+              <label htmlFor="hll-code-editor" className="font-medium text-text-primary">High-Level Code:</label>
+              <span 
+                className={`text-xs font-mono ${!canExecute ? "text-error-primary" : "text-text-secondary"}`}
+                title={`Memory: ${codeCost.toFixed(1)} CU used / ${actualMaxMemory.toFixed(0)} CU max`}
+              >
                 {codeCost.toFixed(1)} / {actualMaxMemory.toFixed(0)} CU
               </span>
             </div>
             <textarea
-              id="hll-code"
+              id="hll-code-editor"
               value={highLevelCode}
               onChange={(e) => onCodeChange(e.target.value)}
-              className="w-full h-64 bg-gray-900 text-gray-100 p-2 rounded border border-border-secondary font-mono text-sm focus:ring-1 focus:ring-accent-primary focus:border-accent-primary"
+              className="flex-grow w-full h-64 md:h-auto bg-gray-800 text-gray-100 p-2 rounded border border-border-primary font-mono text-sm focus:ring-1 focus:ring-accent-primary focus:border-accent-primary resize-none"
               spellCheck="false"
+              aria-label="High-Level Code Editor"
             />
           </div>
-          <div className="md:w-1/2">
-            <label htmlFor="hll-output" className="block mb-2 font-medium text-text-primary">Output:</label>
+
+          {/* Output Section */}
+          <div className="md:w-1/2 flex flex-col">
+            <label htmlFor="hll-output-display" className="block mb-2 font-medium text-text-primary">Output & Logs:</label>
             <div
-              id="hll-output"
-              className="w-full h-64 bg-gray-900 text-gray-100 p-2 rounded border border-border-secondary font-mono text-sm overflow-auto whitespace-pre-wrap"
+              id="hll-output-display"
+              className="flex-grow w-full h-64 md:h-auto bg-gray-800 text-gray-100 p-2 rounded border border-border-primary font-mono text-sm overflow-auto whitespace-pre-wrap"
+              aria-live="polite"
             >
               {highLevelOutput}
             </div>
           </div>
         </div>
-        <div className="mt-4 flex flex-col sm:flex-row justify-end gap-2">
+
+        <div className="mt-4 flex flex-col sm:flex-row justify-end gap-3">
            <button
             onClick={handleRunTests}
             className="px-4 py-2 rounded font-semibold bg-yellow-500 hover:bg-yellow-600 text-black transition-colors duration-150 text-sm"
+            title={`Cost: ${unitTestCost} Ticks. Verifies code integrity and may grant a temporary buff.`}
           >
-            Run Unit Tests (Cost: 15 Ticks)
+            Run Unit Tests (Cost: {unitTestCost} Ticks)
           </button>
           <button
             onClick={handleRunCode}
-            disabled={codeCost > actualMaxMemory}
+            disabled={!canExecute}
             className="px-4 py-2 rounded font-semibold bg-accent-primary hover:bg-green-600 text-black disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-150 text-sm"
+            title={!canExecute ? `Memory limit exceeded (${codeCost.toFixed(1)}/${actualMaxMemory.toFixed(0)} CU)` : "Compile and run the high-level code"}
           >
             Compile & Run
           </button>
         </div>
       </div>
-      <div className="bg-background-secondary p-4 rounded border border-border-primary shadow-md">
-        <h4 className="font-semibold mb-2 text-text-primary">Language Abstractions (Conceptual)</h4>
-        <div className="space-y-1 text-sm text-text-secondary">
-          <p><span className="font-semibold text-text-primary">Algorithm Efficiency:</span> Complex loops, data structures, and recursion can yield higher ticks.</p>
-          <p><span className="font-semibold text-text-primary">Modularity:</span> Well-defined functions are easier to "test".</p>
-          <p><span className="font-semibold text-text-primary">Error Handling:</span> "Bugs" in complex code contribute to entropy.</p>
-        </div>
+      <div className="bg-gray-900 p-4 rounded border border-border-secondary shadow-md">
+        <h4 className="font-semibold mb-2 text-text-primary">Language Concepts & Abstractions</h4>
+        <ul className="space-y-1 text-sm text-text-secondary list-disc list-inside pl-2">
+          <li><span className="font-semibold text-text-primary">Algorithmic Complexity:</span> More sophisticated algorithms (e.g., complex loops, recursion, advanced math) generally yield higher Ticks but are harder to "get right".</li>
+          <li><span className="font-semibold text-text-primary">Modularity & Functions:</span> Well-defined functions improve readability and are conceptually easier to "test" by the unit test system.</li>
+          <li><span className="font-semibold text-text-primary">Error Propagation:</span> "Bugs" or inefficiencies in complex high-level code contribute more significantly to system entropy upon failure.</li>
+          <li><span className="font-semibold text-text-primary">Memory Management:</span> While abstracted, larger codebases and complex data structures (simulated) consume more Code Units (CU).</li>
+        </ul>
       </div>
     </div>
   );

@@ -1,5 +1,5 @@
 // src/components/layers/ConcurrencyLayer.tsx
-import React, { useEffect, useCallback, useState } from 'react';
+import React, { useEffect, useCallback, useState, useMemo } from 'react';
 import { 
   type GameState, 
   type ThreadState,
@@ -25,39 +25,56 @@ const ConcurrencyLayer: React.FC<ConcurrencyLayerProps> = ({
 }) => {
   const [deadlockDetected, setDeadlockDetected] = useState<boolean>(false);
 
-  const { concurrencyThreads: threadsFromProps, concurrencyGlobalLocks: globalLocksFromProps } = gameState.layerSpecificStates;
+  const { concurrencyThreads, concurrencyGlobalLocks } = gameState.layerSpecificStates;
 
-  const availableLocks = ['shared_data_A', 'shared_buffer_B', 'critical_section_C'];
-  const actualMaxMemory = calculateActualMaxMemory(gameState);
-  const maxThreads = calculateMaxThreads(gameState);
-  const totalCodeSize = threadsFromProps.reduce((sum, t) => sum + t.code.length * CODE_COST_HIGHLEVEL_PER_CHAR, 0);
-  const idleThreadsCount = threadsFromProps.filter(t => t.status === 'idle').length;
+  const availableLocks = useMemo(() => ['shared_data_A', 'shared_buffer_B', 'critical_section_C'], []);
+  const actualMaxMemory = useMemo(() => calculateActualMaxMemory(gameState), [gameState]);
+  const maxThreads = useMemo(() => calculateMaxThreads(gameState), [gameState]);
+  
+  const totalCodeSize = useMemo(() => 
+    concurrencyThreads.reduce((sum, t) => sum + t.code.length * CODE_COST_HIGHLEVEL_PER_CHAR, 0),
+    [concurrencyThreads]
+  );
+  
+  const idleThreadsCount = useMemo(() => 
+    concurrencyThreads.filter(t => t.status === 'idle').length,
+    [concurrencyThreads]
+  );
+  
+  const runningThreads = useMemo(() => 
+    concurrencyThreads.filter(t => t.status === 'running'),
+    [concurrencyThreads]
+  );
 
+  // Deadlock detection (simplified heuristic)
   useEffect(() => {
-    const runningThreads = threadsFromProps.filter(t => t.status === 'running');
-    if (runningThreads.length < 2) {
+    if (runningThreads.length < 2 || Object.keys(concurrencyGlobalLocks).length === 0) {
       setDeadlockDetected(false);
       return;
     }
-    let isDeadlocked = false;
-    if (runningThreads.length > 1 && Object.keys(globalLocksFromProps).length > 0) {
-       const threadsWantingLocks = runningThreads.filter(t => 
-         t.code.includes('acquireLock') &&
-         t.acquiredLocks.length < availableLocks.length
-       );
-       if (threadsWantingLocks.length === runningThreads.length && threadsWantingLocks.length > 1) {
-         if (Math.random() < 0.1 * threadsWantingLocks.length) {
-            isDeadlocked = true;
-         }
+    
+    // A simple heuristic: if multiple running threads are trying to acquire locks and hold some
+    const threadsWantingLocks = runningThreads.filter(t => 
+      t.code.includes('acquireLock') && // Heuristic: thread intends to acquire a lock
+      t.acquiredLocks.length < availableLocks.length // And doesn't hold all possible locks
+    );
+
+    // If all currently running threads are in a state of wanting more locks
+    // and there are locks currently held, potential for deadlock increases.
+    if (threadsWantingLocks.length === runningThreads.length && threadsWantingLocks.length > 1) {
+       // Simulate a chance of deadlock based on contention
+       if (Math.random() < 0.1 * threadsWantingLocks.length) { 
+          setDeadlockDetected(true);
+          return;
        }
     }
-    setDeadlockDetected(isDeadlocked);
-  }, [threadsFromProps, globalLocksFromProps, availableLocks.length]);
+    setDeadlockDetected(false);
+  }, [runningThreads, concurrencyGlobalLocks, availableLocks]);
   
   const createNewThread = useCallback(() => {
     onThreadsChange(prevThreads => {
       if (prevThreads.length >= maxThreads) return prevThreads;
-      const newId = prevThreads.length > 0 ? Math.max(...prevThreads.map(t => t.id)) + 1 : 1;
+      const newId = prevThreads.length > 0 ? Math.max(0, ...prevThreads.map(t => t.id)) + 1 : 1;
       const newThread: ThreadState = { 
         id: newId, 
         code: initialConcurrencyThreadCode(newId), 
@@ -71,201 +88,215 @@ const ConcurrencyLayer: React.FC<ConcurrencyLayerProps> = ({
   }, [maxThreads, onThreadsChange]);
   
   const removeThread = useCallback((id: number) => {
-    onGlobalLocksChange(prevGlobalLocks => {
-      const threadToRemove = gameState.layerSpecificStates.concurrencyThreads.find(t => t.id === id);
-      let newGlobalLocks = { ...prevGlobalLocks };
-      if (threadToRemove) {
+    const threadToRemove = concurrencyThreads.find(t => t.id === id);
+    if (threadToRemove?.status === 'running') return; // Cannot remove running thread
+
+    // Release any locks held by the thread being removed
+    if (threadToRemove && threadToRemove.acquiredLocks.length > 0) {
+      onGlobalLocksChange(prevGlobalLocks => {
+        const newGlobalLocks = { ...prevGlobalLocks };
+        let changed = false;
         threadToRemove.acquiredLocks.forEach(lockName => {
-          if (newGlobalLocks[lockName] === id) delete newGlobalLocks[lockName];
+          if (newGlobalLocks[lockName] === id) {
+            delete newGlobalLocks[lockName];
+            changed = true;
+          }
         });
-      }
-      return newGlobalLocks;
-    });
+        return changed ? newGlobalLocks : prevGlobalLocks;
+      });
+    }
     onThreadsChange(prevThreads => prevThreads.filter(t => t.id !== id));
-  }, [gameState.layerSpecificStates.concurrencyThreads, onThreadsChange, onGlobalLocksChange]);
+  }, [concurrencyThreads, onThreadsChange, onGlobalLocksChange]);
   
   const updateThreadCode = useCallback((id: number, newCode: string) => {
     onThreadsChange(prevThreads => prevThreads.map(t => t.id === id ? {...t, code: newCode} : t));
   }, [onThreadsChange]);
   
   const toggleLock = useCallback((threadId: number, lockName: string) => {
+    // This function updates both thread-local lock list and global lock state
     onThreadsChange(prevThreads => {
-        let newGlobalLocksLocal = { ...gameState.layerSpecificStates.concurrencyGlobalLocks }; 
-        const updatedThreads = prevThreads.map(t => {
-            if (t.id === threadId) {
-                if (t.acquiredLocks.includes(lockName)) { 
-                    if (newGlobalLocksLocal[lockName] === threadId) { 
-                        delete newGlobalLocksLocal[lockName];
-                    }
-                    return {...t, acquiredLocks: t.acquiredLocks.filter(l => l !== lockName)};
-                } else { 
-                    if (newGlobalLocksLocal[lockName] === undefined) { 
-                        newGlobalLocksLocal[lockName] = threadId;
-                        return {...t, acquiredLocks: [...t.acquiredLocks, lockName]};
-                    }
-                }
+      const thread = prevThreads.find(t => t.id === threadId);
+      if (!thread || thread.status === 'running') return prevThreads;
+
+      let newGlobalLocks = { ...concurrencyGlobalLocks };
+      let locksChangedForGlobalState = false;
+
+      const updatedThreads = prevThreads.map(t => {
+        if (t.id === threadId) {
+          if (t.acquiredLocks.includes(lockName)) { // Try to release lock
+            if (newGlobalLocks[lockName] === threadId) {
+              delete newGlobalLocks[lockName];
+              locksChangedForGlobalState = true;
             }
-            return t;
-        });
-        if (JSON.stringify(newGlobalLocksLocal) !== JSON.stringify(gameState.layerSpecificStates.concurrencyGlobalLocks)) {
-             onGlobalLocksChange(() => newGlobalLocksLocal);
+            return {...t, acquiredLocks: t.acquiredLocks.filter(l => l !== lockName)};
+          } else { // Try to acquire lock
+            if (newGlobalLocks[lockName] === undefined) { // Lock is available
+              newGlobalLocks[lockName] = threadId;
+              locksChangedForGlobalState = true;
+              return {...t, acquiredLocks: [...t.acquiredLocks, lockName]};
+            } else {
+              // Lock is held by another thread, cannot acquire. UI should reflect this.
+              // No change to this thread's acquiredLocks.
+              return t; 
+            }
+          }
         }
-        return updatedThreads;
+        return t;
+      });
+
+      if (locksChangedForGlobalState) {
+        onGlobalLocksChange(() => newGlobalLocks); // Update global locks if they actually changed
+      }
+      return updatedThreads;
     });
-  }, [onThreadsChange, onGlobalLocksChange, gameState.layerSpecificStates.concurrencyGlobalLocks]);
+  }, [onThreadsChange, onGlobalLocksChange, concurrencyGlobalLocks]);
 
   const executeSingleThread = useCallback((threadId: number) => {
-    const threadToExecute = threadsFromProps.find(t => t.id === threadId);
+    const threadToExecute = concurrencyThreads.find(t => t.id === threadId);
 
-    // Allow running if idle. Completed threads will also effectively re-run from idle.
-    if (!threadToExecute || (threadToExecute.status !== 'idle' && threadToExecute.status !== 'completed')) {
-        return;
+    if (!threadToExecute || threadToExecute.status !== 'idle') {
+      // Can only run idle threads. 'error' status needs reset. 'running' is already running.
+      return;
     }
-
     if (totalCodeSize > actualMaxMemory) {
-      onThreadsChange(prevThreads => prevThreads.map(t => t.id === threadId ? {...t, output: `ERROR: Total memory for threads exceeded. Max: ${actualMaxMemory.toFixed(0)} CU`, status: 'error'} : t));
+      onThreadsChange(prev => prev.map(t => t.id === threadId ? {...t, output: `ERROR: Total thread memory (${totalCodeSize.toFixed(1)} CU) exceeds capacity (${actualMaxMemory.toFixed(0)} CU).`, status: 'error'} : t));
       return;
     }
     if (deadlockDetected) {
-      onThreadsChange(prevThreads => prevThreads.map(t => t.id === threadId ? {...t, output: 'ERROR: Deadlock detected! Resolve deadlock or reset threads.', status: 'error'} : t));
+      onThreadsChange(prev => prev.map(t => t.id === threadId ? {...t, output: 'ERROR: Deadlock detected! Resolve deadlock or manage locks.', status: 'error'} : t));
       return;
     }
 
-    onThreadsChange(prevThreads => prevThreads.map(t => 
-        t.id === threadId ? {
-            ...t, 
-            status: 'running', 
-            output: '// Executing thread...', 
-            ticksGeneratedLastRun: 0 
-        } : t
+    onThreadsChange(prev => prev.map(t => 
+        t.id === threadId ? { ...t, status: 'running', output: '// Executing thread...', ticksGeneratedLastRun: 0 } : t
     ));
     
-    const codeForThisExecution = threadToExecute.code;
-    const acquiredLocksForThisExecution = [...threadToExecute.acquiredLocks];
+    // Capture current state for this execution context
+    const codeForExecution = threadToExecute.code;
+    const locksHeldByThisThread = [...threadToExecute.acquiredLocks];
 
+    // Simulate asynchronous execution
     setTimeout(() => {
-      const result = runCode(codeForThisExecution, 'concurrency', threadId);
+      const result = runCode(codeForExecution, 'concurrency', threadId); // runCode is from Game.tsx
       
-      let finalTicksGenerated = result.ticksGenerated;
-      let finalOutputMessage = '';
-      let finalThreadStatus: ThreadState['status'] = 'error'; // Default to error
+      onThreadsChange(currentThreads => {
+        const targetThreadAfterRun = currentThreads.find(t => t.id === threadId);
+        // If thread was removed or reset while "running", don't update it.
+        if (!targetThreadAfterRun || targetThreadAfterRun.status !== 'running') {
+          return currentThreads; 
+        }
 
-      onThreadsChange(currentGlobalThreads => {
-          const targetThreadInUpdate = currentGlobalThreads.find(t => t.id === threadId);
-          if (!targetThreadInUpdate || targetThreadInUpdate.status !== 'running') {
-              return currentGlobalThreads; 
+        let finalTicks = result.ticksGenerated;
+        let finalOutput = '';
+        let finalStatus: ThreadState['status'] = 'error'; // Default to error
+
+        // Simulate race condition if no locks are held and other threads are running
+        const otherThreadsStillRunning = currentThreads.some(t => t.id !== threadId && t.status === 'running');
+        const potentialRaceCondition = locksHeldByThisThread.length === 0 && otherThreadsStillRunning && Math.random() < 0.25;
+
+        if (result.success && !potentialRaceCondition) {
+          finalStatus = 'idle'; // Successful run makes thread idle, ready for next run
+          finalOutput = `SUCCESS: Thread ${threadId} completed. Generated ${result.ticksGenerated} Ticks.\nLocks held: ${locksHeldByThisThread.join(', ') || 'none'}\nStatus: Idle.`;
+        } else {
+          if (potentialRaceCondition) {
+            finalTicks = Math.floor(result.ticksGenerated * 0.3); // Penalty for race condition
+            finalOutput = `ERROR: Race condition detected in Thread ${threadId} execution!\nReduced Ticks: ${finalTicks}. Consider using locks for shared resources.`;
+          } else { // General failure
+            finalOutput = `ERROR: Thread ${threadId} execution failed.\nGenerated only ${finalTicks} Ticks. Review code or resource conflicts.`;
           }
-
-          const otherThreadsStillRunning = currentGlobalThreads.some(t => t.id !== threadId && t.status === 'running');
-          const potentialRaceCondition = acquiredLocksForThisExecution.length === 0 && otherThreadsStillRunning && Math.random() < 0.25;
-
-          if (result.success && !potentialRaceCondition) {
-            finalThreadStatus = 'idle'; // MODIFIED: Successful completion now sets status to 'idle'
-            finalOutputMessage = `SUCCESS: Thread ${threadId} completed, generated ${result.ticksGenerated} ticks.\nLocks held: ${acquiredLocksForThisExecution.join(', ') || 'none'}\nThread is now idle.`;
-          } else {
-            if (potentialRaceCondition) {
-              finalTicksGenerated = Math.floor(result.ticksGenerated * 0.3);
-              finalOutputMessage = `ERROR: Race condition detected in Thread ${threadId}!\nGenerated only ${finalTicksGenerated} ticks. Consider using locks.`;
-            } else {
-                finalOutputMessage = `ERROR: Thread ${threadId} execution failed.\nGenerated only ${finalTicksGenerated} ticks. Check code or resource conflicts.`;
-            }
-            // Error status is already set as default for finalThreadStatus
-          }
+          // finalStatus remains 'error'
+        }
         
-          return currentGlobalThreads.map(t => t.id === threadId ? {
-            ...t, 
-            status: finalThreadStatus, 
-            output: finalOutputMessage,
-            ticksGeneratedLastRun: finalTicksGenerated
-          } : t);
+        return currentThreads.map(t => t.id === threadId ? {
+          ...t, 
+          status: finalStatus, 
+          output: finalOutput,
+          ticksGeneratedLastRun: finalTicks // Store ticks from this run
+        } : t);
       });
-    }, 1000 + Math.random() * 1000);
+    }, 1000 + Math.random() * 1000); // Random execution time
   }, [
-    threadsFromProps,
-    runCode,        
-    actualMaxMemory,
-    totalCodeSize,  
-    deadlockDetected,
-    onThreadsChange 
+    concurrencyThreads, runCode, actualMaxMemory, totalCodeSize, 
+    deadlockDetected, onThreadsChange
   ]);
 
   const handleRunAllIdleThreads = useCallback(() => {
-    if (deadlockDetected || totalCodeSize > actualMaxMemory || idleThreadsCount === 0) {
-        return;
+    if (idleThreadsCount === 0 || deadlockDetected || totalCodeSize > actualMaxMemory) {
+      // UI should disable this button, but good to have a safeguard
+      return;
     }
-    const idleThreadIds = threadsFromProps
-        .filter(t => t.status === 'idle') // This correctly targets only idle threads
+    const idleThreadIds = concurrencyThreads
+        .filter(t => t.status === 'idle')
         .map(t => t.id);
     
     idleThreadIds.forEach((threadId, index) => {
+        // Stagger the execution starts slightly
         setTimeout(() => {
             executeSingleThread(threadId);
         }, index * 200); 
     });
   }, [
-    threadsFromProps,
-    deadlockDetected, 
-    totalCodeSize, 
-    actualMaxMemory, 
-    idleThreadsCount, 
-    executeSingleThread
+    concurrencyThreads, idleThreadsCount, deadlockDetected, 
+    totalCodeSize, actualMaxMemory, executeSingleThread
   ]);
   
   const resolveDeadlock = useCallback(() => {
     onThreadsChange(prevThreads => prevThreads.map(t => {
       if (t.status === 'running' || t.acquiredLocks.length > 0) {
-        return {...t, status: 'idle', output: 'Thread reset (deadlock). Locks released.', acquiredLocks: []};
+        // Reset running or lock-holding threads to idle and release their locks
+        return {...t, status: 'idle', output: 'Thread reset due to deadlock resolution. Locks released.', acquiredLocks: []};
       }
       return t;
     }));
-    onGlobalLocksChange(() => ({}));
+    onGlobalLocksChange(() => ({})); // Clear all global locks
     setDeadlockDetected(false);
   }, [onThreadsChange, onGlobalLocksChange]);
 
   const handleResetThread = useCallback((threadId: number) => {
-    onThreadsChange(prevThreads => prevThreads.map(t => 
-      t.id === threadId && t.status === 'error'
-        ? { 
-            ...t, 
-            status: 'idle', 
-            output: `// Thread ${threadId} has been reset from error state.`, 
-            ticksGeneratedLastRun: 0, 
-            acquiredLocks: [] 
-          } 
-        : t
-    ));
-    onGlobalLocksChange(prevGlobalLocks => {
+    const threadToReset = concurrencyThreads.find(thr => thr.id === threadId);
+    if (!threadToReset || threadToReset.status !== 'error') return; // Only reset errored threads
+
+    // Release locks if this errored thread was somehow still holding them (defensive)
+    if (threadToReset.acquiredLocks.length > 0) {
+      onGlobalLocksChange(prevGlobalLocks => {
         const newGlobalLocks = {...prevGlobalLocks};
         let changed = false;
-        const threadToReset = threadsFromProps.find(thr => thr.id === threadId);
-        threadToReset?.acquiredLocks.forEach(lockName => {
-             if (newGlobalLocks[lockName] === threadId) {
-                delete newGlobalLocks[lockName];
-                changed = true;
+        threadToReset.acquiredLocks.forEach(lockName => {
+            if (newGlobalLocks[lockName] === threadId) {
+              delete newGlobalLocks[lockName];
+              changed = true;
             }
         });
         return changed ? newGlobalLocks : prevGlobalLocks;
-    });
-  }, [onThreadsChange, onGlobalLocksChange, threadsFromProps]);
+      });
+    }
+
+    onThreadsChange(prevThreads => prevThreads.map(t => 
+      t.id === threadId
+        ? { ...t, status: 'idle', output: `// Thread ${threadId} reset from error state. Ready.`, ticksGeneratedLastRun: 0, acquiredLocks: [] } 
+        : t
+    ));
+  }, [onThreadsChange, onGlobalLocksChange, concurrencyThreads]);
   
   return (
     <div className="animate-fadeIn">
-      <h3 className="text-xl mb-4 text-accent-primary">Concurrency Layer</h3>
-       <div className="bg-background-secondary p-4 rounded border border-border-primary shadow-md mb-4">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4">
-          <p className="text-text-secondary mb-2 sm:mb-0 text-sm">
-            Manage multiple execution threads. Max Threads: {maxThreads}. Idle: {idleThreadsCount}.
-            <br /> Total Code Memory: <span className={totalCodeSize > actualMaxMemory ? "text-error-primary" : "text-text-primary"}>{totalCodeSize.toFixed(1)}</span> / {actualMaxMemory.toFixed(0)} CU
-          </p>
-          <div className="flex flex-wrap gap-2 mt-2 sm:mt-0">
+      <h3 className="text-xl font-semibold mb-4 text-accent-primary">Concurrency & Parallelism Layer</h3>
+       <div className="bg-gray-900 p-4 rounded border border-border-secondary shadow-md mb-4">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-2">
+          <div className="text-text-secondary text-sm">
+            <p>Manage multiple execution threads. Max Threads: <span className="text-text-primary font-medium">{maxThreads}</span>.</p>
+            <p>Idle Threads: <span className="text-text-primary font-medium">{idleThreadsCount}</span>. Running: <span className="text-text-primary font-medium">{runningThreads.length}</span>.</p>
+            <p>Total Code Memory: <span className={`${totalCodeSize > actualMaxMemory ? "text-error-primary" : "text-text-primary"} font-medium`}>{totalCodeSize.toFixed(1)}</span> / {actualMaxMemory.toFixed(0)} CU</p>
+          </div>
+          <div className="flex flex-wrap gap-2 self-start sm:self-center">
             <button
               onClick={handleRunAllIdleThreads}
               disabled={idleThreadsCount === 0 || deadlockDetected || totalCodeSize > actualMaxMemory}
               title={
-                idleThreadsCount === 0 ? "No idle threads to run" :
-                deadlockDetected ? "Deadlock detected, resolve first" :
-                totalCodeSize > actualMaxMemory ? "Total code memory exceeds capacity" :
-                "Run all idle threads"
+                idleThreadsCount === 0 ? "No idle threads available to run" :
+                deadlockDetected ? "Deadlock detected. Please resolve first." :
+                totalCodeSize > actualMaxMemory ? "Total code memory exceeds capacity." :
+                "Run all currently idle threads"
               }
               className="px-3 py-2 rounded font-semibold bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-150 text-sm"
             >
@@ -273,124 +304,139 @@ const ConcurrencyLayer: React.FC<ConcurrencyLayerProps> = ({
             </button>
             <button
               onClick={createNewThread}
-              disabled={threadsFromProps.length >= maxThreads || totalCodeSize > actualMaxMemory}
-              title={threadsFromProps.length >= maxThreads ? "Max threads reached" : totalCodeSize > actualMaxMemory ? "Not enough memory for new thread code" : "Create new thread"}
+              disabled={concurrencyThreads.length >= maxThreads || totalCodeSize >= actualMaxMemory - (initialConcurrencyThreadCode(0).length * CODE_COST_HIGHLEVEL_PER_CHAR) } // crude check for new thread memory
+              title={
+                concurrencyThreads.length >= maxThreads ? "Maximum number of threads reached." : 
+                totalCodeSize >= actualMaxMemory ? "Not enough free memory for a new thread's default code." :
+                "Create a new execution thread"
+              }
               className="px-3 py-2 rounded font-semibold bg-green-600 hover:bg-green-700 text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-150 text-sm"
             >
               Add Thread
             </button>
             {deadlockDetected && (
-              <button onClick={resolveDeadlock} className="px-3 py-2 rounded font-semibold bg-red-600 hover:bg-red-700 text-white transition-colors duration-150 text-sm">
-                Resolve Deadlock
+              <button onClick={resolveDeadlock} className="px-3 py-2 rounded font-semibold bg-red-600 hover:bg-red-700 text-white transition-colors duration-150 text-sm animate-pulseOnce">
+                Resolve Deadlock!
               </button>
             )}
           </div>
         </div>
 
         {deadlockDetected && (
-          <div className="bg-red-700 bg-opacity-50 text-red-100 p-3 rounded mb-4 text-sm border border-red-600">
-            ⚠️ DEADLOCK DETECTED! Multiple threads are blocked. Use "Resolve Deadlock" or manage locks.
+          <div className="bg-red-800 bg-opacity-70 text-red-100 p-3 rounded mb-4 text-sm border border-red-600 shadow-lg">
+            <span className="font-bold">⚠️ DEADLOCK DETECTED!</span> Multiple threads are blocked, preventing progress. Use "Resolve Deadlock" or manually manage locks and reset errored threads.
           </div>
         )}
 
          <div className="mb-4">
-          <h4 className="font-medium mb-1 text-text-primary">Available Locks:</h4>
+          <h4 className="font-medium mb-1 text-text-primary">Global Resource Locks:</h4>
           <div className="flex flex-wrap gap-2">
             {availableLocks.map(lock => (
               <div 
                 key={lock}
-                className={`px-2 py-1 rounded text-xs ${
-                  globalLocksFromProps[lock] !== undefined 
-                    ? 'bg-red-700 text-gray-200' 
-                    : 'bg-green-700 text-gray-200'
+                title={`Lock status for ${lock}`}
+                className={`px-2 py-1 rounded text-xs font-medium border ${
+                  concurrencyGlobalLocks[lock] !== undefined 
+                    ? 'bg-red-700 text-gray-200 border-red-500' 
+                    : 'bg-green-700 text-gray-200 border-green-500'
                 }`}
               >
-                {lock} {globalLocksFromProps[lock] !== undefined && `(Held by T${globalLocksFromProps[lock]})`}
+                {lock} {concurrencyGlobalLocks[lock] !== undefined && `(Held by T${concurrencyGlobalLocks[lock]})`}
               </div>
             ))}
           </div>
         </div>
         
         <div className="space-y-4">
-          {threadsFromProps.map(thread => (
-            <div key={thread.id} className="bg-gray-900 p-3 rounded border border-border-secondary">
+          {concurrencyThreads.map(thread => {
+            const isRunning = thread.status === 'running';
+            const isError = thread.status === 'error';
+            const threadCodeCost = thread.code.length * CODE_COST_HIGHLEVEL_PER_CHAR;
+
+            return (
+            <div key={thread.id} className="bg-gray-800 p-3 rounded border border-border-primary shadow-sm">
               <div className="flex justify-between items-center mb-2">
-                <h5 className="font-medium text-text-primary">Thread {thread.id}</h5>
+                <h5 className="font-medium text-text-primary">Thread {thread.id} <span className="text-xs text-text-secondary">(Cost: {threadCodeCost.toFixed(1)} CU)</span></h5>
                 <div className="flex items-center gap-2">
-                  <span className={`px-2 py-0.5 text-xs rounded font-semibold ${
+                  <span className={`px-2 py-0.5 text-xs rounded-full font-semibold ${
                     thread.status === 'idle' ? 'bg-gray-600 text-gray-300' :
-                    thread.status === 'running' ? 'bg-yellow-500 text-black animate-pulseOnce' :
-                    // 'completed' status will no longer be a persistent state, but for UI flash:
-                    // thread.status === 'completed' ? 'bg-green-500 text-black' : 
-                    'bg-red-500 text-white' // This will be for 'error'
+                    isRunning ? 'bg-yellow-500 text-black animate-pulseOnce' :
+                    isError ? 'bg-red-500 text-white' :
+                    'bg-blue-500 text-white' // Fallback, should not happen
                   }`}>
                     {thread.status.toUpperCase()}
                   </span>
                   <button 
                     onClick={() => removeThread(thread.id)} 
-                    disabled={thread.status === 'running'} 
+                    disabled={isRunning} 
                     className="text-xs bg-red-700 hover:bg-red-800 text-white px-2 py-1 rounded disabled:opacity-50 disabled:cursor-not-allowed"
-                    title={thread.status === 'running' ? "Cannot remove running thread" : "Remove thread"}
+                    title={isRunning ? "Cannot remove a running thread" : "Remove this thread"}
+                    aria-label={`Remove Thread ${thread.id}`}
                   >
-                    X
+                    ✕
                   </button>
                 </div>
               </div>
               
               <div className="flex flex-col md:flex-row gap-3 mb-2">
                 <div className="md:w-1/2">
-                   <label className="block text-xs font-medium text-text-secondary mb-1">Code (Thread {thread.id}):</label>
+                   <label htmlFor={`thread-code-${thread.id}`} className="block text-xs font-medium text-text-secondary mb-1">Code (Thread {thread.id}):</label>
                   <textarea
+                    id={`thread-code-${thread.id}`}
                     value={thread.code}
                     onChange={(e) => updateThreadCode(thread.id, e.target.value)}
-                    disabled={thread.status === 'running'}
-                    className="w-full h-40 bg-gray-800 text-gray-100 p-2 rounded border border-gray-700 font-mono text-xs focus:ring-1 focus:ring-accent-primary focus:border-accent-primary"
+                    disabled={isRunning}
+                    className="w-full h-40 bg-gray-900 text-gray-100 p-2 rounded border border-border-secondary font-mono text-xs focus:ring-1 focus:ring-accent-primary focus:border-accent-primary resize-none"
                     spellCheck="false"
+                    aria-label={`Code editor for Thread ${thread.id}`}
                   />
                 </div>
                 <div className="md:w-1/2">
-                  <label className="block text-xs font-medium text-text-secondary mb-1">Output:</label>
-                  <div className="w-full h-40 bg-gray-800 text-gray-100 p-2 rounded border border-gray-700 font-mono text-xs overflow-auto whitespace-pre-wrap">
+                  <label htmlFor={`thread-output-${thread.id}`} className="block text-xs font-medium text-text-secondary mb-1">Output:</label>
+                  <div 
+                    id={`thread-output-${thread.id}`}
+                    className="w-full h-40 bg-gray-900 text-gray-100 p-2 rounded border border-border-secondary font-mono text-xs overflow-auto whitespace-pre-wrap"
+                    aria-live="polite"
+                  >
                     {thread.output || "// Output will appear here"}
                   </div>
                 </div>
               </div>
               
               <div className="text-xs text-text-secondary mb-2">
-                Locks Acquired: {thread.acquiredLocks.join(', ') || 'None'}
+                Locks Acquired by this Thread: {thread.acquiredLocks.join(', ') || 'None'}
               </div>
               <div className="flex flex-wrap gap-2 mb-3">
-                {availableLocks.map(lockName => (
+                {availableLocks.map(lockName => {
+                  const lockHeldByOther = concurrencyGlobalLocks[lockName] !== undefined && concurrencyGlobalLocks[lockName] !== thread.id;
+                  const canToggle = !isRunning && !lockHeldByOther;
+                  return (
                   <button
                     key={lockName}
                     onClick={() => toggleLock(thread.id, lockName)}
-                    disabled={
-                      thread.status === 'running' || 
-                      (globalLocksFromProps[lockName] !== undefined && globalLocksFromProps[lockName] !== thread.id) 
-                    }
-                    className={`px-2 py-1 text-xs rounded font-medium transition-colors ${
+                    disabled={!canToggle}
+                    className={`px-2 py-1 text-xs rounded font-medium transition-colors border ${
                       thread.acquiredLocks.includes(lockName)
-                        ? 'bg-red-600 hover:bg-red-700 text-white'
-                        : 'bg-green-600 hover:bg-green-700 text-white'
+                        ? 'bg-red-600 hover:bg-red-700 text-white border-red-500'
+                        : 'bg-green-600 hover:bg-green-700 text-white border-green-500'
                     } disabled:opacity-50 disabled:cursor-not-allowed`}
                     title={
-                        thread.status === 'running' ? "Cannot change locks on running thread" :
-                        (globalLocksFromProps[lockName] !== undefined && globalLocksFromProps[lockName] !== thread.id) ? `Lock held by Thread ${globalLocksFromProps[lockName]}` :
-                        thread.acquiredLocks.includes(lockName) ? `Release ${lockName}` : `Acquire ${lockName}`
+                        isRunning ? "Cannot change locks on a running thread." :
+                        lockHeldByOther ? `Lock '${lockName}' is currently held by Thread ${concurrencyGlobalLocks[lockName]}.` :
+                        thread.acquiredLocks.includes(lockName) ? `Release lock '${lockName}'` : `Acquire lock '${lockName}'`
                     }
                   >
                     {thread.acquiredLocks.includes(lockName) ? `Release ${lockName}` : `Acquire ${lockName}`}
                   </button>
-                ))}
+                )})}
               </div>
               
-              <div className="flex justify-end gap-2">
-                {thread.status === 'error' && (
+              <div className="flex flex-wrap justify-end gap-2">
+                {isError && (
                   <button
                     onClick={() => handleResetThread(thread.id)}
-                    // disabled is not strictly needed here if only shown for 'error'
                     className="px-3 py-1.5 rounded font-semibold bg-yellow-600 hover:bg-yellow-700 text-black transition-colors duration-150 text-sm"
-                    title="Reset this errored thread to idle state"
+                    title="Reset this errored thread to an idle state and release its locks"
                   >
                     Reset Thread
                   </button>
@@ -398,16 +444,15 @@ const ConcurrencyLayer: React.FC<ConcurrencyLayerProps> = ({
                 <button
                   onClick={() => executeSingleThread(thread.id)}
                   disabled={
-                    // A thread can be run if it's 'idle'. 'completed' is now effectively 'idle' post-run.
-                    thread.status !== 'idle' || 
+                    isRunning || isError ||
                     totalCodeSize > actualMaxMemory || 
                     deadlockDetected
                   }
                   title={
-                    thread.status === 'error' ? `Thread is in error state. Reset to run again.` :
-                    thread.status === 'running' ? `Thread is currently running.` :
-                    totalCodeSize > actualMaxMemory ? "Total code memory exceeds capacity" :
-                    deadlockDetected ? "Deadlock detected, resolve first" :
+                    isRunning ? "Thread is currently running." :
+                    isError ? "Thread is in an error state. Reset to run again." :
+                    totalCodeSize > actualMaxMemory ? "Total code memory for threads exceeds capacity." :
+                    deadlockDetected ? "Deadlock detected system-wide. Please resolve first." :
                     "Run this thread"
                   }
                   className="px-3 py-1.5 rounded font-semibold bg-accent-primary hover:bg-green-600 text-black disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-150 text-sm"
@@ -416,13 +461,13 @@ const ConcurrencyLayer: React.FC<ConcurrencyLayerProps> = ({
                 </button>
               </div>
               
-              {thread.ticksGeneratedLastRun > 0 && (
+              {thread.ticksGeneratedLastRun > 0 && thread.status !== 'running' && (
                 <div className="mt-1 text-xs text-green-400">
-                  Last run generated: {thread.ticksGeneratedLastRun} ticks
+                  Last run generated: {thread.ticksGeneratedLastRun} Ticks.
                 </div>
               )}
             </div>
-          ))}
+          )})}
         </div>
       </div>
     </div>

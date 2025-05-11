@@ -1,11 +1,9 @@
-import Game from './components/Game'
+import Game from './components/Game';
 
 function App() {
   return (
-    // Base styling moved to index.html body and tailwind.config.js
-    // App component can focus on layout
     <div className="min-h-screen flex flex-col items-center p-4 sm:p-8">
-      <div className="container w-full max-w-7xl mx-auto">
+      <div className="container w-full max-w-7xl mx-auto flex flex-col flex-grow"> {/* flex-grow for footer */}
         <header className="flex flex-col sm:flex-row justify-between items-center mb-6 sm:mb-8 pb-4 border-b border-border-primary">
           <h1 className="text-3xl sm:text-4xl font-bold text-accent-primary mb-2 sm:mb-0">
             Synthesis
@@ -13,14 +11,19 @@ function App() {
           <p className="text-sm text-text-secondary">A Programming Incremental Game</p>
         </header>
         
-        <Game />
+        <main className="flex-grow"> {/* main content takes available space */}
+          <Game />
+        </main>
         
-        <footer className="p-4 text-center text-gray-400 text-sm">
-          <div className="flex justify-center">
+        <footer className="p-4 mt-8 text-center text-text-secondary text-sm border-t border-border-primary"> {/* mt-8 for spacing */}
+          <p>
+            Created by [Your Name/Alias Here if you wish, or remove this line]. Game version from provided code.
+          </p>
+          <div className="flex justify-center mt-2">
             <a 
               href="https://github.com/evanlin23/typedef" 
               target="_blank" 
-              rel="noopener noreferrer"
+              rel="noopener noreferrer" // Important for security
               className="text-purple-400 hover:underline mx-2"
             >
               GitHub
@@ -29,7 +32,7 @@ function App() {
         </footer>
       </div>
     </div>
-  )
+  );
 }
 
-export default App
+export default App;

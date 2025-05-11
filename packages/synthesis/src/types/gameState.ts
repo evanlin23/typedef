@@ -43,14 +43,13 @@ export interface LayerBuff {
 }
 
 export interface ActiveLayerBuffs {
-  [layerKey: string]: LayerBuff | null; // e.g., 'assembly', 'highLevel'
+  [layerKey: string]: LayerBuff | null; // e.g., 'assembly', 'highLevel', 'concurrency'
 }
 
-// Define Thread state structure (can be moved from ConcurrencyLayer or kept there and imported if preferred)
 export interface ThreadState {
   id: number;
   code: string;
-  status: 'idle' | 'running' | 'completed' | 'error';
+  status: 'idle' | 'running' | 'error'; // 'completed' status is merged into 'idle' post-run
   output: string;
   ticksGeneratedLastRun: number;
   acquiredLocks: string[];
@@ -60,7 +59,6 @@ export interface GlobalConcurrencyLocks {
     [lockName: string]: number | undefined; // lockName -> threadId holding it
 }
 
-// New interface to hold states for individual layers
 export interface LayerSpecificStates {
   assemblyCode: string;
   assemblyOutput: string;
@@ -76,7 +74,7 @@ export interface GameState {
   resources: Resources;
   upgrades: Upgrades;
   upgradeCosts: UpgradeCosts;
-  activeProcesses: number;
+  activeProcesses: number; // Number of active non-concurrent processes
   
   metaKnowledge: MetaKnowledge;
   activeLayerBuffs: ActiveLayerBuffs;
@@ -85,19 +83,19 @@ export interface GameState {
   totalTicksGeneratedAllTime: number;
 
   autoTickEnabled: boolean;
-  layerSpecificStates: LayerSpecificStates; // Added here
+  layerSpecificStates: LayerSpecificStates;
 }
 
 // Game Constants
-export const BASE_TICK_RATE_PER_CPU_LEVEL = 0.5; // Potential Ticks per second per CPU level
-export const AI_CORE_TICK_RATE_PER_LEVEL = 0.2; // Potential Ticks per second per AI core level
-export const GAME_LOOP_INTERVAL_MS = 100; // Game loop runs every 100ms (10 times per second)
+export const BASE_TICK_RATE_PER_CPU_LEVEL = 0.5;
+export const AI_CORE_TICK_RATE_PER_LEVEL = 0.2;
+export const GAME_LOOP_INTERVAL_MS = 100;
 export const MAX_ENTROPY = 100;
-export const ENTROPY_PER_PROCESS_PER_SEC = 0.1; // Base entropy gain
-export const OPTIMIZATION_ENTROPY_REDUCTION_PER_LEVEL = 0.005; // Reduction per opt level
+export const ENTROPY_PER_PROCESS_PER_SEC = 0.1;
+export const OPTIMIZATION_ENTROPY_REDUCTION_PER_LEVEL = 0.005;
 
-export const CODE_COST_ASSEMBLY_PER_CHAR = 0.02; // CU per character
-export const CODE_COST_HIGHLEVEL_PER_CHAR = 0.01; // CU per character
+export const CODE_COST_ASSEMBLY_PER_CHAR = 0.02;
+export const CODE_COST_HIGHLEVEL_PER_CHAR = 0.01;
 
 export const initialAssemblyCode = `MOV AX, 1
 ADD AX, 5 ; Example modification
@@ -116,17 +114,18 @@ function calculateComplexity(input) {
 calculateComplexity(18); // Modified input
 `;
 
-export const initialConcurrencyThreadCode = (id: number) => `// Thread ${id} - High-Level Syntax
+export const initialConcurrencyThreadCode = (id: number): string => `// Thread ${id} - High-Level Syntax
 async function processDataPart(partId) {
-  // Acquire a lock if dealing with shared resources
+  // Example of acquiring a lock for a shared resource:
   // await acquireLock('shared_data_A');
   console.log(\`Thread ${id} processing part \${partId}\`);
   let sum = 0;
-  for (let i = 0; i < (7 + partId); i++) { // Vary complexity
+  for (let i = 0; i < (7 + partId); i++) { // Vary complexity based on partId
     sum += (i * partId) + Math.random();
-    // Simulate work
+    // Simulate asynchronous work
     await new Promise(resolve => setTimeout(resolve, 40 + Math.random() * 20)); 
   }
+  // Example of releasing a lock:
   // releaseLock('shared_data_A');
   return sum;
 }
@@ -169,12 +168,12 @@ export const initialGameState: GameState = {
   activeLayerBuffs: {
     assembly: null,
     highLevel: null,
-    concurrency: null,
+    concurrency: null, // Ensure all potential layers are here
   },
   lastSaveTime: Date.now(),
   totalTicksGeneratedAllTime: 0,
   autoTickEnabled: false,
-  layerSpecificStates: { // Initialize new state
+  layerSpecificStates: {
     assemblyCode: initialAssemblyCode,
     assemblyOutput: "// Assembly output will appear here",
     highLevelCode: initialHighLevelCode,
@@ -200,7 +199,6 @@ export const calculateActualMaxMemory = (state: GameState): number => {
 };
 
 export const calculateTotalPotentialTickRate = (state: GameState): number => {
-  // Tick rate before entropy, combining CPU and AI
   const cpuTicks = BASE_TICK_RATE_PER_CPU_LEVEL * state.upgrades.cpuLevel;
   const aiTicks = AI_CORE_TICK_RATE_PER_LEVEL * state.upgrades.aiCoreLevel;
   return (cpuTicks + aiTicks) * state.metaKnowledge.buffs.tickMultiplier;
@@ -208,10 +206,14 @@ export const calculateTotalPotentialTickRate = (state: GameState): number => {
 
 export const calculateEffectiveTickRate = (state: GameState): number => {
   const totalPotentialRate = calculateTotalPotentialTickRate(state);
-  const entropyFactor = 1 - (state.resources.entropy / (MAX_ENTROPY * 2)); // Max 50% reduction from entropy
-  return totalPotentialRate * Math.max(0, entropyFactor); // Ensure non-negative
+  // Entropy reduces efficiency, max 50% reduction from entropy.
+  const entropyFactor = 1 - (state.resources.entropy / (MAX_ENTROPY * 2)); 
+  return totalPotentialRate * Math.max(0, entropyFactor); // Ensure non-negative rate
 };
 
 export const calculateMaxThreads = (state: GameState): number => {
-  return 1 + state.upgrades.maxThreadsLevel; // e.g., Level 1 = 2 threads, Level 2 = 3 threads
+  // Base of 1 thread, plus 1 for each level of maxThreadsLevel upgrade.
+  // So, level 0 = 1 thread, level 1 = 2 threads, etc.
+  // The initial state has maxThreadsLevel: 1, so it starts with 1+1 = 2 threads.
+  return 1 + state.upgrades.maxThreadsLevel;
 };

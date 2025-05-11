@@ -2,7 +2,7 @@ import { type GameState, calculateEffectiveTickRate } from '../../types/gameStat
 
 interface MachineLayerProps {
   gameState: GameState;
-  produceTickManually: () => void; // Renamed for clarity
+  produceTickManually: () => void;
   toggleAutoTick: () => void;
 }
 
@@ -11,61 +11,74 @@ const MachineLayer = ({
   produceTickManually, 
   toggleAutoTick,
 }: MachineLayerProps) => {
-  const effectiveTickRate = calculateEffectiveTickRate(gameState);
+  const effectiveTickRate = calculateEffectiveTickRate(gameState); // Overall passive tick rate
+  const { cpuLevel, memoryLevel } = gameState.upgrades;
   
   return (
     <div className="animate-fadeIn">
-      <h3 className="text-xl mb-4 text-accent-primary">Machine Layer</h3>
+      <h3 className="text-xl font-semibold mb-4 text-accent-primary">Machine Core Interface</h3>
       
-      <div className="bg-background-secondary p-4 rounded border border-border-primary shadow-md mb-4">
+      <div className="bg-gray-900 p-4 rounded border border-border-secondary shadow-md mb-4">
         <div className="mb-6">
-          <p className="text-text-secondary">The Machine Layer represents the fundamental hardware of your virtual machine.</p>
-          <p className="mt-1 text-text-secondary">Manually execute a single computation cycle (tick), or enable auto-execution for continuous processing.</p>
+          <p className="text-text-secondary text-sm">
+            This layer represents the fundamental hardware of your virtual machine. Manually execute a single computation cycle 
+            (generating 1 Tick) or enable Auto-Execution for continuous simulated manual cycles.
+          </p>
+          <p className="mt-1 text-text-secondary text-sm">
+            Passive tick generation from CPU and AI upgrades occurs automatically in the background.
+          </p>
         </div>
         
         <div className="flex flex-col items-center space-y-6">
           <button
             onClick={produceTickManually}
-            className="bg-green-500 hover:bg-green-600 active:bg-green-700 text-white font-bold py-6 px-12 sm:py-8 sm:px-16 rounded-full transition-colors duration-300 shadow-lg focus:outline-none focus:ring-2 focus:ring-green-400 focus:ring-opacity-50"
-            aria-label="Execute Tick Manually"
+            className="bg-green-500 hover:bg-green-600 active:bg-green-700 text-white font-bold py-5 px-10 sm:py-6 sm:px-12 rounded-full transition-transform duration-150 ease-out active:scale-95 shadow-lg focus:outline-none focus:ring-2 focus:ring-green-400 focus:ring-opacity-50"
+            aria-label="Execute One Computation Cycle Manually"
           >
-            EXECUTE CYCLE
+            EXECUTE CYCLE (+1 Tick)
           </button>
           
           <div className="flex items-center space-x-3">
-            <span className="text-text-primary">Auto-Execution:</span>
+            <label htmlFor="auto-exec-toggle" className="text-text-primary">Auto-Execution (Manual Cycles):</label>
             <button
+              id="auto-exec-toggle"
               onClick={toggleAutoTick}
-              className={`px-4 py-2 rounded transition-colors duration-200 text-sm font-medium ${
+              className={`px-4 py-2 rounded transition-colors duration-200 text-sm font-medium border ${
                 gameState.autoTickEnabled 
-                  ? 'bg-accent-primary text-black' 
-                  : 'bg-gray-700 hover:bg-gray-600 text-text-primary border border-border-secondary'
+                  ? 'bg-accent-primary text-black border-green-600' 
+                  : 'bg-gray-700 hover:bg-gray-600 text-text-primary border-border-secondary'
               }`}
+              aria-pressed={gameState.autoTickEnabled}
             >
-              {gameState.autoTickEnabled ? 'ON' : 'OFF'}
+              {gameState.autoTickEnabled ? 'ENABLED' : 'DISABLED'}
             </button>
           </div>
+          {gameState.autoTickEnabled && effectiveTickRate > 0.05 && (
+             <p className="text-xs text-text-secondary">
+               Auto-executing at approx. {Math.min(1000 / 50, effectiveTickRate).toFixed(2)} cycles/sec.
+             </p>
+           )}
         </div>
       </div>
       
-      <div className="bg-background-secondary p-4 rounded border border-border-primary shadow-md">
-        <h4 className="font-semibold mb-2 text-text-primary">Machine Status</h4>
-        <div className="space-y-1 text-sm text-text-secondary pl-4 border-l-2 border-border-secondary">
+      <div className="bg-gray-900 p-4 rounded border border-border-secondary shadow-md">
+        <h4 className="font-semibold mb-2 text-text-primary">Core System Status</h4>
+        <div className="space-y-1 text-sm text-text-secondary pl-4 border-l-2 border-border-primary">
           <div className="flex justify-between">
-            <span>Processor Cores (Simulated):</span>
-            <span>{gameState.upgrades.cpuLevel}</span>
+            <span>Simulated CPU Cores:</span>
+            <span className="font-mono">Level {cpuLevel}</span>
           </div>
           <div className="flex justify-between">
-            <span>Effective Clock Speed:</span>
-            <span>{effectiveTickRate.toFixed(2)} Hz (Cycles/sec)</span>
-          </div>
-           <div className="flex justify-between">
             <span>Memory Modules:</span>
-            <span>Level {gameState.upgrades.memoryLevel}</span>
+            <span className="font-mono">Level {memoryLevel}</span>
           </div>
           <div className="flex justify-between">
-            <span>Execution Mode:</span>
-            <span>{gameState.autoTickEnabled ? 'Automatic' : 'Manual'}</span>
+            <span title="Overall passive tick generation rate from CPU & AI, after entropy">Effective Passive Clock Speed:</span>
+            <span className="font-mono">{effectiveTickRate.toFixed(2)} Hz (Ticks/sec)</span>
+          </div>
+          <div className="flex justify-between">
+            <span>Manual Cycle Execution Mode:</span>
+            <span className="font-mono">{gameState.autoTickEnabled ? 'Automatic' : 'Manual'}</span>
           </div>
         </div>
       </div>
