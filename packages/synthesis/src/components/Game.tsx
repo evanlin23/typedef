@@ -145,8 +145,8 @@ const Game = () => {
   };
 
   return (
-    <div className="bg-gray-100 min-h-screen p-4 text-gray-900">
-      <h1 className="text-2xl font-bold mb-4 text-center text-green-600">Synthesis</h1>
+    <div className="bg-gray-900 min-h-screen p-4 text-gray-200">
+      <h1 className="text-2xl font-bold mb-4 text-center text-green-400">Synthesis</h1>
       
       <div className="flex flex-col lg:flex-row gap-4">
         <div className="lg:w-1/4">
@@ -166,29 +166,29 @@ const Game = () => {
           <button
             onClick={garbageCollect}
             disabled={gameState.resources.ticks < 10}
-            className="w-full mt-4 bg-gray-200 p-2 rounded border border-gray-300 hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full mt-4 bg-gray-900 p-2 rounded border border-gray-700 hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Garbage Collection (10 ticks)
           </button>
         </div>
         
-        <div className="lg:w-3/4 bg-gray-200 rounded border border-gray-300 p-4">
-          <div className="flex border-b border-gray-300 mb-4">
+        <div className="lg:w-3/4 bg-gray-900 rounded border border-gray-700 p-4">
+          <div className="flex border-b border-gray-700 mb-4">
             <button 
               onClick={() => setActiveTab('machine')}
-              className={`px-4 py-2 ${activeTab === 'machine' ? 'text-green-600 border-b-2 border-green-600' : ''}`}
+              className={`px-4 py-2 ${activeTab === 'machine' ? 'text-green-400 border-b-2 border-green-400' : ''}`}
             >
               Machine
             </button>
             <button 
               onClick={() => setActiveTab('assembly')}
-              className={`px-4 py-2 ${activeTab === 'assembly' ? 'text-green-600 border-b-2 border-green-600' : ''}`}
+              className={`px-4 py-2 ${activeTab === 'assembly' ? 'text-green-400 border-b-2 border-green-400' : ''}`}
             >
               Assembly
             </button>
             <button 
               onClick={() => setActiveTab('highlevel')}
-              className={`px-4 py-2 ${activeTab === 'highlevel' ? 'text-green-600 border-b-2 border-green-600' : ''}`}
+              className={`px-4 py-2 ${activeTab === 'highlevel' ? 'text-green-400 border-b-2 border-green-400' : ''}`}
             >
               High-Level Language
             </button>

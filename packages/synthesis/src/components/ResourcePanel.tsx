@@ -9,7 +9,7 @@ interface ResourcePanelProps {
 
 const ResourcePanel = ({ resources, tickRate, activeProcesses }: ResourcePanelProps) => {
   return (
-    <div className="bg-gray-200 p-4 rounded border border-gray-300 mb-4">
+    <div className="bg-gray-900 p-4 rounded border border-gray-700 mb-4">
       <h2 className="text-lg font-semibold mb-2 text-blue-600">Resources</h2>
       
       <div className="space-y-2">

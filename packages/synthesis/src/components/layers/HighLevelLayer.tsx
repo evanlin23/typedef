@@ -19,7 +19,6 @@ function generateTicks() {
 generateTicks();`);
   
   const [output, setOutput] = useState('// Output will appear here');
-  const [language, setLanguage] = useState('javascript');
   
   const handleRunCode = () => {
     // Check if code exceeds memory
@@ -47,27 +46,13 @@ Execution halted`);
   
   return (
     <div>
-      <h3 className="text-xl mb-4 text-green-600">High-Level Language Layer</h3>
+      <h3 className="text-xl mb-4 text-green-400">High-Level Language Layer</h3>
       
-      <div className="bg-gray-100 p-4 rounded border border-gray-300 mb-4">
+      <div className="bg-gray-900 p-4 rounded border border-gray-700 mb-4">
         <p className="mb-4">
           The High-Level Language Layer allows you to write code in modern programming languages to generate ticks more efficiently.
           High-level code can generate significantly more ticks when successful.
         </p>
-        
-        <div className="mb-4">
-          <label htmlFor="language" className="block mb-2 font-medium">Select Language:</label>
-          <select
-            id="language"
-            value={language}
-            onChange={(e) => setLanguage(e.target.value)}
-            className="bg-gray-200 text-gray-900 p-2 rounded border border-gray-300"
-          >
-            <option value="javascript">JavaScript</option>
-            <option value="python">Python</option>
-            <option value="c">C</option>
-          </select>
-        </div>
         
         <div className="flex flex-col md:flex-row gap-4">
           <div className="md:w-1/2">
@@ -81,7 +66,7 @@ Execution halted`);
               id="high-code"
               value={code}
               onChange={(e) => setCode(e.target.value)}
-              className="w-full h-64 bg-gray-200 text-gray-900 p-2 rounded border border-gray-300 font-mono text-sm"
+              className="w-full h-64 bg-gray-900 text-gray-200 p-2 rounded border border-gray-700 font-mono text-sm"
             />
           </div>
           
@@ -91,7 +76,7 @@ Execution halted`);
             </div>
             <div
               id="high-output"
-              className="w-full h-64 bg-gray-200 text-gray-900 p-2 rounded border border-gray-300 font-mono text-sm overflow-auto whitespace-pre-wrap"
+              className="w-full h-64 bg-gray-900 text-gray-200 p-2 rounded border border-gray-700 font-mono text-sm overflow-auto whitespace-pre-wrap"
             >
               {output}
             </div>
@@ -101,14 +86,14 @@ Execution halted`);
         <div className="mt-4 flex justify-end">
           <button
             onClick={handleRunCode}
-            className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700"
+            className="bg-green-400 text-white px-4 py-2 rounded hover:bg-green-700"
           >
             Run Code
           </button>
         </div>
       </div>
       
-      <div className="bg-gray-100 p-4 rounded border border-gray-300">
+      <div className="bg-gray-900 p-4 rounded border border-gray-700">
         <h4 className="font-semibold mb-2">Language Features</h4>
         <div className="space-y-2">
           <p>
