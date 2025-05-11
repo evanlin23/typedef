@@ -1,14 +1,17 @@
-import React, { useState, useEffect } from 'react';
+// src/components/ClassManagement.tsx
+import React, { useState, useEffect, useCallback } from 'react';
 import type { Class } from '../utils/types';
-import { getClasses, deleteClass } from '../utils/db';
+import { getClasses, deleteClass as dbDeleteClass } from '../utils/db'; // Renamed to avoid conflict
 import ClassCreator from './ClassCreator';
 import ClassList from './ClassList';
 import ConfirmationModal from './ConfirmationModal';
 import Footer from './Footer';
+import Header from './Header'; // Assuming a generic header might be wanted here too
+import LoadingSpinner from './LoadingSpinner';
 
 interface ClassManagementProps {
   onSelectClass: (classId: number) => void;
-  onCreateClass: (classId: number) => void;
+  onCreateClass: (classId: number) => void; // Used by ClassCreator to auto-select new class
 }
 
 const ClassManagement: React.FC<ClassManagementProps> = ({ onSelectClass, onCreateClass }) => {
@@ -20,58 +23,59 @@ const ClassManagement: React.FC<ClassManagementProps> = ({ onSelectClass, onCrea
   });
   const [showOnlyPinned, setShowOnlyPinned] = useState(false);
   
-  useEffect(() => {
-    loadClasses();
-  }, []);
-
-  const loadClasses = async () => {
+  const loadClasses = useCallback(async() => {
     setIsLoading(true);
     try {
       const classData = await getClasses();
       
-      // Process class data with progress calculation
-      const classesWithProgress = classData.map(cls => {
+      const classesWithCalculatedProgress = classData.map(cls => {
         const doneCount = cls.doneCount || 0;
-        const totalItems = cls.pdfCount;
-        const progress = totalItems > 0 ? Math.round((doneCount / totalItems) * 100) : 0;
+        const totalPdfs = cls.pdfCount || 0; // pdfCount is the authoritative source from DB
+        const progress = totalPdfs > 0 ? Math.round((doneCount / totalPdfs) * 100) : 0;
         
         return {
           ...cls,
           progress,
           completedItems: doneCount,
-          totalItems
+          totalItems: totalPdfs, // Use pdfCount from DB as totalItems
         };
       });
       
       // Sort classes: pinned first, then by name
-      const sortedClasses = classesWithProgress.sort((a, b) => {
-        if (a.isPinned && !b.isPinned) return -1;
-        if (!a.isPinned && b.isPinned) return 1;
+      const sortedClasses = classesWithCalculatedProgress.sort((a, b) => {
+        if (a.isPinned && !b.isPinned) {return -1;}
+        if (!a.isPinned && b.isPinned) {return 1;}
         return a.name.localeCompare(b.name);
       });
       
       setClasses(sortedClasses);
     } catch (error) {
       console.error('Failed to load classes:', error);
+      // Optionally, set an error state to display to the user
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
 
-  const handleConfirmDelete = (classId: number) => {
+  useEffect(() => {
+    loadClasses();
+  }, [loadClasses]);
+
+  const requestDeleteConfirmation = (classId: number) => {
     setConfirmDelete({ isOpen: true, classId });
   };
 
-  const handleDeleteClass = async () => {
-    if (confirmDelete.classId === null) return;
+  const handleDeleteClass = async() => {
+    if (confirmDelete.classId === null) {return;}
     
     try {
-      await deleteClass(confirmDelete.classId);
+      await dbDeleteClass(confirmDelete.classId);
       setConfirmDelete({ isOpen: false, classId: null });
-      await loadClasses();
+      await loadClasses(); // Refresh list after deletion
     } catch (error) {
       console.error('Failed to delete class:', error);
-      setConfirmDelete({ isOpen: false, classId: null });
+      setConfirmDelete({ isOpen: false, classId: null }); // Still close modal on error
+      // Optionally, show an error notification
     }
   };
 
@@ -89,28 +93,27 @@ const ClassManagement: React.FC<ClassManagementProps> = ({ onSelectClass, onCrea
     
   return (
     <div className="bg-gray-900 text-gray-200 min-h-screen flex flex-col">
-      {/* Add overflow-x-hidden to prevent horizontal scrollbar */}
+      {/* Background div for consistent bg, good for overlays or complex layouts */}
       <div className="fixed inset-0 bg-gray-900 -z-10" aria-hidden="true"></div>
-      <div className="bg-gray-800 py-8 mb-8">
-        <div className="container mx-auto px-4">
-          <h1 className="text-3xl font-bold text-center text-green-400">
-            struct
-          </h1>
-        </div>
-      </div>
+      
+      {/* Using the standard Header component */}
+      <Header showBackButton={false} /> 
 
-      <div className="container mx-auto px-4 pb-16 flex-grow">
+      <div className="container mx-auto px-4 pb-16 flex-grow pt-8">
         <ClassCreator onClassCreated={loadClasses} onCreateClass={onCreateClass} />
         
-        <ClassList 
-          classes={filteredClasses}
-          isLoading={isLoading}
-          showOnlyPinned={showOnlyPinned}
-          onTogglePinnedFilter={handleTogglePinnedFilter}
-          onSelectClass={onSelectClass}
-          onRequestDelete={handleConfirmDelete}
-          onDataChanged={loadClasses}
-        />
+        {isLoading ? (
+          <LoadingSpinner />
+        ) : (
+          <ClassList 
+            classes={filteredClasses}
+            showOnlyPinned={showOnlyPinned}
+            onTogglePinnedFilter={handleTogglePinnedFilter}
+            onSelectClass={onSelectClass}
+            onRequestDelete={requestDeleteConfirmation}
+            onDataChanged={loadClasses} // For ClassCard to trigger refresh
+          />
+        )}
       </div>
 
       <Footer />
