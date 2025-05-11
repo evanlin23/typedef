@@ -1,6 +1,7 @@
 // src/components/layers/AssemblyLayer.tsx
 import React, { useCallback } from 'react';
-import { type GameState, CODE_COST_ASSEMBLY_PER_CHAR, calculateActualMaxMemory } from '../../types/gameState';
+// Remove calculateActualMaxMemory import, use gameState.resources.maxMemory directly
+import { type GameState, CODE_COST_ASSEMBLY_PER_CHAR } from '../../types/gameState';
 
 interface AssemblyLayerProps {
   gameState: GameState;
@@ -18,11 +19,12 @@ const AssemblyLayer: React.FC<AssemblyLayerProps> = ({
   onOutputSet 
 }) => {
   const { assemblyCode, assemblyOutput } = gameState.layerSpecificStates;
-  const actualMaxMemory = calculateActualMaxMemory(gameState);
+  // Use current maxMemory from gameState.resources
+  const actualMaxMemory = gameState.resources.maxMemory;
   const codeCost = assemblyCode.length * CODE_COST_ASSEMBLY_PER_CHAR;
   const canExecute = codeCost <= actualMaxMemory;
 
-  const unitTestCost = 5; // Defined here for clarity and display
+  const unitTestCost = 5;
 
   const handleRunCode = useCallback(() => {
     if (!canExecute) {
@@ -30,8 +32,6 @@ const AssemblyLayer: React.FC<AssemblyLayerProps> = ({
       return;
     }
     
-    // runCode in Game.tsx will use gameState.layerSpecificStates.assemblyCode
-    // The first argument to runCode is technically ignored for this layer but kept for consistent signature
     const result = runCode(assemblyCode, 'assembly'); 
     
     if (result.success) {
@@ -44,7 +44,6 @@ const AssemblyLayer: React.FC<AssemblyLayerProps> = ({
   const handleRunTests = useCallback(() => {
     if (gameState.resources.ticks < unitTestCost) {
       onOutputSet(`// Not enough Ticks to run unit tests. Cost: ${unitTestCost} Ticks.\nCheck global notifications for error details.`);
-      // Game.tsx runUnitTests will also show a toast for this
     } else {
       onOutputSet(`// Unit test suite initiated for Assembly Layer...\nCheck global notifications for results.`);
     }
@@ -89,7 +88,7 @@ const AssemblyLayer: React.FC<AssemblyLayerProps> = ({
             <div
               id="asm-output-display"
               className="flex-grow w-full h-64 md:h-auto bg-gray-800 text-gray-100 p-2 rounded border border-border-primary font-mono text-sm overflow-auto whitespace-pre-wrap"
-              aria-live="polite" // Announce changes to screen readers
+              aria-live="polite"
             >
               {assemblyOutput}
             </div>
@@ -115,7 +114,6 @@ const AssemblyLayer: React.FC<AssemblyLayerProps> = ({
         </div>
       </div>
       
-      {/* Reference Section */}
       <div className="bg-gray-900 p-4 rounded border border-border-secondary shadow-md">
         <h4 className="font-semibold mb-2 text-text-primary">Assembly Reference (Simplified ISA)</h4>
         <ul className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-sm text-text-secondary list-none p-0">

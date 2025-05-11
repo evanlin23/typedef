@@ -1,6 +1,7 @@
 // src/components/layers/HighLevelLayer.tsx
 import React, { useCallback } from 'react';
-import { type GameState, CODE_COST_HIGHLEVEL_PER_CHAR, calculateActualMaxMemory } from '../../types/gameState';
+// Remove calculateActualMaxMemory import, use gameState.resources.maxMemory directly
+import { type GameState, CODE_COST_HIGHLEVEL_PER_CHAR } from '../../types/gameState';
 
 interface HighLevelLayerProps {
   gameState: GameState;
@@ -18,11 +19,12 @@ const HighLevelLayer: React.FC<HighLevelLayerProps> = ({
   onOutputSet
 }) => {
   const { highLevelCode, highLevelOutput } = gameState.layerSpecificStates;
-  const actualMaxMemory = calculateActualMaxMemory(gameState);
+  // Use current maxMemory from gameState.resources
+  const actualMaxMemory = gameState.resources.maxMemory;
   const codeCost = highLevelCode.length * CODE_COST_HIGHLEVEL_PER_CHAR;
   const canExecute = codeCost <= actualMaxMemory;
 
-  const unitTestCost = 15; // Defined here for clarity and display
+  const unitTestCost = 15;
 
   const handleRunCode = useCallback(() => {
     if (!canExecute) {
@@ -30,7 +32,6 @@ const HighLevelLayer: React.FC<HighLevelLayerProps> = ({
       return;
     }
     
-    // runCode in Game.tsx will use gameState.layerSpecificStates.highLevelCode
     const result = runCode(highLevelCode, 'highLevel');
     
     if (result.success) {

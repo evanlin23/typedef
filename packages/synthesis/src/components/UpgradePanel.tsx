@@ -1,5 +1,7 @@
+// src/components/UpgradePanel.tsx
 import type { UpgradeCosts, GameState } from '../types/gameState';
-import { calculateActualMaxMemory, calculateMaxThreads } from '../types/gameState';
+// Remove calculateActualMaxMemory from import, calculateMaxThreads is fine
+import { calculateMaxThreads, calculateActualMaxMemoryValue } from '../types/gameState'; // Added calculateActualMaxMemoryValue for potential future use
 
 interface UpgradePanelProps {
   gameState: GameState;
@@ -21,7 +23,10 @@ const UpgradePanel = ({ gameState, buyUpgrade }: UpgradePanelProps) => {
       key: 'memory' as keyof UpgradeCosts, 
       name: 'Memory Capacity', 
       level: upgrades.memoryLevel,
-      description: `Current Level: ${upgrades.memoryLevel}. Max Memory: ${calculateActualMaxMemory(gameState).toFixed(0)} CU.`
+      // Use resources.maxMemory to display current max memory
+      description: `Current Level: ${upgrades.memoryLevel}. Max Memory: ${resources.maxMemory.toFixed(0)} CU.`
+      // If you wanted to show *next level's* potential max memory:
+      // description: `Current Level: ${upgrades.memoryLevel}. Max Memory: ${resources.maxMemory.toFixed(0)} CU. Next: ${calculateActualMaxMemoryValue(upgrades.memoryLevel + 1, metaKnowledge.buffs.memoryMultiplier).toFixed(0)} CU.`
     },
     { 
       key: 'optimization' as keyof UpgradeCosts, 
@@ -53,13 +58,25 @@ const UpgradePanel = ({ gameState, buyUpgrade }: UpgradePanelProps) => {
           const actualCost = Math.floor(baseCost * actualCostMultiplier);
           const canAfford = resources.ticks >= actualCost;
 
+          // For memory, show what the next level's max memory would be
+          let itemDescription = item.description;
+          if (item.key === 'memory') {
+            const nextLevelMemory = calculateActualMaxMemoryValue(item.level + 1, metaKnowledge.buffs.memoryMultiplier);
+            itemDescription = `Current Level: ${item.level}. Max Memory: ${resources.maxMemory.toFixed(0)} CU. (Next Lvl: ${nextLevelMemory.toFixed(0)} CU)`;
+          }
+          if (item.key === 'maxThreads') {
+             const nextLevelThreads = calculateMaxThreads({...gameState, upgrades: {...upgrades, maxThreadsLevel: item.level + 1 }});
+             itemDescription = `Current Level: ${item.level}. Max Threads: ${calculateMaxThreads(gameState)}. (Next Lvl: ${nextLevelThreads} Threads)`;
+          }
+
+
           return (
             <div key={item.key} className="p-3 bg-gray-900 rounded border border-border-secondary">
               <div className="flex flex-col sm:flex-row justify-between sm:items-center mb-1 gap-1 sm:gap-2">
                 <span className="text-text-primary font-medium">{item.name} (Lvl {item.level})</span>
                 <span className="text-sm text-text-secondary font-mono whitespace-nowrap">Cost: {actualCost} Ticks</span>
               </div>
-              <p className="text-xs text-text-secondary mb-2">{item.description}</p>
+              <p className="text-xs text-text-secondary mb-2">{itemDescription}</p>
               <button
                 onClick={() => buyUpgrade(item.key, actualCost)}
                 disabled={!canAfford}

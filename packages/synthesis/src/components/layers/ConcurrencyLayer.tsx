@@ -4,7 +4,7 @@ import {
   type GameState, 
   type ThreadState,
   type GlobalConcurrencyLocks,
-  calculateActualMaxMemory, 
+  // calculateActualMaxMemory removed
   calculateMaxThreads, 
   CODE_COST_HIGHLEVEL_PER_CHAR,
   initialConcurrencyThreadCode 
@@ -26,9 +26,11 @@ const ConcurrencyLayer: React.FC<ConcurrencyLayerProps> = ({
   const [deadlockDetected, setDeadlockDetected] = useState<boolean>(false);
 
   const { concurrencyThreads, concurrencyGlobalLocks } = gameState.layerSpecificStates;
+  const { resources } = gameState; // Destructure resources to get maxMemory
 
   const availableLocks = useMemo(() => ['shared_data_A', 'shared_buffer_B', 'critical_section_C'], []);
-  const actualMaxMemory = useMemo(() => calculateActualMaxMemory(gameState), [gameState]);
+  // Use current maxMemory from gameState.resources directly
+  const actualMaxMemory = useMemo(() => resources.maxMemory, [resources.maxMemory]);
   const maxThreads = useMemo(() => calculateMaxThreads(gameState), [gameState]);
   
   const totalCodeSize = useMemo(() => 
@@ -53,16 +55,12 @@ const ConcurrencyLayer: React.FC<ConcurrencyLayerProps> = ({
       return;
     }
     
-    // A simple heuristic: if multiple running threads are trying to acquire locks and hold some
     const threadsWantingLocks = runningThreads.filter(t => 
-      t.code.includes('acquireLock') && // Heuristic: thread intends to acquire a lock
-      t.acquiredLocks.length < availableLocks.length // And doesn't hold all possible locks
+      t.code.includes('acquireLock') &&
+      t.acquiredLocks.length < availableLocks.length
     );
 
-    // If all currently running threads are in a state of wanting more locks
-    // and there are locks currently held, potential for deadlock increases.
     if (threadsWantingLocks.length === runningThreads.length && threadsWantingLocks.length > 1) {
-       // Simulate a chance of deadlock based on contention
        if (Math.random() < 0.1 * threadsWantingLocks.length) { 
           setDeadlockDetected(true);
           return;
@@ -89,9 +87,8 @@ const ConcurrencyLayer: React.FC<ConcurrencyLayerProps> = ({
   
   const removeThread = useCallback((id: number) => {
     const threadToRemove = concurrencyThreads.find(t => t.id === id);
-    if (threadToRemove?.status === 'running') return; // Cannot remove running thread
+    if (threadToRemove?.status === 'running') return;
 
-    // Release any locks held by the thread being removed
     if (threadToRemove && threadToRemove.acquiredLocks.length > 0) {
       onGlobalLocksChange(prevGlobalLocks => {
         const newGlobalLocks = { ...prevGlobalLocks };
@@ -113,7 +110,6 @@ const ConcurrencyLayer: React.FC<ConcurrencyLayerProps> = ({
   }, [onThreadsChange]);
   
   const toggleLock = useCallback((threadId: number, lockName: string) => {
-    // This function updates both thread-local lock list and global lock state
     onThreadsChange(prevThreads => {
       const thread = prevThreads.find(t => t.id === threadId);
       if (!thread || thread.status === 'running') return prevThreads;
@@ -123,20 +119,18 @@ const ConcurrencyLayer: React.FC<ConcurrencyLayerProps> = ({
 
       const updatedThreads = prevThreads.map(t => {
         if (t.id === threadId) {
-          if (t.acquiredLocks.includes(lockName)) { // Try to release lock
+          if (t.acquiredLocks.includes(lockName)) {
             if (newGlobalLocks[lockName] === threadId) {
               delete newGlobalLocks[lockName];
               locksChangedForGlobalState = true;
             }
             return {...t, acquiredLocks: t.acquiredLocks.filter(l => l !== lockName)};
-          } else { // Try to acquire lock
-            if (newGlobalLocks[lockName] === undefined) { // Lock is available
+          } else { 
+            if (newGlobalLocks[lockName] === undefined) { 
               newGlobalLocks[lockName] = threadId;
               locksChangedForGlobalState = true;
               return {...t, acquiredLocks: [...t.acquiredLocks, lockName]};
             } else {
-              // Lock is held by another thread, cannot acquire. UI should reflect this.
-              // No change to this thread's acquiredLocks.
               return t; 
             }
           }
@@ -145,7 +139,7 @@ const ConcurrencyLayer: React.FC<ConcurrencyLayerProps> = ({
       });
 
       if (locksChangedForGlobalState) {
-        onGlobalLocksChange(() => newGlobalLocks); // Update global locks if they actually changed
+        onGlobalLocksChange(() => newGlobalLocks);
       }
       return updatedThreads;
     });
@@ -155,7 +149,6 @@ const ConcurrencyLayer: React.FC<ConcurrencyLayerProps> = ({
     const threadToExecute = concurrencyThreads.find(t => t.id === threadId);
 
     if (!threadToExecute || threadToExecute.status !== 'idle') {
-      // Can only run idle threads. 'error' status needs reset. 'running' is already running.
       return;
     }
     if (totalCodeSize > actualMaxMemory) {
@@ -171,50 +164,45 @@ const ConcurrencyLayer: React.FC<ConcurrencyLayerProps> = ({
         t.id === threadId ? { ...t, status: 'running', output: '// Executing thread...', ticksGeneratedLastRun: 0 } : t
     ));
     
-    // Capture current state for this execution context
     const codeForExecution = threadToExecute.code;
     const locksHeldByThisThread = [...threadToExecute.acquiredLocks];
 
-    // Simulate asynchronous execution
     setTimeout(() => {
-      const result = runCode(codeForExecution, 'concurrency', threadId); // runCode is from Game.tsx
+      const result = runCode(codeForExecution, 'concurrency', threadId); 
       
       onThreadsChange(currentThreads => {
         const targetThreadAfterRun = currentThreads.find(t => t.id === threadId);
-        // If thread was removed or reset while "running", don't update it.
         if (!targetThreadAfterRun || targetThreadAfterRun.status !== 'running') {
           return currentThreads; 
         }
 
         let finalTicks = result.ticksGenerated;
         let finalOutput = '';
-        let finalStatus: ThreadState['status'] = 'error'; // Default to error
+        let finalStatus: ThreadState['status'] = 'error';
 
-        // Simulate race condition if no locks are held and other threads are running
         const otherThreadsStillRunning = currentThreads.some(t => t.id !== threadId && t.status === 'running');
         const potentialRaceCondition = locksHeldByThisThread.length === 0 && otherThreadsStillRunning && Math.random() < 0.25;
 
         if (result.success && !potentialRaceCondition) {
-          finalStatus = 'idle'; // Successful run makes thread idle, ready for next run
+          finalStatus = 'idle';
           finalOutput = `SUCCESS: Thread ${threadId} completed. Generated ${result.ticksGenerated} Ticks.\nLocks held: ${locksHeldByThisThread.join(', ') || 'none'}\nStatus: Idle.`;
         } else {
           if (potentialRaceCondition) {
-            finalTicks = Math.floor(result.ticksGenerated * 0.3); // Penalty for race condition
+            finalTicks = Math.floor(result.ticksGenerated * 0.3);
             finalOutput = `ERROR: Race condition detected in Thread ${threadId} execution!\nReduced Ticks: ${finalTicks}. Consider using locks for shared resources.`;
-          } else { // General failure
+          } else {
             finalOutput = `ERROR: Thread ${threadId} execution failed.\nGenerated only ${finalTicks} Ticks. Review code or resource conflicts.`;
           }
-          // finalStatus remains 'error'
         }
         
         return currentThreads.map(t => t.id === threadId ? {
           ...t, 
           status: finalStatus, 
           output: finalOutput,
-          ticksGeneratedLastRun: finalTicks // Store ticks from this run
+          ticksGeneratedLastRun: finalTicks
         } : t);
       });
-    }, 1000 + Math.random() * 1000); // Random execution time
+    }, 1000 + Math.random() * 1000);
   }, [
     concurrencyThreads, runCode, actualMaxMemory, totalCodeSize, 
     deadlockDetected, onThreadsChange
@@ -222,7 +210,6 @@ const ConcurrencyLayer: React.FC<ConcurrencyLayerProps> = ({
 
   const handleRunAllIdleThreads = useCallback(() => {
     if (idleThreadsCount === 0 || deadlockDetected || totalCodeSize > actualMaxMemory) {
-      // UI should disable this button, but good to have a safeguard
       return;
     }
     const idleThreadIds = concurrencyThreads
@@ -230,7 +217,6 @@ const ConcurrencyLayer: React.FC<ConcurrencyLayerProps> = ({
         .map(t => t.id);
     
     idleThreadIds.forEach((threadId, index) => {
-        // Stagger the execution starts slightly
         setTimeout(() => {
             executeSingleThread(threadId);
         }, index * 200); 
@@ -243,20 +229,18 @@ const ConcurrencyLayer: React.FC<ConcurrencyLayerProps> = ({
   const resolveDeadlock = useCallback(() => {
     onThreadsChange(prevThreads => prevThreads.map(t => {
       if (t.status === 'running' || t.acquiredLocks.length > 0) {
-        // Reset running or lock-holding threads to idle and release their locks
         return {...t, status: 'idle', output: 'Thread reset due to deadlock resolution. Locks released.', acquiredLocks: []};
       }
       return t;
     }));
-    onGlobalLocksChange(() => ({})); // Clear all global locks
+    onGlobalLocksChange(() => ({}));
     setDeadlockDetected(false);
   }, [onThreadsChange, onGlobalLocksChange]);
 
   const handleResetThread = useCallback((threadId: number) => {
     const threadToReset = concurrencyThreads.find(thr => thr.id === threadId);
-    if (!threadToReset || threadToReset.status !== 'error') return; // Only reset errored threads
+    if (!threadToReset || threadToReset.status !== 'error') return;
 
-    // Release locks if this errored thread was somehow still holding them (defensive)
     if (threadToReset.acquiredLocks.length > 0) {
       onGlobalLocksChange(prevGlobalLocks => {
         const newGlobalLocks = {...prevGlobalLocks};
@@ -304,7 +288,7 @@ const ConcurrencyLayer: React.FC<ConcurrencyLayerProps> = ({
             </button>
             <button
               onClick={createNewThread}
-              disabled={concurrencyThreads.length >= maxThreads || totalCodeSize >= actualMaxMemory - (initialConcurrencyThreadCode(0).length * CODE_COST_HIGHLEVEL_PER_CHAR) } // crude check for new thread memory
+              disabled={concurrencyThreads.length >= maxThreads || totalCodeSize >= actualMaxMemory - (initialConcurrencyThreadCode(0).length * CODE_COST_HIGHLEVEL_PER_CHAR) }
               title={
                 concurrencyThreads.length >= maxThreads ? "Maximum number of threads reached." : 
                 totalCodeSize >= actualMaxMemory ? "Not enough free memory for a new thread's default code." :
@@ -362,7 +346,7 @@ const ConcurrencyLayer: React.FC<ConcurrencyLayerProps> = ({
                     thread.status === 'idle' ? 'bg-gray-600 text-gray-300' :
                     isRunning ? 'bg-yellow-500 text-black animate-pulseOnce' :
                     isError ? 'bg-red-500 text-white' :
-                    'bg-blue-500 text-white' // Fallback, should not happen
+                    'bg-blue-500 text-white'
                   }`}>
                     {thread.status.toUpperCase()}
                   </span>

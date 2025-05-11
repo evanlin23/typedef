@@ -1,5 +1,9 @@
+// src/components/ResourcePanel.tsx
 import type { GameState } from '../types/gameState';
-import { calculateEffectiveTickRate, calculateActualMaxMemory } from '../types/gameState';
+// calculateEffectiveTickRate is fine to import.
+// calculateActualMaxMemory is NOT exported with that name anymore.
+// We will use gameState.resources.maxMemory for display.
+import { calculateEffectiveTickRate } from '../types/gameState';
 
 interface ResourcePanelProps {
   gameState: GameState;
@@ -8,10 +12,10 @@ interface ResourcePanelProps {
 const ResourcePanel = ({ gameState }: ResourcePanelProps) => {
   const { resources, upgrades, layerSpecificStates } = gameState;
   const effectiveTickRate = calculateEffectiveTickRate(gameState); // Passive tick rate
-  const actualMaxMemory = calculateActualMaxMemory(gameState);
   
-  // Calculate total active processes for display if needed (non-concurrent + running threads)
-  // gameState.activeProcesses already stores non-concurrent processes.
+  // The actual maximum memory is now stored in state.resources.maxMemory
+  const actualMaxMemory = resources.maxMemory; 
+  
   const runningThreadsCount = layerSpecificStates.concurrencyThreads.filter(t => t.status === 'running').length;
   const totalDisplayedActiveProcesses = gameState.activeProcesses + runningThreadsCount;
 
@@ -33,6 +37,7 @@ const ResourcePanel = ({ gameState }: ResourcePanelProps) => {
         
         <div className="flex justify-between">
           <span>Memory (CU):</span>
+          {/* Use the actualMaxMemory variable which now points to resources.maxMemory */}
           <span className="font-mono" title={`Used: ${resources.usedMemory.toFixed(1)}, Max: ${actualMaxMemory.toFixed(0)}`}>
             {resources.usedMemory.toFixed(1)} / {actualMaxMemory.toFixed(0)}
           </span>
@@ -54,7 +59,7 @@ const ResourcePanel = ({ gameState }: ResourcePanelProps) => {
                   resources.entropy > 40 ? "bg-yellow-500" : 
                   "bg-accent-primary"
                 }`}
-                style={{ width: `${Math.min(100, resources.entropy)}%`}} // Cap width at 100% for visual
+                style={{ width: `${Math.min(100, resources.entropy)}%`}}
               />
             </div>
           </div>

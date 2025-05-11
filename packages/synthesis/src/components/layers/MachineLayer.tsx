@@ -1,3 +1,5 @@
+// src/components/layers/MachineLayer.tsx
+import React from 'react'; // Added React import
 import { type GameState, calculateEffectiveTickRate } from '../../types/gameState';
 
 interface MachineLayerProps {
@@ -11,9 +13,17 @@ const MachineLayer = ({
   produceTickManually, 
   toggleAutoTick,
 }: MachineLayerProps) => {
-  const effectiveTickRate = calculateEffectiveTickRate(gameState); // Overall passive tick rate
+  const effectiveTickRate = calculateEffectiveTickRate(gameState);
   const { cpuLevel, memoryLevel } = gameState.upgrades;
-  
+  // The `calculateEffectiveTickRate` in `useGameLoop` for the auto-clicker
+  // is specific to how often the "+1 Tick" event for manual clicks happens.
+  // The `effectiveTickRate` here is the overall passive rate.
+  // Let's calculate the auto-clicker display rate similarly to how it's done in useGameLoop.
+  const autoClickerBaseRate = 1; 
+  const autoClickerCpuBonus = gameState.upgrades.cpuLevel * 0.2; 
+  const totalAutoClickerRate = autoClickerBaseRate + autoClickerCpuBonus;
+  const effectiveManualClickRateDisplay = totalAutoClickerRate * gameState.metaKnowledge.buffs.tickMultiplier * (1 - (gameState.resources.entropy / (100 * 2)));
+
   return (
     <div className="animate-fadeIn">
       <h3 className="text-xl font-semibold mb-4 text-accent-primary">Machine Core Interface</h3>
@@ -53,9 +63,9 @@ const MachineLayer = ({
               {gameState.autoTickEnabled ? 'ENABLED' : 'DISABLED'}
             </button>
           </div>
-          {gameState.autoTickEnabled && effectiveTickRate > 0.05 && (
+          {gameState.autoTickEnabled && effectiveManualClickRateDisplay > 0.05 && (
              <p className="text-xs text-text-secondary">
-               Auto-executing at approx. {Math.min(1000 / 50, effectiveTickRate).toFixed(2)} cycles/sec.
+               Auto-executing at approx. {Math.min(1000 / 50, effectiveManualClickRateDisplay).toFixed(2)} cycles/sec.
              </p>
            )}
         </div>
