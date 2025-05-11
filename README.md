@@ -1,4 +1,4 @@
-## Projects made when bored
+## Projects
 
 ### [typedef](https://evanlin23.github.io/typedef/)
 Type the definitions of random words as fast as you can!
