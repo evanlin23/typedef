@@ -1,0 +1,55 @@
+# .github/workflows/reusable-deploy.yml
+name: Reusable Deploy
+
+on:
+  workflow_call:
+    inputs:
+      package-name:
+        required: true
+        type: string
+      dist-folder:
+        required: true
+        type: string
+      repository-name:
+        required: false
+        type: string
+      external:
+        required: true
+        type: boolean
+    secrets:
+      REPO_ACCESS_TOKEN:
+        required: false
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '20'
+
+      - name: Setup PNPM
+        uses: pnpm/action-setup@v2
+        with:
+          version: '9'
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Build ${{ inputs.package-name }}
+        run: pnpm --filter ${{ inputs.package-name }} build
+
+      - name: Deploy to GitHub Pages
+        uses: JamesIves/github-pages-deploy-action@v4
+        with:
+          folder: ${{ inputs.dist-folder }}
+          branch: gh-pages
+          clean: true
+          repository-name: ${{ inputs.external && inputs.repository-name || '' }}
+          token: ${{ inputs.external && secrets.REPO_ACCESS_TOKEN || github.token }}

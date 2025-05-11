@@ -1,3 +1,5 @@
+// test rebuild
+
 export default function Footer() {
   return (
     <footer className="mt-auto py-4 bg-gray-800">

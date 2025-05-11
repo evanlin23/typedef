@@ -1,4 +1,6 @@
 // src/components/Footer.tsx
+// test rebuild
+
 import React, { memo } from 'react';
 import { useGame } from '../context/GameContext';
 

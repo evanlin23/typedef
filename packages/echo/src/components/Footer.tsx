@@ -1,5 +1,6 @@
 // src/components/Footer.tsx
 import React from 'react';
+// test rebuild
 
 export const Footer: React.FC = () => {
   return (
