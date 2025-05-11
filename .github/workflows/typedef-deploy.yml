@@ -12,6 +12,8 @@ on:
 
 jobs:
   call-deploy:
+    permissions:
+      contents: write
     uses: ./.github/workflows/reusable-deploy.yml
     with:
       package-name: typedef
