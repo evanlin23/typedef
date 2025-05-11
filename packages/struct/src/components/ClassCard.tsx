@@ -9,7 +9,7 @@ interface ClassCardProps {
   classData: Class;
   onSelect: () => void;
   onRequestDelete: (e: React.MouseEvent) => void;
-  onDataChanged: () => Promise<void>; // To refresh the list of classes
+  onDataChanged: () => Promise<void>; 
 }
 
 const ClassCard: React.FC<ClassCardProps> = ({ 
@@ -26,7 +26,7 @@ const ClassCard: React.FC<ClassCardProps> = ({
   };
 
   const handleTogglePin = async (e: React.MouseEvent) => {
-    e.stopPropagation(); // Prevent card selection
+    e.stopPropagation(); 
     if (!classData.id) return;
     try {
       await updateClass(classData.id, { isPinned: !classData.isPinned });
@@ -62,27 +62,27 @@ const ClassCard: React.FC<ClassCardProps> = ({
     if (e.key === 'Enter') {
       saveClassName();
     } else if (e.key === 'Escape') {
-      setEditingName(null); // Revert to original name by closing editor
+      setEditingName(null); 
     }
   };
 
   useEffect(() => {
     if (editingName !== null && inputRef.current) {
       inputRef.current.focus();
-      inputRef.current.select(); // Select all text when editing starts
+      inputRef.current.select(); 
     }
   }, [editingName]);
 
 
   const handleDeleteClick = (e: React.MouseEvent) => {
-    e.stopPropagation(); // Prevent card selection
+    e.stopPropagation(); 
     onRequestDelete(e);
   };
 
   return (
     <div
-      onClick={editingName === null ? onSelect : undefined} // Only allow select if not editing
-      className={`bg-gray-800 p-6 rounded-lg shadow-lg transition-colors group
+      onClick={editingName === null ? onSelect : undefined} 
+      className={`bg-gray-800 p-4 rounded-lg shadow-lg transition-colors group relative
         ${editingName === null ? 'cursor-pointer hover:bg-gray-700' : ''}
         ${classData.isPinned ? 'border-l-4 border-green-400' : 'border-l-4 border-transparent'}`}
       role="button"
@@ -93,7 +93,31 @@ const ClassCard: React.FC<ClassCardProps> = ({
         }
       }}
     >
-      <div className="flex justify-between items-start mb-2">
+      <div className="absolute top-3 right-3 flex items-center space-x-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+        <button
+            onClick={handleTogglePin}
+            className={`p-1.5 rounded-full transition-colors ${classData.isPinned ? 'text-green-400 hover:text-green-300 bg-gray-700 hover:bg-gray-600' : 'text-gray-400 hover:text-green-400 hover:bg-gray-700'}`}
+            aria-label={classData.isPinned ? "Unpin class" : "Pin class"}
+            title={classData.isPinned ? "Unpin class" : "Pin class"}
+        >
+            <PinIcon isPinned={classData.isPinned || false} className="h-4 w-4"/>
+        </button>
+        <button
+            onClick={handleDeleteClick}
+            className="p-1.5 text-gray-400 hover:text-red-500 rounded-full hover:bg-gray-700 transition-colors"
+            aria-label="Delete class"
+            title="Delete class"
+        >
+            <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="3 6 5 6 21 6"></polyline>
+                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                <line x1="10" y1="11" x2="10" y2="17"></line>
+                <line x1="14" y1="11" x2="14" y2="17"></line>
+            </svg>
+        </button>
+      </div>
+
+      <div className="mb-2 pr-16"> 
         {editingName !== null ? (
           <input
             ref={inputRef}
@@ -101,19 +125,19 @@ const ClassCard: React.FC<ClassCardProps> = ({
             value={editingName}
             onChange={handleEditNameChange}
             onKeyDown={handleKeyDown}
-            onBlur={saveClassName} // Save on blur
+            onBlur={saveClassName} 
             className="text-xl font-bold bg-gray-700 text-gray-200 p-1 rounded w-full focus:ring-2 focus:ring-green-400 outline-none"
-            onClick={(e) => e.stopPropagation()} // Prevent card click through
+            onClick={(e) => e.stopPropagation()} 
             aria-label="Edit class name"
           />
         ) : (
-          <div className="flex items-center space-x-2 min-w-0 flex-1"> {/* min-w-0 for truncation */}
+          <div className="flex items-center space-x-2 min-w-0 group/name_edit"> 
             <h3 className="text-xl font-bold text-gray-200 truncate" title={classData.name}>
               {classData.name}
             </h3>
             <button
               onClick={startEditingClassName}
-              className="ml-2 text-gray-400 hover:text-green-400 transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
+              className="text-gray-400 hover:text-green-400 transition-colors opacity-0 group-hover/name_edit:opacity-100 focus:opacity-100"
               aria-label="Edit class name"
             >
               <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -123,35 +147,13 @@ const ClassCard: React.FC<ClassCardProps> = ({
             </button>
           </div>
         )}
-        
-        <div className="flex items-center space-x-1">
-            <button
-                onClick={handleTogglePin}
-                className={`p-1 rounded transition-colors ${classData.isPinned ? 'text-green-400 hover:text-green-300' : 'text-gray-400 hover:text-green-400 opacity-0 group-hover:opacity-100 focus:opacity-100'}`}
-                aria-label={classData.isPinned ? "Unpin class" : "Pin class"}
-                title={classData.isPinned ? "Unpin class" : "Pin class"}
-            >
-                <PinIcon isPinned={classData.isPinned || false} />
-            </button>
-            <button
-                onClick={handleDeleteClick}
-                className="p-1 text-gray-400 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
-                aria-label="Delete class"
-                title="Delete class"
-            >
-                <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <polyline points="3 6 5 6 21 6"></polyline>
-                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                </svg>
-            </button>
-        </div>
       </div>
       
-      <div className="text-sm text-gray-400">
+      <div className="text-sm text-gray-400 mb-1">
         Created: {formatDate(classData.dateCreated)}
       </div>
       
-      <div className="mt-1 text-sm text-gray-400">
+      <div className="text-sm text-gray-400">
         {classData.totalItems || 0} { (classData.totalItems || 0) === 1 ? 'PDF' : 'PDFs'}
       </div>
       

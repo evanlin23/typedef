@@ -24,11 +24,11 @@ const FileUpload: React.FC<FileUploadProps> = ({ onUpload }) => {
   const handleDragLeave = useCallback((e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     e.stopPropagation();
-    // Check if drag is leaving to outside the window or to a child element
-    if (e.relatedTarget && (e.relatedTarget as Node).parentNode === e.currentTarget) {
-      return;
+    // Check if the drag is leaving to outside the component or to an actual external element
+    // relatedTarget is the element entered, currentTarget is the div listening for drag events
+    if (!e.relatedTarget || !e.currentTarget.contains(e.relatedTarget as Node)) {
+      setIsDragging(false);
     }
-    setIsDragging(false);
   }, []);
 
   const handleDrop = useCallback((e: React.DragEvent<HTMLDivElement>) => {
@@ -38,7 +38,7 @@ const FileUpload: React.FC<FileUploadProps> = ({ onUpload }) => {
     
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
       onUpload(e.dataTransfer.files);
-      // Reset file input value to allow re-uploading the same file
+      // Reset file input value to allow re-uploading the same file(s)
       if (fileInputRef.current) {
         fileInputRef.current.value = ''; 
       }
@@ -48,7 +48,7 @@ const FileUpload: React.FC<FileUploadProps> = ({ onUpload }) => {
   const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
       onUpload(e.target.files);
-      // Reset file input value to allow re-uploading the same file
+      // Reset file input value
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
@@ -106,7 +106,6 @@ const FileUpload: React.FC<FileUploadProps> = ({ onUpload }) => {
         <p className="mt-1 text-sm text-gray-400">
           Drag & drop PDF files here, or click to select.
         </p>
-        {/* Removed "Only PDF files are supported" as it's implied by accept attribute and context */}
       </div>
     </div>
   );

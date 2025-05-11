@@ -4,8 +4,8 @@ import { addClass } from '../utils/db';
 import type { Class } from '../utils/types';
 
 interface ClassCreatorProps {
-  onClassCreated: () => Promise<void>; // To refresh the list of classes
-  onCreateClass: (classId: number) => void; // To select the newly created class
+  onClassCreated: () => Promise<void>; 
+  onCreateClass: (classId: number) => void; 
 }
 
 const ClassCreator: React.FC<ClassCreatorProps> = ({ onClassCreated, onCreateClass }) => {
@@ -18,19 +18,18 @@ const ClassCreator: React.FC<ClassCreatorProps> = ({ onClassCreated, onCreateCla
     
     setIsCreating(true);
     try {
-      const classData: Omit<Class, 'id' | 'pdfCount' | 'doneCount' | 'progress' | 'completedItems' | 'totalItems'> = {
+      const classData: Omit<Class, 'id' | 'pdfCount' | 'doneCount' | 'progress' | 'completedItems' | 'totalItems' | 'notes'> = {
         name: trimmedName,
         dateCreated: Date.now(),
-        isPinned: false, // Default for new classes
+        isPinned: false, 
       };
-      const classId = await addClass(classData);
+      const classId = await addClass(classData); // addClass in db.ts initializes notes
       
       setNewClassName('');
-      await onClassCreated(); // Refresh the list
-      onCreateClass(classId); // Select the new class in App.tsx
+      await onClassCreated(); 
+      onCreateClass(classId); 
     } catch (error) {
       console.error('Failed to create class:', error);
-      // Optionally, show an error to the user
     } finally {
       setIsCreating(false);
     }

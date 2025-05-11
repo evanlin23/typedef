@@ -1,25 +1,27 @@
 // src/utils/types.ts
 export type PDF = {
-  id?: number; // Auto-incremented by IndexedDB
+  id?: number; 
   name: string;
   size: number;
   lastModified: number;
   data: ArrayBuffer;
   status: 'to-study' | 'done';
   dateAdded: number;
-  classId: number; // Foreign key to Class
+  classId: number; 
+  orderIndex?: number; // For custom drag-and-drop ordering
 };
 
 export interface Class {
-  id?: number; // Auto-incremented by IndexedDB
+  id?: number; 
   name: string;
   dateCreated: number;
-  pdfCount: number; // Total PDFs in this class
-  doneCount?: number; // Number of PDFs marked as 'done'
+  pdfCount: number; 
+  doneCount?: number; 
   isPinned?: boolean;
+  notes?: string; // Notes specific to this class
 
   // Client-side calculated properties for display
-  progress?: number; // Overall progress percentage
-  completedItems?: number; // Alias for doneCount, for props
-  totalItems?: number; // Alias for pdfCount, for props
+  progress?: number; 
+  completedItems?: number; 
+  totalItems?: number; 
 }
