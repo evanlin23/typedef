@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react'; // Added React import
+import React, { useState, useEffect, useCallback } from 'react';
 import ResourcePanel from './ResourcePanel';
 import MachineLayer from './layers/MachineLayer';
 import AssemblyLayer from './layers/AssemblyLayer';
@@ -6,7 +6,7 @@ import HighLevelLayer from './layers/HighLevelLayer';
 import ConcurrencyLayer from './layers/ConcurrencyLayer';
 import AILayer from './layers/AILayer';
 import UpgradePanel from './UpgradePanel';
-import PrestigePanel, { getMetaBuffUpgradeCost } from './PrestigePanel';
+import PrestigePanel, { getMetaBuffUpgradeCost } from './PrestigePanel'; // Import helper
 import { 
   type GameState, initialGameState, GAME_LOOP_INTERVAL_MS, MAX_ENTROPY,
   ENTROPY_PER_PROCESS_PER_SEC, OPTIMIZATION_ENTROPY_REDUCTION_PER_LEVEL,
@@ -14,10 +14,11 @@ import {
   type UpgradeCosts, type MetaKnowledge, type LayerBuff, type ActiveLayerBuffs,
   CODE_COST_ASSEMBLY_PER_CHAR, CODE_COST_HIGHLEVEL_PER_CHAR,
   BASE_TICK_RATE_PER_CPU_LEVEL, AI_CORE_TICK_RATE_PER_LEVEL,
-  type ThreadState, type GlobalConcurrencyLocks, type LayerSpecificStates // Added types
+  type ThreadState, type GlobalConcurrencyLocks, type LayerSpecificStates,
+  initialAssemblyCode, initialHighLevelCode, initialConcurrencyThreadCode // Import initial codes
 } from '../types/gameState';
 
-const STORAGE_KEY = 'synthesis_game_state_v2.2'; // Incremented version
+const STORAGE_KEY = 'synthesis_game_state_v2.3'; // Incremented for any structural change that needs re-evaluation
 
 interface Toast { id: number; message: string; type: 'success' | 'error' | 'info'; }
 
@@ -49,41 +50,48 @@ const Game = () => {
                     (parsedLS as any)[lsKey] = initialLS[lsKey];
                     needsSave = true;
                 }
+                 // Ensure concurrencyThreads is an array
                 if (lsKey === 'concurrencyThreads' && !Array.isArray(parsedLS[lsKey])) {
                     parsedLS.concurrencyThreads = [...initialLS.concurrencyThreads];
                     needsSave = true;
                 }
-                 if (lsKey === 'concurrencyGlobalLocks' && typeof parsedLS[lsKey] !== 'object') {
+                // Ensure concurrencyGlobalLocks is an object
+                 if (lsKey === 'concurrencyGlobalLocks' && (typeof parsedLS[lsKey] !== 'object' || parsedLS[lsKey] === null)) {
                     parsedLS.concurrencyGlobalLocks = {...initialLS.concurrencyGlobalLocks};
                     needsSave = true;
                 }
             });
         }
 
-        // Deep check for metaKnowledge.buffs
-        if (!parsed.metaKnowledge || typeof parsed.metaKnowledge.buffs !== 'object') {
+        // Deep check for metaKnowledge and its buffs
+        if (!parsed.metaKnowledge || typeof parsed.metaKnowledge !== 'object' || parsed.metaKnowledge === null) {
             parsed.metaKnowledge = { ...initialGameState.metaKnowledge };
             needsSave = true;
         } else {
-            const initialBuffs = initialGameState.metaKnowledge.buffs;
-            const parsedBuffs = parsed.metaKnowledge.buffs;
-            (Object.keys(initialBuffs) as Array<keyof MetaKnowledge['buffs']>).forEach(bKey => {
-                if (parsedBuffs[bKey] === undefined) {
-                    (parsedBuffs as any)[bKey] = initialBuffs[bKey];
-                    needsSave = true;
-                }
-            });
+            if (!parsed.metaKnowledge.buffs || typeof parsed.metaKnowledge.buffs !== 'object' || parsed.metaKnowledge.buffs === null) {
+                parsed.metaKnowledge.buffs = { ...initialGameState.metaKnowledge.buffs };
+                needsSave = true;
+            } else {
+                const initialBuffs = initialGameState.metaKnowledge.buffs;
+                const parsedBuffs = parsed.metaKnowledge.buffs;
+                (Object.keys(initialBuffs) as Array<keyof MetaKnowledge['buffs']>).forEach(bKey => {
+                    if (parsedBuffs[bKey] === undefined) {
+                        (parsedBuffs as any)[bKey] = initialBuffs[bKey];
+                        needsSave = true;
+                    }
+                });
+            }
         }
         
-        // Similar deep checks for upgrades and upgradeCosts
+        // Deep checks for upgrades and upgradeCosts
         ['upgrades', 'upgradeCosts'].forEach(objKeyStr => {
             const objKey = objKeyStr as 'upgrades' | 'upgradeCosts';
-            if (!parsed[objKey] || typeof parsed[objKey] !== 'object') {
+            if (!parsed[objKey] || typeof parsed[objKey] !== 'object' || parsed[objKey] === null) {
                 (parsed as any)[objKey] = { ...initialGameState[objKey] };
                 needsSave = true;
             } else {
                 const initialSubObj = initialGameState[objKey];
-                const parsedSubObj = parsed[objKey] as any; // Type assertion for sub-object
+                const parsedSubObj = parsed[objKey] as any; 
                  (Object.keys(initialSubObj) as Array<keyof typeof initialSubObj>).forEach(subKey => {
                     if (parsedSubObj[subKey] === undefined) {
                         parsedSubObj[subKey] = initialSubObj[subKey];
@@ -93,10 +101,8 @@ const Game = () => {
             }
         });
 
-
         if (needsSave) {
-            console.log("Migrated old save data structure for", STORAGE_KEY);
-            // localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed as GameState)); // Optionally re-save immediately
+            console.log("Migrated old save data structure for key:", STORAGE_KEY);
         }
         return parsed as GameState;
       } catch (error) {
@@ -126,7 +132,6 @@ const Game = () => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify({...gameState, lastSaveTime: Date.now()}));
   }, [gameState]);
 
-  // Main game loop (remains largely the same)
   useEffect(() => {
     const gameLoop = setInterval(() => {
       setGameState(prev => {
@@ -142,13 +147,11 @@ const Game = () => {
         let newTicks = prev.resources.ticks + totalPassiveTicksThisInterval;
         let newAiAutoGenerated = prev.resources.aiAutoGeneratedTicks + actualAiTicksPerInterval;
         
-        // Calculate activeProcesses based on running threads for more accuracy if Concurrency is a major factor
         const runningThreadsCount = prev.layerSpecificStates.concurrencyThreads.filter(t => t.status === 'running').length;
-        const nonThreadProcesses = prev.activeProcesses - prev.layerSpecificStates.concurrencyThreads.filter(t => t.status !== 'idle').length; // Approximation
-        const currentActiveProcesses = Math.max(0, nonThreadProcesses) + runningThreadsCount;
+        const otherActiveProcesses = prev.activeProcesses - prev.layerSpecificStates.concurrencyThreads.filter(t => t.status !== 'idle').length; 
+        const currentTotalActiveProcesses = Math.max(0, otherActiveProcesses) + runningThreadsCount;
 
-
-        const baseEntropyGain = currentActiveProcesses * (ENTROPY_PER_PROCESS_PER_SEC / (1000 / GAME_LOOP_INTERVAL_MS));
+        const baseEntropyGain = currentTotalActiveProcesses * (ENTROPY_PER_PROCESS_PER_SEC / (1000 / GAME_LOOP_INTERVAL_MS));
         const optimizationEffect = prev.upgrades.optimizationLevel * OPTIMIZATION_ENTROPY_REDUCTION_PER_LEVEL * prev.metaKnowledge.buffs.entropyReductionMultiplier;
         const entropyGain = Math.max(0, baseEntropyGain - optimizationEffect);
         const newEntropy = Math.min(MAX_ENTROPY, Math.max(0, prev.resources.entropy + entropyGain));
@@ -170,7 +173,7 @@ const Game = () => {
             entropy: newEntropy,
             aiAutoGeneratedTicks: newAiAutoGenerated,
           },
-          activeProcesses: currentActiveProcesses, // Update active processes based on threads too
+          activeProcesses: currentTotalActiveProcesses,
           totalTicksGeneratedAllTime: prev.totalTicksGeneratedAllTime + totalPassiveTicksThisInterval,
           activeLayerBuffs: newActiveLayerBuffs,
         };
@@ -179,7 +182,6 @@ const Game = () => {
     return () => clearInterval(gameLoop);
   }, [addToast]);
 
-  // Auto Tick for Machine Layer (remains largely the same)
    useEffect(() => {
     let autoTickInterval: NodeJS.Timeout | null = null;
     if (gameState.autoTickEnabled) {
@@ -197,10 +199,8 @@ const Game = () => {
     return () => {
       if (autoTickInterval) clearInterval(autoTickInterval);
     };
-  }, [gameState.autoTickEnabled, gameState]); // gameState dependency for effective rate calculation
+  }, [gameState]);
 
-
-  // Callbacks for layer state changes
   const handleAssemblyCodeChange = useCallback((newCode: string) => {
     setGameState(prev => ({ ...prev, layerSpecificStates: { ...prev.layerSpecificStates, assemblyCode: newCode } }));
   }, []);
@@ -220,7 +220,6 @@ const Game = () => {
     setGameState(prev => ({ ...prev, layerSpecificStates: { ...prev.layerSpecificStates, concurrencyGlobalLocks: updater(prev.layerSpecificStates.concurrencyGlobalLocks) } }));
   }, []);
 
-  // produceTickManually, toggleAutoTick, buyUpgrade (remain the same)
   const produceTickManually = useCallback(() => {
     setGameState(prev => ({
       ...prev,
@@ -235,17 +234,12 @@ const Game = () => {
 
   const buyUpgrade = useCallback((upgradeKey: keyof UpgradeCosts, costOnClick: number) => {
     setGameState(prev => {
-      // Verify cost again with current state, in case of rapid clicks or state changes
-      // The costOnClick is what the user saw, but we should recalculate based on current state for safety
-      const currentBaseCost = prev.upgradeCosts[upgradeKey]; // This is the current cost for the *next* level
-      const actualCurrentCost = Math.floor(currentBaseCost * prev.metaKnowledge.buffs.costMultiplier);
+      const currentStoredBaseCostForNextLevel = prev.upgradeCosts[upgradeKey]; 
+      const actualPaymentCost = Math.floor(currentStoredBaseCostForNextLevel * prev.metaKnowledge.buffs.costMultiplier);
 
-      // console.log(`Attempting to buy ${upgradeKey}. Ticks: ${prev.resources.ticks}, Cost (seen by user): ${costOnClick}, Cost (recalculated): ${actualCurrentCost}`);
-
-      if (prev.resources.ticks < actualCurrentCost) {
-        // Check if the cost seen by user was different, could indicate a rapid state change issue
-        if (costOnClick !== actualCurrentCost) {
-             addToast("Cost changed, please try again.", "error");
+      if (prev.resources.ticks < actualPaymentCost) {
+        if (costOnClick !== actualPaymentCost && Math.abs(costOnClick - actualPaymentCost) > 1) {
+             addToast("Cost updated. Please try again.", "error");
         } else {
             addToast("Not enough Ticks for this upgrade.", "error");
         }
@@ -253,72 +247,53 @@ const Game = () => {
       }
       
       const newState = JSON.parse(JSON.stringify(prev)) as GameState;
-      newState.resources.ticks -= actualCurrentCost; // Deduct the recalculated actual cost
+      newState.resources.ticks -= actualPaymentCost;
       
       let upgradeNameForToast = "";
       let newLevelForToast: number | undefined;
 
-      // Base costs from initialGameState (or a separate constant map if preferred)
-      // These are the costs for upgrading FROM level 0 to 1, or 1 to 2, etc.
-      // The `initialGameState.upgradeCosts` represents the cost for the *first* upgrade of that type.
-      // So, when we upgrade, we calculate the cost for the *next* level.
+      const cpuCostMultiplier = 1.5;
+      const memoryCostMultiplier = 1.6;
+      const optCostMultiplier = 1.8;
+      const aiCoreCostMultiplier = 1.7;
+      const threadsCostMultiplier = 2.0;
 
       switch (upgradeKey) {
         case 'cpu':
           newState.upgrades.cpuLevel += 1;
-          // Cost for the *next* upgrade of CPU:
-          newState.upgradeCosts.cpu = Math.floor(initialGameState.upgradeCosts.cpu * Math.pow(1.6, newState.upgrades.cpuLevel - initialGameState.upgrades.cpuLevel +1)); 
-          // The +1 in Math.pow exponent is because initialGameState.upgrades.cpuLevel is 1, 
-          // and initialGameState.upgradeCosts.cpu is cost for level 1->2.
-          // A more robust way:
-          // Cost for level N = BaseCostForLevel1 * (multiplier ^ (N-1))
-          // So, cost for (newState.upgrades.cpuLevel + 1)
-          newState.upgradeCosts.cpu = Math.floor(initialGameState.upgradeCosts.cpu * Math.pow(1.6, newState.upgrades.cpuLevel)); // If initialCosts.cpu is cost for L1->L2 & initialUpgrades.cpu is L1
-
-          upgradeNameForToast = "CPU Core Clock";
-          newLevelForToast = newState.upgrades.cpuLevel;
-          break;
+          newState.upgradeCosts.cpu = Math.floor(currentStoredBaseCostForNextLevel * cpuCostMultiplier);
+          upgradeNameForToast = "CPU Core Clock"; newLevelForToast = newState.upgrades.cpuLevel; break;
         case 'memory':
           newState.upgrades.memoryLevel += 1;
-          newState.upgradeCosts.memory = Math.floor(initialGameState.upgradeCosts.memory * Math.pow(1.8, newState.upgrades.memoryLevel));
-          upgradeNameForToast = "Memory Capacity";
-          newLevelForToast = newState.upgrades.memoryLevel;
-          break;
+          newState.upgradeCosts.memory = Math.floor(currentStoredBaseCostForNextLevel * memoryCostMultiplier);
+          upgradeNameForToast = "Memory Capacity"; newLevelForToast = newState.upgrades.memoryLevel; break;
         case 'optimization':
           newState.upgrades.optimizationLevel += 1;
-          newState.upgradeCosts.optimization = Math.floor(initialGameState.upgradeCosts.optimization * Math.pow(2.2, newState.upgrades.optimizationLevel)); // Opt level starts at 0
-          upgradeNameForToast = "System Optimization";
-          newLevelForToast = newState.upgrades.optimizationLevel;
-          break;
+          newState.upgradeCosts.optimization = Math.floor(currentStoredBaseCostForNextLevel * optCostMultiplier);
+          upgradeNameForToast = "System Optimization"; newLevelForToast = newState.upgrades.optimizationLevel; break;
         case 'aiCore':
           newState.upgrades.aiCoreLevel += 1;
-          newState.upgradeCosts.aiCore = Math.floor(initialGameState.upgradeCosts.aiCore * Math.pow(1.9, newState.upgrades.aiCoreLevel)); // AI level starts at 0
-          upgradeNameForToast = "AI Computation Cores";
-          newLevelForToast = newState.upgrades.aiCoreLevel;
-          break;
+          newState.upgradeCosts.aiCore = Math.floor(currentStoredBaseCostForNextLevel * aiCoreCostMultiplier);
+          upgradeNameForToast = "AI Computation Cores"; newLevelForToast = newState.upgrades.aiCoreLevel; break;
         case 'maxThreads':
           newState.upgrades.maxThreadsLevel +=1;
-          newState.upgradeCosts.maxThreads = Math.floor(initialGameState.upgradeCosts.maxThreads * Math.pow(2.5, newState.upgrades.maxThreadsLevel));
-          upgradeNameForToast = "Thread Scheduler";
-          newLevelForToast = newState.upgrades.maxThreadsLevel;
-          break;
-        default:
+          newState.upgradeCosts.maxThreads = Math.floor(currentStoredBaseCostForNextLevel * threadsCostMultiplier);
+          upgradeNameForToast = "Thread Scheduler"; newLevelForToast = newState.upgrades.maxThreadsLevel; break;
+        default: 
+          addToast("Error processing upgrade: Unknown key.", "error"); 
           console.error("Unknown upgrade key in buyUpgrade:", upgradeKey);
-          addToast("Error processing upgrade.", "error");
           return prev;
       }
       
       if (upgradeNameForToast && newLevelForToast !== undefined) {
           addToast(`${upgradeNameForToast} upgraded to Level ${newLevelForToast}!`, 'success');
       } else {
-          addToast(`Upgrade successful!`, 'success'); // Fallback toast
+          addToast(`Upgrade successful!`, 'success');
       }
       return newState;
     });
   }, [addToast]);
 
-
-  // runCode adjusted to use persisted code for Assembly/HLL
   const runCode = useCallback((codeFromLayer: string, layer: string, threadId?: number): { success: boolean; ticksGenerated: number } => {
     let codeToRun: string;
     switch (layer) {
@@ -353,7 +328,9 @@ const Game = () => {
     
     setGameState(prev => {
       let newActiveProcesses = prev.activeProcesses;
-      if (success && layer !== 'concurrency') { // Concurrency layer manages its own "process" count via thread statuses
+      // Only increment activeProcesses for non-concurrent successful runs
+      // Concurrency layer's "active process" count is implicitly handled by thread statuses for game loop entropy calculation
+      if (success && layer !== 'concurrency') {
           newActiveProcesses += 1;
       }
       const cappedActiveProcesses = Math.min(newActiveProcesses, 50 + prev.upgrades.cpuLevel * 5);
@@ -372,15 +349,14 @@ const Game = () => {
       };
     });
 
-    // Auto-decrement for non-concurrent successful processes
     if (success && layer !== 'concurrency') { 
       setTimeout(() => {
         setGameState(prev => ({
           ...prev, 
           activeProcesses: Math.max(0, prev.activeProcesses - 1),
-          resources: {
+          resources: { 
             ...prev.resources, 
-            usedMemory: Math.max(0, prev.resources.usedMemory - currentCodeCost)
+            usedMemory: Math.max(0, prev.resources.usedMemory - currentCodeCost) 
           }
         }));
       }, 5000 + Math.random() * 5000);
@@ -388,23 +364,182 @@ const Game = () => {
     return { success, ticksGenerated };
   }, [gameState.layerSpecificStates, gameState.activeLayerBuffs, gameState.metaKnowledge.buffs.tickMultiplier, gameState.upgrades.cpuLevel, addToast]);
 
+  const runUnitTests = useCallback((layer: string) => {
+    const cost = layer === 'assembly' ? 5 : layer === 'highLevel' ? 15 : 10;
+    
+    // Outer check for immediate feedback
+    if (gameState.resources.ticks < cost) {
+      addToast(`Not enough Ticks to run unit tests for ${layer}. Cost: ${cost} Ticks.`, 'error');
+      return;
+    }
 
-  // runUnitTests, garbageCollect, Prestige logic (remain the same, ensure addToast is used)
-  const runUnitTests = useCallback((layer: string) => { /* ... (addToast for feedback) */ }, [gameState.resources.ticks, addToast]);
-  const garbageCollect = useCallback(() => { /* ... (addToast for feedback) */ }, [gameState.resources.ticks, gameState.metaKnowledge.buffs, addToast]);
-  const calculateMkGain = useCallback((): number => { /* ... */ }, [gameState.totalTicksGeneratedAllTime, gameState.upgrades]);
-  const handlePrestige = useCallback(() => { /* ... (addToast for feedback) */ }, [gameState.metaKnowledge, gameState.autoTickEnabled, calculateMkGain, addToast]);
+    setGameState(prev => {
+      const currentTestCost = layer === 'assembly' ? 5 : layer === 'highLevel' ? 15 : 10;
+      if (prev.resources.ticks < currentTestCost) {
+        // Safeguard, unlikely if outer check passed and no immediate state change
+        return prev;
+      }
+      
+      const testSuccess = Math.random() < 0.7;
+      let newActiveLayerBuffs = { ...prev.activeLayerBuffs };
+      let newEntropy = prev.resources.entropy;
+
+      if (testSuccess) {
+        const buffDurationMs = 60 * 1000;
+        const buffMultiplier = 1.2;
+        const newBuff: LayerBuff = {
+          id: `${layer}_test_buff_${Date.now()}`,
+          isActive: true,
+          expiresAt: Date.now() + buffDurationMs,
+          effectMultiplier: buffMultiplier,
+          description: `+20% tick output from ${layer} layer for 1 min.`
+        };
+        newActiveLayerBuffs[layer as keyof ActiveLayerBuffs] = newBuff;
+        addToast(`Unit tests for ${layer} passed! Output boosted by 20% for 1 minute.`, 'success');
+      } else {
+        const entropyPenalty = layer === 'assembly' ? 3 : 5;
+        newEntropy = Math.min(MAX_ENTROPY, prev.resources.entropy + entropyPenalty);
+        addToast(`Unit tests for ${layer} found issues! Entropy increased by ${entropyPenalty}.`, 'error');
+      }
+
+      return {
+        ...prev,
+        resources: { 
+          ...prev.resources, 
+          ticks: Math.max(0, prev.resources.ticks - currentTestCost),
+          entropy: newEntropy 
+        },
+        activeLayerBuffs: newActiveLayerBuffs,
+      };
+    });
+  }, [gameState.resources.ticks, addToast]);
+
+  const garbageCollect = useCallback(() => {
+    const costForCheck = Math.floor(10 * gameState.metaKnowledge.buffs.costMultiplier);
+    if (gameState.resources.ticks < costForCheck) {
+        addToast("Not enough Ticks for Garbage Collection.", "error");
+        return;
+    }
+    
+    setGameState(prev => {
+      const currentCost = Math.floor(10 * prev.metaKnowledge.buffs.costMultiplier);
+      if (prev.resources.ticks < currentCost) {
+        return prev; 
+      }
+
+      const entropyReductionAmount = 20 * prev.metaKnowledge.buffs.entropyReductionMultiplier;
+      const activeProcessesToReduce = Math.floor(prev.activeProcesses * 0.25); // Reduce a quarter of non-thread processes
+
+      const newEntropy = Math.max(0, prev.resources.entropy - entropyReductionAmount);
+      const newTicks = Math.max(0, prev.resources.ticks - currentCost);
+      const newActiveProcesses = Math.max(0, prev.activeProcesses - activeProcessesToReduce);
+      
+      let toastMessage = 'Garbage Collection ran. ';
+      if (newEntropy < prev.resources.entropy) {
+          toastMessage += 'Entropy reduced. ';
+      } else {
+          toastMessage += 'No entropy to reduce further. ';
+      }
+      if (newActiveProcesses < prev.activeProcesses) {
+          toastMessage += 'Some idle processes cleared.';
+      }
+      addToast(toastMessage, 'info');
+
+      return {
+        ...prev,
+        resources: { ...prev.resources, ticks: newTicks, entropy: newEntropy },
+        activeProcesses: newActiveProcesses,
+      };
+    });
+  }, [
+    gameState.resources.ticks, 
+    gameState.metaKnowledge.buffs.costMultiplier, 
+    gameState.metaKnowledge.buffs.entropyReductionMultiplier,
+    addToast
+  ]);
+
+  const calculateMkGain = useCallback((): number => {
+    const fromTicks = Math.floor(gameState.totalTicksGeneratedAllTime / 1_000_000);
+    const fromCpu = Math.floor(gameState.upgrades.cpuLevel / 10);
+    const fromMemory = Math.floor(gameState.upgrades.memoryLevel / 5);
+    const fromAICores = Math.floor(gameState.upgrades.aiCoreLevel / 5);
+    const fromOptimization = Math.floor(gameState.upgrades.optimizationLevel / 8);
+    const fromThreads = Math.floor(gameState.upgrades.maxThreadsLevel / 3);
+
+    if (gameState.totalTicksGeneratedAllTime < 250000 && 
+        (gameState.upgrades.cpuLevel < 5 || gameState.upgrades.memoryLevel < 3)) {
+        return 0;
+    }
+    const totalMk = fromTicks + fromCpu + fromMemory + fromAICores + fromOptimization + fromThreads;
+    return Math.max(0, Math.floor(totalMk));
+  }, [gameState.totalTicksGeneratedAllTime, gameState.upgrades]);
+
+  const handlePrestige = useCallback(() => {
+    const mkGained = calculateMkGain();
+    
+    if (mkGained < 1) {
+        if (!confirm("Your current progress might not yield significant Meta-Knowledge. Are you sure you want to prestige for 0 MK? This will reset your game progress.")) {
+            addToast("Prestige cancelled. Continue enhancing your system!", "info");
+            return;
+        }
+    } else {
+        if (!confirm(`Are you sure you want to prestige and gain ${mkGained} Meta-Knowledge? This will reset your current game progress (except MK buffs).`)) {
+            addToast("Prestige cancelled.", "info");
+            return;
+        }
+    }
+
+    const preservedMetaKnowledge: MetaKnowledge = {
+      ...gameState.metaKnowledge,
+      points: gameState.metaKnowledge.points + mkGained,
+    };
+    const preservedAutoTick = gameState.autoTickEnabled;
+    
+    // Reset layer specific states to their initial values
+    const resetLayerStates: LayerSpecificStates = {
+        assemblyCode: initialAssemblyCode,
+        assemblyOutput: "// Assembly output will appear here",
+        highLevelCode: initialHighLevelCode,
+        highLevelOutput: "// High-level output will appear here",
+        concurrencyThreads: [
+          { 
+            id: 1, 
+            code: initialConcurrencyThreadCode(1), 
+            status: 'idle', 
+            output: '// Thread 1 ready', 
+            ticksGeneratedLastRun: 0, 
+            acquiredLocks: [] 
+          }
+        ],
+        concurrencyGlobalLocks: {},
+    };
+
+    setGameState({
+      ...initialGameState, 
+      metaKnowledge: preservedMetaKnowledge,
+      autoTickEnabled: preservedAutoTick,
+      layerSpecificStates: resetLayerStates, 
+      lastSaveTime: Date.now(), 
+    });
+    setActiveTab('machine');
+    addToast(`Universe Recompiled! Gained ${mkGained} Meta-Knowledge. System rebooted with enhanced potential.`, 'success');
+  }, [
+    gameState.metaKnowledge, 
+    gameState.autoTickEnabled, 
+    calculateMkGain, 
+    addToast
+  ]);
+  
   const spendMetaKnowledge = useCallback((buffKey: keyof MetaKnowledge['buffs']) => {
     setGameState(prev => {
       const currentBuffValue = prev.metaKnowledge.buffs[buffKey];
-      const cost = getMetaBuffUpgradeCost(buffKey, currentBuffValue); // Use the imported helper
+      const cost = getMetaBuffUpgradeCost(buffKey, currentBuffValue);
 
       if (prev.metaKnowledge.points < cost) {
         addToast("Not enough Meta-Knowledge points.", 'error');
         return prev;
       }
-      // Check for max cost reduction (0.5 is 50% reduction)
-      const isMaxCostReduction = buffKey === 'costMultiplier' && currentBuffValue <= 0.501; // Use a small epsilon for float comparison
+      const isMaxCostReduction = buffKey === 'costMultiplier' && currentBuffValue <= 0.501;
       if (isMaxCostReduction) {
          addToast("Maximum cost reduction reached for this buff.", "info");
          return prev;
@@ -414,28 +549,12 @@ const Game = () => {
       newMetaKnowledge.points -= cost;
       
       let buffName = "";
-      // Apply the buff increment
       switch (buffKey) {
-        case 'tickMultiplier': 
-          newMetaKnowledge.buffs.tickMultiplier += 0.05; 
-          buffName = "Tick Multiplier"; 
-          break;
-        case 'costMultiplier': 
-          // Ensure it doesn't go below 0.5
-          newMetaKnowledge.buffs.costMultiplier = Math.max(0.5, newMetaKnowledge.buffs.costMultiplier - 0.02); 
-          buffName = "Cost Reduction"; 
-          break;
-        case 'entropyReductionMultiplier': 
-          newMetaKnowledge.buffs.entropyReductionMultiplier += 0.05; 
-          buffName = "Entropy Reduction"; 
-          break;
-        case 'memoryMultiplier': 
-          newMetaKnowledge.buffs.memoryMultiplier += 0.05; 
-          buffName = "Memory Multiplier"; 
-          break;
+        case 'tickMultiplier': newMetaKnowledge.buffs.tickMultiplier += 0.05; buffName = "Tick Multiplier"; break;
+        case 'costMultiplier': newMetaKnowledge.buffs.costMultiplier = Math.max(0.5, newMetaKnowledge.buffs.costMultiplier - 0.02); buffName = "Cost Reduction"; break;
+        case 'entropyReductionMultiplier': newMetaKnowledge.buffs.entropyReductionMultiplier += 0.05; buffName = "Entropy Reduction"; break;
+        case 'memoryMultiplier': newMetaKnowledge.buffs.memoryMultiplier += 0.05; buffName = "Memory Multiplier"; break;
       }
-
-      // Round to prevent floating point display issues
       newMetaKnowledge.buffs.tickMultiplier = parseFloat(newMetaKnowledge.buffs.tickMultiplier.toFixed(3));
       newMetaKnowledge.buffs.costMultiplier = parseFloat(newMetaKnowledge.buffs.costMultiplier.toFixed(3));
       newMetaKnowledge.buffs.entropyReductionMultiplier = parseFloat(newMetaKnowledge.buffs.entropyReductionMultiplier.toFixed(3));
@@ -457,7 +576,6 @@ const Game = () => {
 
   return (
     <>
-      {/* Toast Container */}
       <div className="fixed top-4 right-4 z-50 space-y-2 w-auto max-w-sm">
         {toasts.map(toast => (
           <div key={toast.id} className={`p-3 rounded-md shadow-lg text-sm font-medium animate-fadeIn ${
@@ -480,7 +598,7 @@ const Game = () => {
             title={gameState.resources.ticks < Math.floor(10 * gameState.metaKnowledge.buffs.costMultiplier) ? "Not enough Ticks" : `Cost: ${Math.floor(10 * gameState.metaKnowledge.buffs.costMultiplier)} Ticks`}
             className="w-full px-4 py-3 rounded font-semibold bg-yellow-500 hover:bg-yellow-600 text-black disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-150"
           >
-            Garbage Collection
+            Garbage Collection (Cost: {Math.floor(10 * gameState.metaKnowledge.buffs.costMultiplier)})
           </button>
         </div>
         
@@ -501,9 +619,7 @@ const Game = () => {
             ))}
           </div>
           
-          {/* Render the active tab's component */}
           {tabs.find(tabInfo => tabInfo.key === activeTab)?.component}
-
         </div>
       </div>
     </>
