@@ -20,7 +20,26 @@ const ClassManagement: React.FC<ClassManagementProps> = ({ onSelectClass, onCrea
     setIsLoading(true);
     try {
       const classData = await getClasses();
-      setClasses(classData);
+      
+      // Use the actual doneCount from the class data
+      // Calculate progress based on doneCount and pdfCount
+      const classesWithProgress = classData.map(cls => {
+        // If doneCount is not set, default to 0
+        const doneCount = cls.doneCount || 0;
+        const totalItems = cls.pdfCount;
+        
+        // Calculate progress percentage
+        const progress = totalItems > 0 ? Math.round((doneCount / totalItems) * 100) : 0;
+        
+        return {
+          ...cls,
+          progress,
+          completedItems: doneCount,
+          totalItems
+        };
+      });
+      
+      setClasses(classesWithProgress);
     } catch (error) {
       console.error('Failed to load classes:', error);
     } finally {
@@ -59,6 +78,13 @@ const ClassManagement: React.FC<ClassManagementProps> = ({ onSelectClass, onCrea
 
   const formatDate = (timestamp: number) => {
     return new Date(timestamp).toLocaleDateString();
+  };
+
+  // Function to determine the color of the progress bar based on completion percentage
+  const getProgressColor = (progress: number) => {
+    if (progress < 30) return 'bg-red-500';
+    if (progress < 70) return 'bg-yellow-500';
+    return 'bg-green-500';
   };
 
   return (
@@ -150,6 +176,24 @@ const ClassManagement: React.FC<ClassManagementProps> = ({ onSelectClass, onCrea
                 <div className="mt-1 text-gray-400 text-sm">
                   {cls.pdfCount} {cls.pdfCount === 1 ? 'PDF' : 'PDFs'}
                 </div>
+                
+                {/* Progress section */}
+                <div className="mt-4">
+                  <div className="flex justify-between text-sm text-gray-400 mb-1">
+                    <span>Progress</span>
+                    <span>{cls.progress}%</span>
+                  </div>
+                  <div className="w-full bg-gray-700 rounded-full h-2">
+                    <div 
+                      className={`${getProgressColor(cls.progress || 0)} h-2 rounded-full`} 
+                      style={{ width: `${cls.progress}%` }}
+                    ></div>
+                  </div>
+                  <div className="text-xs text-gray-400 mt-1">
+                    {cls.doneCount || 0} of {cls.pdfCount} PDFs completed
+                  </div>
+                </div>
+                
                 <div className="mt-4">
                   <button className="w-full bg-blue-500 text-center py-2 rounded text-gray-200 hover:bg-blue-600 transition-colors">
                     Open Class

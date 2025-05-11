@@ -1,3 +1,4 @@
+// utils/types.ts
 export type PDF = {
   id?: number;
   name: string;
@@ -6,7 +7,7 @@ export type PDF = {
   data: ArrayBuffer;
   status: 'to-study' | 'done';
   dateAdded: number;
-  classId?: number;
+  classId: number;
 }
 
 export type Class = {
@@ -14,4 +15,6 @@ export type Class = {
   name: string;
   dateCreated: number;
   pdfCount: number;
+  doneCount?: number;
+  progress?: number;
 }
