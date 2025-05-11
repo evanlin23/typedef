@@ -8,3 +8,6 @@ Simple music player (upload songs, listen to them w/o ads)
 
 ### [struct](https://evanlin23.github.io/struct/)
 Upload pdfs to study and mark them as done once you're done studying them.
+
+### [synthesis](https://evanlin23.github.io/synthesis/)
+Clicker game inspired by computer science concepts
