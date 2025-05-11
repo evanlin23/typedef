@@ -9,8 +9,8 @@ interface ResourcePanelProps {
 
 const ResourcePanel = ({ resources, tickRate, activeProcesses }: ResourcePanelProps) => {
   return (
-    <div className="bg-[color:var(--color-bg-secondary)] p-4 rounded border border-[color:var(--color-border-primary)] mb-4">
-      <h2 className="text-lg font-semibold mb-2 text-[color:var(--color-accent-secondary)]">Resources</h2>
+    <div className="bg-gray-200 p-4 rounded border border-gray-300 mb-4">
+      <h2 className="text-lg font-semibold mb-2 text-blue-600">Resources</h2>
       
       <div className="space-y-2">
         <div className="flex justify-between">
@@ -30,7 +30,7 @@ const ResourcePanel = ({ resources, tickRate, activeProcesses }: ResourcePanelPr
         
         <div className="flex justify-between">
           <span>Entropy:</span>
-          <span className={resources.entropy > 50 ? "text-[color:var(--color-error)]" : ""}>
+          <span className={resources.entropy > 50 ? "text-red-600" : ""}>
             {resources.entropy.toFixed(1)}%
           </span>
         </div>

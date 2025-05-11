@@ -41,9 +41,9 @@ Memory access violation`);
   
   return (
     <div>
-      <h3 className="text-xl mb-4 text-[color:var(--color-accent-primary)]">Assembly Layer</h3>
+      <h3 className="text-xl mb-4 text-green-600">Assembly Layer</h3>
       
-      <div className="bg-[color:var(--color-bg-primary)] p-4 rounded border border-[color:var(--color-border-primary)] mb-4">
+      <div className="bg-gray-100 p-4 rounded border border-gray-300 mb-4">
         <p className="mb-4">
           The Assembly Layer allows you to write low-level assembly code to generate ticks more efficiently.
           More complex code can generate more ticks, but also carries higher risk of failure.
@@ -53,7 +53,7 @@ Memory access violation`);
           <div className="md:w-1/2">
             <div className="mb-2 flex justify-between">
               <label htmlFor="code" className="font-medium">Assembly Code:</label>
-              <span className={code.length > maxMemory * 10 ? "text-[color:var(--color-error)]" : ""}>
+              <span className={code.length > maxMemory * 10 ? "text-red-600" : ""}>
                 {code.length} / {maxMemory * 10} bytes
               </span>
             </div>
@@ -61,7 +61,7 @@ Memory access violation`);
               id="code"
               value={code}
               onChange={(e) => setCode(e.target.value)}
-              className="w-full h-64 bg-[color:var(--color-bg-secondary)] text-[color:var(--color-text-primary)] p-2 rounded border border-[color:var(--color-border-secondary)] font-mono text-sm"
+              className="w-full h-64 bg-gray-200 text-gray-900 p-2 rounded border border-gray-300 font-mono text-sm"
             />
           </div>
           
@@ -71,7 +71,7 @@ Memory access violation`);
             </div>
             <div
               id="output"
-              className="w-full h-64 bg-[color:var(--color-bg-secondary)] text-[color:var(--color-text-primary)] p-2 rounded border border-[color:var(--color-border-secondary)] font-mono text-sm overflow-auto whitespace-pre-wrap"
+              className="w-full h-64 bg-gray-200 text-gray-900 p-2 rounded border border-gray-300 font-mono text-sm overflow-auto whitespace-pre-wrap"
             >
               {output}
             </div>
@@ -81,14 +81,14 @@ Memory access violation`);
         <div className="mt-4 flex justify-end">
           <button
             onClick={handleRunCode}
-            className="bg-[color:var(--color-accent-primary)] text-black px-4 py-2 rounded hover:bg-[color:var(--color-accent-secondary)]"
+            className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700"
           >
             Run Code
           </button>
         </div>
       </div>
       
-      <div className="bg-[color:var(--color-bg-primary)] p-4 rounded border border-[color:var(--color-border-primary)]">
+      <div className="bg-gray-100 p-4 rounded border border-gray-300">
         <h4 className="font-semibold mb-2">Assembly Reference</h4>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
           <div>

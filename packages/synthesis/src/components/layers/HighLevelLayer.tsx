@@ -47,9 +47,9 @@ Execution halted`);
   
   return (
     <div>
-      <h3 className="text-xl mb-4 text-[color:var(--color-accent-primary)]">High-Level Language Layer</h3>
+      <h3 className="text-xl mb-4 text-green-600">High-Level Language Layer</h3>
       
-      <div className="bg-[color:var(--color-bg-primary)] p-4 rounded border border-[color:var(--color-border-primary)] mb-4">
+      <div className="bg-gray-100 p-4 rounded border border-gray-300 mb-4">
         <p className="mb-4">
           The High-Level Language Layer allows you to write code in modern programming languages to generate ticks more efficiently.
           High-level code can generate significantly more ticks when successful.
@@ -61,7 +61,7 @@ Execution halted`);
             id="language"
             value={language}
             onChange={(e) => setLanguage(e.target.value)}
-            className="bg-[color:var(--color-bg-secondary)] text-[color:var(--color-text-primary)] p-2 rounded border border-[color:var(--color-border-secondary)]"
+            className="bg-gray-200 text-gray-900 p-2 rounded border border-gray-300"
           >
             <option value="javascript">JavaScript</option>
             <option value="python">Python</option>
@@ -73,7 +73,7 @@ Execution halted`);
           <div className="md:w-1/2">
             <div className="mb-2 flex justify-between">
               <label htmlFor="high-code" className="font-medium">Code:</label>
-              <span className={code.length > maxMemory * 20 ? "text-[color:var(--color-error)]" : ""}>
+              <span className={code.length > maxMemory * 20 ? "text-red-600" : ""}>
                 {code.length} / {maxMemory * 20} bytes
               </span>
             </div>
@@ -81,7 +81,7 @@ Execution halted`);
               id="high-code"
               value={code}
               onChange={(e) => setCode(e.target.value)}
-              className="w-full h-64 bg-[color:var(--color-bg-secondary)] text-[color:var(--color-text-primary)] p-2 rounded border border-[color:var(--color-border-secondary)] font-mono text-sm"
+              className="w-full h-64 bg-gray-200 text-gray-900 p-2 rounded border border-gray-300 font-mono text-sm"
             />
           </div>
           
@@ -91,7 +91,7 @@ Execution halted`);
             </div>
             <div
               id="high-output"
-              className="w-full h-64 bg-[color:var(--color-bg-secondary)] text-[color:var(--color-text-primary)] p-2 rounded border border-[color:var(--color-border-secondary)] font-mono text-sm overflow-auto whitespace-pre-wrap"
+              className="w-full h-64 bg-gray-200 text-gray-900 p-2 rounded border border-gray-300 font-mono text-sm overflow-auto whitespace-pre-wrap"
             >
               {output}
             </div>
@@ -101,14 +101,14 @@ Execution halted`);
         <div className="mt-4 flex justify-end">
           <button
             onClick={handleRunCode}
-            className="bg-[color:var(--color-accent-primary)] text-black px-4 py-2 rounded hover:bg-[color:var(--color-accent-secondary)]"
+            className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700"
           >
             Run Code
           </button>
         </div>
       </div>
       
-      <div className="bg-[color:var(--color-bg-primary)] p-4 rounded border border-[color:var(--color-border-primary)]">
+      <div className="bg-gray-100 p-4 rounded border border-gray-300">
         <h4 className="font-semibold mb-2">Language Features</h4>
         <div className="space-y-2">
           <p>

@@ -7,9 +7,22 @@ import HighLevelLayer from './layers/HighLevelLayer';
 import UpgradePanel from './UpgradePanel';
 import { type GameState, initialGameState } from '../types/gameState';
 
+const STORAGE_KEY = 'synthesis_game_state';
+
 const Game = () => {
-  const [gameState, setGameState] = useState<GameState>(initialGameState);
+  const [gameState, setGameState] = useState<GameState>(() => {
+    // Load state from localStorage on initial render
+    const savedState = localStorage.getItem(STORAGE_KEY);
+    return savedState ? JSON.parse(savedState) : initialGameState;
+  });
+  
   const [activeTab, setActiveTab] = useState('machine');
+  const [autoTickEnabled, setAutoTickEnabled] = useState(false);
+
+  // Save game state to localStorage whenever it changes
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(gameState));
+  }, [gameState]);
 
   // Main game loop - runs every 100ms
   useEffect(() => {
@@ -30,7 +43,7 @@ const Game = () => {
           ...prevState,
           resources: {
             ...prevState.resources,
-            ticks: newTicks,
+            ticks: Math.max(0, newTicks), // Prevent negative ticks
             entropy: Math.min(100, prevState.resources.entropy + entropyGain)
           },
           // Entropy slows tick rate
@@ -71,6 +84,7 @@ const Game = () => {
           break;
         case 'memory':
           newState.resources.maxMemory += 10;
+          newState.upgrades.memory += 1; // Fix: Increment memory level counter
           newState.upgradeCosts.memory = Math.floor(newState.upgradeCosts.memory * 1.8);
           break;
         case 'optimization':
@@ -124,15 +138,15 @@ const Game = () => {
       ...prev,
       resources: {
         ...prev.resources,
-        ticks: prev.resources.ticks - 10,
+        ticks: Math.max(0, prev.resources.ticks - 10), // Prevent negative ticks
         entropy: Math.max(0, prev.resources.entropy - 20)
       }
     }));
   };
 
   return (
-    <div className="bg-[color:var(--color-bg-primary)] min-h-screen p-4 text-[color:var(--color-text-primary)]">
-      <h1 className="text-2xl font-bold mb-4 text-center text-[color:var(--color-accent-primary)]">Synthesis</h1>
+    <div className="bg-gray-100 min-h-screen p-4 text-gray-900">
+      <h1 className="text-2xl font-bold mb-4 text-center text-green-600">Synthesis</h1>
       
       <div className="flex flex-col lg:flex-row gap-4">
         <div className="lg:w-1/4">
@@ -152,30 +166,29 @@ const Game = () => {
           <button
             onClick={garbageCollect}
             disabled={gameState.resources.ticks < 10}
-            className="w-full mt-4 bg-[color:var(--color-bg-secondary)] p-2 rounded border border-[color:var(--color-border-primary)] hover:bg-[color:var(--color-border-secondary)] disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full mt-4 bg-gray-200 p-2 rounded border border-gray-300 hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Garbage Collection (10 ticks)
           </button>
         </div>
         
-        <div className="lg:w-3/4 bg-[color:var(--color-bg-secondary)] rounded border border-[color:var(--color-border-primary)] p-4">
-          <div className="flex border-b border-[color:var(--color-border-secondary)] mb-4">
+        <div className="lg:w-3/4 bg-gray-200 rounded border border-gray-300 p-4">
+          <div className="flex border-b border-gray-300 mb-4">
             <button 
               onClick={() => setActiveTab('machine')}
-              className={`px-4 py-2 ${activeTab === 'machine' ? 'text-[color:var(--color-accent-primary)] border-b-2 border-[color:var(--color-accent-primary)]' : ''}`}
+              className={`px-4 py-2 ${activeTab === 'machine' ? 'text-green-600 border-b-2 border-green-600' : ''}`}
             >
               Machine
             </button>
             <button 
               onClick={() => setActiveTab('assembly')}
-              className={`px-4 py-2 ${activeTab === 'assembly' ? 'text-[color:var(--color-accent-primary)] border-b-2 border-[color:var(--color-accent-primary)]' : ''}`}
+              className={`px-4 py-2 ${activeTab === 'assembly' ? 'text-green-600 border-b-2 border-green-600' : ''}`}
             >
               Assembly
             </button>
             <button 
               onClick={() => setActiveTab('highlevel')}
-              className={`px-4 py-2 ${activeTab === 'highlevel' ? 'text-[color:var(--color-accent-primary)] border-b-2 border-[color:var(--color-accent-primary)]' : ''}`}
-              disabled={gameState.resources.ticks < 1000}
+              className={`px-4 py-2 ${activeTab === 'highlevel' ? 'text-green-600 border-b-2 border-green-600' : ''}`}
             >
               High-Level Language
             </button>
@@ -185,6 +198,8 @@ const Game = () => {
             <MachineLayer 
               produceTick={produceTick}
               tickRate={gameState.effectiveTickRate}
+              autoTickEnabled={autoTickEnabled}
+              setAutoTickEnabled={setAutoTickEnabled}
             />
           )}
           
