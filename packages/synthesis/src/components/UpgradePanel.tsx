@@ -22,7 +22,7 @@ const UpgradePanel = ({ upgrades, costs, ticks, buyUpgrade }: UpgradePanelProps)
           <button
             onClick={() => buyUpgrade('cpuSpeed', costs.cpuSpeed)}
             disabled={ticks < costs.cpuSpeed}
-            className="bg-gray-900 p-1 rounded border border-gray-700 hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="bg-gray-900 p-1 rounded border border-gray-700 hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Upgrade CPU
           </button>
@@ -36,7 +36,7 @@ const UpgradePanel = ({ upgrades, costs, ticks, buyUpgrade }: UpgradePanelProps)
           <button
             onClick={() => buyUpgrade('memory', costs.memory)}
             disabled={ticks < costs.memory}
-            className="bg-gray-900 p-1 rounded border border-gray-700 hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="bg-gray-900 p-1 rounded border border-gray-700 hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Upgrade Memory
           </button>
@@ -50,7 +50,7 @@ const UpgradePanel = ({ upgrades, costs, ticks, buyUpgrade }: UpgradePanelProps)
           <button
             onClick={() => buyUpgrade('optimization', costs.optimization)}
             disabled={ticks < costs.optimization}
-            className="bg-gray-900 p-1 rounded border border-gray-700 hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="bg-gray-900 p-1 rounded border border-gray-700 hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Improve Optimizations
           </button>
