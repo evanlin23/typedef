@@ -1,34 +1,36 @@
 import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
 import './App.css'
+import Game from './components/Game'
 
 function App() {
-  const [count, setCount] = useState(0)
+  const [darkMode, setDarkMode] = useState(true)
+
+  const toggleTheme = () => {
+    setDarkMode(prev => !prev)
+  }
 
   return (
-    <>
-      <div>
-        <a href="https://vite.dev" target="_blank">
-          <img src={viteLogo} className="logo" alt="Vite logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
+    <div className={`min-h-screen ${darkMode ? 'dark' : 'light'}`}>
+      <div className="container mx-auto px-4 py-8">
+        <header className="flex justify-between items-center mb-8">
+          <h1 className="text-3xl font-bold text-[color:var(--color-accent-primary)]">
+            Synthesis
+          </h1>
+          <button 
+            onClick={toggleTheme}
+            className="p-2 rounded bg-[color:var(--color-bg-secondary)] border border-[color:var(--color-border-primary)]"
+          >
+            {darkMode ? '☀️' : '🌙'}
+          </button>
+        </header>
+        
+        <Game />
+        
+        <footer className="mt-8 text-center text-[color:var(--color-text-secondary)] text-sm">
+          <p>Synthesis v0.1.0 - A Programming Incremental Game</p>
+        </footer>
       </div>
-      <h1>Vite + React</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/App.tsx</code> and save to test HMR
-        </p>
-      </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
-    </>
+    </div>
   )
 }
 

@@ -1,5 +1,5 @@
 // src/components/UpgradePanel.tsx
-import { Upgrades, UpgradeCosts } from '../types/gameState';
+import type { Upgrades, UpgradeCosts } from '../types/gameState';
 
 interface UpgradePanelProps {
   upgrades: Upgrades;

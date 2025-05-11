@@ -5,7 +5,7 @@ import MachineLayer from './layers/MachineLayer';
 import AssemblyLayer from './layers/AssemblyLayer';
 import HighLevelLayer from './layers/HighLevelLayer';
 import UpgradePanel from './UpgradePanel';
-import { GameState, initialGameState } from '../types/gameState';
+import { type GameState, initialGameState } from '../types/gameState';
 
 const Game = () => {
   const [gameState, setGameState] = useState<GameState>(initialGameState);
