@@ -1,6 +1,10 @@
 // src/components/layers/concurrency/ConcurrencyControls.tsx
+// This component is largely presentational and receives its data/callbacks as props.
+// No direct context usage is strictly necessary here if parent (ConcurrencyLayer) manages interactions.
+// If it were to directly interact with global state (e.g., showing global ticks for a cost), it would use context.
+// For this refactor, it remains as is, taking props.
 import React from 'react';
-import { CODE_COST_HIGHLEVEL_PER_CHAR, initialConcurrencyThreadCode } from '../../../types/gameState'; // For new thread memory check
+import { CODE_COST_HIGHLEVEL_PER_CHAR, initialConcurrencyThreadCode } from '../../../types/gameState';
 
 interface ConcurrencyControlsProps {
   maxThreads: number;

@@ -1,6 +1,5 @@
 // src/utils/gameCalculations.ts
 import { type GameState, type MetaKnowledge, PRESTIGE_MK_COST_MULTIPLIER_CAP } from '../types/gameState';
-// Removed: import { PRESTIGE_MK_COST_MULTIPLIER_CAP } from '../constants/gameConfig';
 
 export const calculateMkGain = (gameState: GameState): number => {
   const fromTicks = Math.floor(gameState.totalTicksGeneratedAllTime / 1_000_000);
@@ -21,14 +20,17 @@ export const calculateMkGain = (gameState: GameState): number => {
 export const getMetaBuffUpgradeCost = (buffKey: keyof MetaKnowledge['buffs'], currentBuffValue: number): number => {
   switch (buffKey) {
     case 'tickMultiplier':
-      return Math.floor((currentBuffValue - 1.0) / 0.05) + 1;
+      // Cost increases by 1 for every 0.05 increment (or part thereof) above 1.0
+      return Math.floor(Math.max(0, currentBuffValue - 1.0) / 0.05) + 1;
     case 'costMultiplier':
+      // Cap at PRESTIGE_MK_COST_MULTIPLIER_CAP
       if (currentBuffValue <= PRESTIGE_MK_COST_MULTIPLIER_CAP + 0.001) return Infinity;
-      return Math.floor((1.0 - currentBuffValue) / 0.02) + 1;
+      // Cost increases by 1 for every 0.02 reduction (or part thereof) from 1.0
+      return Math.floor(Math.max(0, 1.0 - currentBuffValue) / 0.02) + 1;
     case 'entropyReductionMultiplier':
-      return Math.floor((currentBuffValue - 1.0) / 0.05) + 1;
+      return Math.floor(Math.max(0, currentBuffValue - 1.0) / 0.05) + 1;
     case 'memoryMultiplier':
-      return Math.floor((currentBuffValue - 1.0) / 0.05) + 1;
+      return Math.floor(Math.max(0, currentBuffValue - 1.0) / 0.05) + 1;
     default:
       return 1;
   }

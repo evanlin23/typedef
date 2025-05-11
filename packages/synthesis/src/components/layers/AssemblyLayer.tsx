@@ -1,54 +1,49 @@
 // src/components/layers/AssemblyLayer.tsx
 import React, { useCallback } from 'react';
-// Remove calculateActualMaxMemory import, use gameState.resources.maxMemory directly
-import { type GameState, CODE_COST_ASSEMBLY_PER_CHAR } from '../../types/gameState';
+import { useGameContext } from '../../contexts/GameContext';
+import CodeEnvironmentUI from '../shared/CodeEnvironmentUI';
+import { CODE_COST_ASSEMBLY_PER_CHAR } from '../../types/gameState';
 
-interface AssemblyLayerProps {
-  gameState: GameState;
-  runCode: (code: string, layer: string) => { success: boolean; ticksGenerated: number };
-  runUnitTests: (layer: string) => void;
-  onCodeChange: (newCode: string) => void;
-  onOutputSet: (newOutput: string) => void;
-}
+const AssemblyLayer: React.FC = () => {
+  const { 
+    gameState, 
+    runCode, 
+    runUnitTests,
+    handleAssemblyCodeChange, // ** Use from context **
+    handleAssemblyOutputSet   // ** Use from context **
+  } = useGameContext();
 
-const AssemblyLayer: React.FC<AssemblyLayerProps> = ({ 
-  gameState, 
-  runCode, 
-  runUnitTests,
-  onCodeChange,
-  onOutputSet 
-}) => {
   const { assemblyCode, assemblyOutput } = gameState.layerSpecificStates;
-  // Use current maxMemory from gameState.resources
   const actualMaxMemory = gameState.resources.maxMemory;
   const codeCost = assemblyCode.length * CODE_COST_ASSEMBLY_PER_CHAR;
   const canExecute = codeCost <= actualMaxMemory;
-
   const unitTestCost = 5;
 
-  const handleRunCode = useCallback(() => {
+  const handleRunCodeInternal = useCallback(() => {
     if (!canExecute) {
-      onOutputSet(`ERROR: Memory capacity (${actualMaxMemory.toFixed(0)} CU) exceeded. Required: ${codeCost.toFixed(1)} CU.`);
+      handleAssemblyOutputSet(`ERROR: Memory capacity (${actualMaxMemory.toFixed(0)} CU) exceeded. Required: ${codeCost.toFixed(1)} CU.`);
       return;
     }
-    
+    // runCode from context now takes the code directly from gameState.layerSpecificStates.assemblyCode
+    // so we don't need to pass assemblyCode as the first argument if CodeActions.runCode is adapted to read it.
+    // For now, the runCode in context still expects codeFromLayer.
     const result = runCode(assemblyCode, 'assembly'); 
     
     if (result.success) {
-      onOutputSet(`SUCCESS: Execution generated ${result.ticksGenerated} Ticks.\n\n// Simulated execution log:\nLoading micro-ops...\nExecuting from address 0x0000...\nProgram terminated normally.`);
+      handleAssemblyOutputSet(`SUCCESS: Execution generated ${result.ticksGenerated} Ticks.\n\n// Simulated execution log:\nLoading micro-ops...\nExecuting from address 0x0000...\nProgram terminated normally.`);
     } else {
-      onOutputSet(`ERROR: Code execution failed due to runtime error or inefficiency.\nGenerated only ${result.ticksGenerated} Ticks.\n\n// Debug trace (simulated):\nSegmentation fault at 0x${Math.floor(Math.random() * 0xFFFF).toString(16).padStart(4, '0')}.`);
+      handleAssemblyOutputSet(`ERROR: Code execution failed due to runtime error or inefficiency.\nGenerated only ${result.ticksGenerated} Ticks.\n\n// Debug trace (simulated):\nSegmentation fault at 0x${Math.floor(Math.random() * 0xFFFF).toString(16).padStart(4, '0')}.`);
     }
-  }, [assemblyCode, runCode, actualMaxMemory, codeCost, onOutputSet, canExecute]);
+  }, [assemblyCode, runCode, actualMaxMemory, codeCost, handleAssemblyOutputSet, canExecute]);
 
-  const handleRunTests = useCallback(() => {
+  const handleRunTestsInternal = useCallback(() => {
     if (gameState.resources.ticks < unitTestCost) {
-      onOutputSet(`// Not enough Ticks to run unit tests. Cost: ${unitTestCost} Ticks.\nCheck global notifications for error details.`);
+      handleAssemblyOutputSet(`// Not enough Ticks to run unit tests. Cost: ${unitTestCost} Ticks.\nCheck global notifications for error details.`);
     } else {
-      onOutputSet(`// Unit test suite initiated for Assembly Layer...\nCheck global notifications for results.`);
+      handleAssemblyOutputSet(`// Unit test suite initiated for Assembly Layer...\nCheck global notifications for results.`);
     }
     runUnitTests('assembly');
-  }, [runUnitTests, onOutputSet, gameState.resources.ticks, unitTestCost]);
+  }, [runUnitTests, handleAssemblyOutputSet, gameState.resources.ticks, unitTestCost]);
   
   return (
     <div className="animate-fadeIn">
@@ -60,51 +55,29 @@ const AssemblyLayer: React.FC<AssemblyLayerProps> = ({
           but complexity (code length) increases error risk, entropy, and memory usage.
         </p>
         
-        <div className="flex flex-col md:flex-row gap-4">
-          {/* Code Editor Section */}
-          <div className="md:w-1/2 flex flex-col">
-            <div className="mb-2 flex justify-between items-center">
-              <label htmlFor="asm-code-editor" className="font-medium text-text-primary">Assembly Code:</label>
-              <span 
-                className={`text-xs font-mono ${!canExecute ? "text-error-primary" : "text-text-secondary"}`}
-                title={`Memory: ${codeCost.toFixed(1)} CU used / ${actualMaxMemory.toFixed(0)} CU max`}
-              >
-                {codeCost.toFixed(1)} / {actualMaxMemory.toFixed(0)} CU
-              </span>
-            </div>
-            <textarea
-              id="asm-code-editor"
-              value={assemblyCode}
-              onChange={(e) => onCodeChange(e.target.value)}
-              className="flex-grow w-full h-64 md:h-auto bg-gray-800 text-gray-100 p-2 rounded border border-border-primary font-mono text-sm focus:ring-1 focus:ring-accent-primary focus:border-accent-primary resize-none"
-              spellCheck="false"
-              aria-label="Assembly Code Editor"
-            />
-          </div>
-          
-          {/* Output Section */}
-          <div className="md:w-1/2 flex flex-col">
-            <label htmlFor="asm-output-display" className="block mb-2 font-medium text-text-primary">Output & Logs:</label>
-            <div
-              id="asm-output-display"
-              className="flex-grow w-full h-64 md:h-auto bg-gray-800 text-gray-100 p-2 rounded border border-border-primary font-mono text-sm overflow-auto whitespace-pre-wrap"
-              aria-live="polite"
-            >
-              {assemblyOutput}
-            </div>
-          </div>
-        </div>
+        {/* ** Use CodeEnvironmentUI ** */}
+        <CodeEnvironmentUI
+          layerKey="asm"
+          code={assemblyCode}
+          onCodeChange={handleAssemblyCodeChange}
+          output={assemblyOutput}
+          codeLabel="Assembly Code"
+          outputLabel="Output & Logs"
+          memoryCost={codeCost}
+          maxMemory={actualMaxMemory}
+          canExecute={canExecute}
+        />
         
         <div className="mt-4 flex flex-col sm:flex-row justify-end gap-3">
           <button
-            onClick={handleRunTests}
+            onClick={handleRunTestsInternal}
             className="px-4 py-2 rounded font-semibold bg-yellow-500 hover:bg-yellow-600 text-black transition-colors duration-150 text-sm"
             title={`Cost: ${unitTestCost} Ticks. Runs a suite of tests to potentially find issues or grant a temporary buff.`}
           >
             Run Unit Tests (Cost: {unitTestCost} Ticks)
           </button>
           <button
-            onClick={handleRunCode}
+            onClick={handleRunCodeInternal}
             disabled={!canExecute}
             className="px-4 py-2 rounded font-semibold bg-accent-primary hover:bg-green-600 text-black disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-150 text-sm"
             title={!canExecute ? `Memory limit exceeded (${codeCost.toFixed(1)}/${actualMaxMemory.toFixed(0)} CU)` : "Execute the current assembly code"}

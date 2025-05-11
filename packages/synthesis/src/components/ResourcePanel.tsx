@@ -1,24 +1,16 @@
 // src/components/ResourcePanel.tsx
-import type { GameState } from '../types/gameState';
-// calculateEffectiveTickRate is fine to import.
-// calculateActualMaxMemory is NOT exported with that name anymore.
-// We will use gameState.resources.maxMemory for display.
+// ** No direct props needed, gameState comes from context **
+import { useGameContext } from '../contexts/GameContext'; // ** Import useGameContext **
 import { calculateEffectiveTickRate } from '../types/gameState';
 
-interface ResourcePanelProps {
-  gameState: GameState;
-}
-
-const ResourcePanel = ({ gameState }: ResourcePanelProps) => {
-  const { resources, upgrades, layerSpecificStates } = gameState;
-  const effectiveTickRate = calculateEffectiveTickRate(gameState); // Passive tick rate
-  
-  // The actual maximum memory is now stored in state.resources.maxMemory
+const ResourcePanel = () => {
+  const { gameState } = useGameContext(); // ** Use context **
+  const { resources, upgrades, layerSpecificStates, activeProcesses } = gameState;
+  const effectiveTickRate = calculateEffectiveTickRate(gameState);
   const actualMaxMemory = resources.maxMemory; 
   
   const runningThreadsCount = layerSpecificStates.concurrencyThreads.filter(t => t.status === 'running').length;
-  const totalDisplayedActiveProcesses = gameState.activeProcesses + runningThreadsCount;
-
+  const totalDisplayedActiveProcesses = activeProcesses + runningThreadsCount;
 
   return (
     <div className="bg-background-secondary p-4 rounded border border-border-primary shadow-md mb-4">
@@ -37,7 +29,6 @@ const ResourcePanel = ({ gameState }: ResourcePanelProps) => {
         
         <div className="flex justify-between">
           <span>Memory (CU):</span>
-          {/* Use the actualMaxMemory variable which now points to resources.maxMemory */}
           <span className="font-mono" title={`Used: ${resources.usedMemory.toFixed(1)}, Max: ${actualMaxMemory.toFixed(0)}`}>
             {resources.usedMemory.toFixed(1)} / {actualMaxMemory.toFixed(0)}
           </span>
@@ -71,7 +62,7 @@ const ResourcePanel = ({ gameState }: ResourcePanelProps) => {
         </div>
          <div className="flex justify-between text-xs text-text-secondary">
           <span title="Tasks from Assembly, High-Level layers">└ Non-Concurrent Tasks:</span>
-          <span className="font-mono">{gameState.activeProcesses}</span>
+          <span className="font-mono">{activeProcesses}</span>
         </div>
          <div className="flex justify-between text-xs text-text-secondary">
           <span title="Actively running threads in Concurrency layer">└ Running Threads:</span>

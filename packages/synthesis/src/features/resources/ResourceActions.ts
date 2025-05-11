@@ -1,7 +1,6 @@
 // src/features/resources/ResourceActions.ts
-import { type GameState, MAX_ENTROPY } from '../../types/gameState'; // Import MAX_ENTROPY
+import { type GameState } from '../../types/gameState';
 import { type Toast } from '../../components/ToastSystem';
-// Removed: import { MAX_ENTROPY } from '../../constants/gameConfig';
 
 export const produceTickManually = (
   setGameState: React.Dispatch<React.SetStateAction<GameState>>
@@ -14,11 +13,11 @@ export const produceTickManually = (
 };
 
 export const garbageCollect = (
-  gameState: GameState, // gameState is read-only here
+  gameState: GameState,
   setGameState: React.Dispatch<React.SetStateAction<GameState>>,
   addToast: (message: string, type?: Toast['type']) => void
 ) => {
-  const baseCost = 10; // This could be a constant from gameState.ts if desired
+  const baseCost = 10;
   const actualCost = Math.floor(baseCost * gameState.metaKnowledge.buffs.costMultiplier);
 
   if (gameState.resources.ticks < actualCost) {
@@ -28,7 +27,7 @@ export const garbageCollect = (
   
   setGameState(prev => {
     const currentActualCost = Math.floor(baseCost * prev.metaKnowledge.buffs.costMultiplier);
-    if (prev.resources.ticks < currentActualCost) {
+    if (prev.resources.ticks < currentActualCost) { // Re-check cost
         return prev;
     }
 

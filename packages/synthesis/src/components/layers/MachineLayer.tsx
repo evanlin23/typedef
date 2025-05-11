@@ -1,24 +1,17 @@
 // src/components/layers/MachineLayer.tsx
-import React from 'react'; // Added React import
-import { type GameState, calculateEffectiveTickRate } from '../../types/gameState';
+import { useGameContext } from '../../contexts/GameContext'; 
+import { calculateEffectiveTickRate } from '../../types/gameState';
 
-interface MachineLayerProps {
-  gameState: GameState;
-  produceTickManually: () => void;
-  toggleAutoTick: () => void;
-}
 
-const MachineLayer = ({ 
-  gameState,
-  produceTickManually, 
-  toggleAutoTick,
-}: MachineLayerProps) => {
+const MachineLayer = () => { 
+  const { 
+    gameState,
+    produceTickManually,
+    toggleAutoTick,
+  } = useGameContext();
+
   const effectiveTickRate = calculateEffectiveTickRate(gameState);
   const { cpuLevel, memoryLevel } = gameState.upgrades;
-  // The `calculateEffectiveTickRate` in `useGameLoop` for the auto-clicker
-  // is specific to how often the "+1 Tick" event for manual clicks happens.
-  // The `effectiveTickRate` here is the overall passive rate.
-  // Let's calculate the auto-clicker display rate similarly to how it's done in useGameLoop.
   const autoClickerBaseRate = 1; 
   const autoClickerCpuBonus = gameState.upgrades.cpuLevel * 0.2; 
   const totalAutoClickerRate = autoClickerBaseRate + autoClickerCpuBonus;
@@ -41,7 +34,7 @@ const MachineLayer = ({
         
         <div className="flex flex-col items-center space-y-6">
           <button
-            onClick={produceTickManually}
+            onClick={produceTickManually} // ** Use from context **
             className="bg-green-500 hover:bg-green-600 active:bg-green-700 text-white font-bold py-5 px-10 sm:py-6 sm:px-12 rounded-full transition-transform duration-150 ease-out active:scale-95 shadow-lg focus:outline-none focus:ring-2 focus:ring-green-400 focus:ring-opacity-50"
             aria-label="Execute One Computation Cycle Manually"
           >
@@ -52,7 +45,7 @@ const MachineLayer = ({
             <label htmlFor="auto-exec-toggle" className="text-text-primary">Auto-Execution (Manual Cycles):</label>
             <button
               id="auto-exec-toggle"
-              onClick={toggleAutoTick}
+              onClick={toggleAutoTick} // ** Use from context **
               className={`px-4 py-2 rounded transition-colors duration-200 text-sm font-medium border ${
                 gameState.autoTickEnabled 
                   ? 'bg-accent-primary text-black border-green-600' 

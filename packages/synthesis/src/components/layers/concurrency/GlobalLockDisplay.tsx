@@ -1,4 +1,5 @@
 // src/components/layers/concurrency/GlobalLockDisplay.tsx
+// This component is purely presentational based on props. No context needed directly.
 import React from 'react';
 import { type GlobalConcurrencyLocks } from '../../../types/gameState';
 

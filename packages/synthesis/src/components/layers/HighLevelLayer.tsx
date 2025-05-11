@@ -1,55 +1,48 @@
 // src/components/layers/HighLevelLayer.tsx
 import React, { useCallback } from 'react';
-// Remove calculateActualMaxMemory import, use gameState.resources.maxMemory directly
-import { type GameState, CODE_COST_HIGHLEVEL_PER_CHAR } from '../../types/gameState';
+import { useGameContext } from '../../contexts/GameContext';
+import CodeEnvironmentUI from '../shared/CodeEnvironmentUI';
+import { CODE_COST_HIGHLEVEL_PER_CHAR } from '../../types/gameState';
 
-interface HighLevelLayerProps {
-  gameState: GameState;
-  runCode: (code: string, layer: string) => { success: boolean; ticksGenerated: number };
-  runUnitTests: (layer: string) => void;
-  onCodeChange: (newCode: string) => void;
-  onOutputSet: (newOutput: string) => void;
-}
+const HighLevelLayer: React.FC = () => {
+  const { 
+    gameState, 
+    runCode, 
+    runUnitTests,
+    handleHighLevelCodeChange, // ** Use from context **
+    handleHighLevelOutputSet   // ** Use from context **
+  } = useGameContext();
 
-const HighLevelLayer: React.FC<HighLevelLayerProps> = ({ 
-  gameState, 
-  runCode, 
-  runUnitTests,
-  onCodeChange,
-  onOutputSet
-}) => {
   const { highLevelCode, highLevelOutput } = gameState.layerSpecificStates;
-  // Use current maxMemory from gameState.resources
   const actualMaxMemory = gameState.resources.maxMemory;
   const codeCost = highLevelCode.length * CODE_COST_HIGHLEVEL_PER_CHAR;
   const canExecute = codeCost <= actualMaxMemory;
-
   const unitTestCost = 15;
 
-  const handleRunCode = useCallback(() => {
+  const handleRunCodeInternal = useCallback(() => {
     if (!canExecute) {
-      onOutputSet(`ERROR: Memory capacity (${actualMaxMemory.toFixed(0)} CU) exceeded. Required: ${codeCost.toFixed(1)} CU.`);
+      handleHighLevelOutputSet(`ERROR: Memory capacity (${actualMaxMemory.toFixed(0)} CU) exceeded. Required: ${codeCost.toFixed(1)} CU.`);
       return;
     }
-    
+    // Similar to AssemblyLayer, runCode expects codeFromLayer for now.
     const result = runCode(highLevelCode, 'highLevel');
     
     if (result.success) {
-      onOutputSet(`SUCCESS: Compilation and execution generated ${result.ticksGenerated} Ticks.\n\n// Simulated execution log:\nSource code analyzed...\nBytecode compilation complete...\nVirtual machine executing...\nProgram finished successfully.`);
+      handleHighLevelOutputSet(`SUCCESS: Compilation and execution generated ${result.ticksGenerated} Ticks.\n\n// Simulated execution log:\nSource code analyzed...\nBytecode compilation complete...\nVirtual machine executing...\nProgram finished successfully.`);
     } else {
       const errorLine = Math.floor(Math.random() * highLevelCode.split('\n').length) + 1;
-      onOutputSet(`ERROR: Code execution failed due to runtime exception or logical error.\nGenerated only ${result.ticksGenerated} Ticks.\n\n// Debug trace (simulated):\nException: NullReferenceError on line ${errorLine}.\nStack trace available (simulated).`);
+      handleHighLevelOutputSet(`ERROR: Code execution failed due to runtime exception or logical error.\nGenerated only ${result.ticksGenerated} Ticks.\n\n// Debug trace (simulated):\nException: NullReferenceError on line ${errorLine}.\nStack trace available (simulated).`);
     }
-  }, [highLevelCode, runCode, actualMaxMemory, codeCost, onOutputSet, canExecute]);
+  }, [highLevelCode, runCode, actualMaxMemory, codeCost, handleHighLevelOutputSet, canExecute]);
 
-  const handleRunTests = useCallback(() => {
+  const handleRunTestsInternal = useCallback(() => {
      if (gameState.resources.ticks < unitTestCost) {
-      onOutputSet(`// Not enough Ticks to run unit tests. Cost: ${unitTestCost} Ticks.\nCheck global notifications for error details.`);
+      handleHighLevelOutputSet(`// Not enough Ticks to run unit tests. Cost: ${unitTestCost} Ticks.\nCheck global notifications for error details.`);
     } else {
-      onOutputSet(`// Unit test suite initiated for High-Level Language Layer...\nCheck global notifications for results.`);
+      handleHighLevelOutputSet(`// Unit test suite initiated for High-Level Language Layer...\nCheck global notifications for results.`);
     }
     runUnitTests('highLevel');
-  }, [runUnitTests, onOutputSet, gameState.resources.ticks, unitTestCost]);
+  }, [runUnitTests, handleHighLevelOutputSet, gameState.resources.ticks, unitTestCost]);
 
   return (
     <div className="animate-fadeIn">
@@ -60,51 +53,29 @@ const HighLevelLayer: React.FC<HighLevelLayerProps> = ({
           Achieve greater tick generation through complex logic, but beware of higher-level bugs, increased entropy from failures, and larger memory footprints.
         </p>
         
-        <div className="flex flex-col md:flex-row gap-4">
-          {/* Code Editor Section */}
-          <div className="md:w-1/2 flex flex-col">
-            <div className="mb-2 flex justify-between items-center">
-              <label htmlFor="hll-code-editor" className="font-medium text-text-primary">High-Level Code:</label>
-              <span 
-                className={`text-xs font-mono ${!canExecute ? "text-error-primary" : "text-text-secondary"}`}
-                title={`Memory: ${codeCost.toFixed(1)} CU used / ${actualMaxMemory.toFixed(0)} CU max`}
-              >
-                {codeCost.toFixed(1)} / {actualMaxMemory.toFixed(0)} CU
-              </span>
-            </div>
-            <textarea
-              id="hll-code-editor"
-              value={highLevelCode}
-              onChange={(e) => onCodeChange(e.target.value)}
-              className="flex-grow w-full h-64 md:h-auto bg-gray-800 text-gray-100 p-2 rounded border border-border-primary font-mono text-sm focus:ring-1 focus:ring-accent-primary focus:border-accent-primary resize-none"
-              spellCheck="false"
-              aria-label="High-Level Code Editor"
-            />
-          </div>
-
-          {/* Output Section */}
-          <div className="md:w-1/2 flex flex-col">
-            <label htmlFor="hll-output-display" className="block mb-2 font-medium text-text-primary">Output & Logs:</label>
-            <div
-              id="hll-output-display"
-              className="flex-grow w-full h-64 md:h-auto bg-gray-800 text-gray-100 p-2 rounded border border-border-primary font-mono text-sm overflow-auto whitespace-pre-wrap"
-              aria-live="polite"
-            >
-              {highLevelOutput}
-            </div>
-          </div>
-        </div>
+        {/* ** Use CodeEnvironmentUI ** */}
+        <CodeEnvironmentUI
+          layerKey="hll"
+          code={highLevelCode}
+          onCodeChange={handleHighLevelCodeChange}
+          output={highLevelOutput}
+          codeLabel="High-Level Code"
+          outputLabel="Output & Logs"
+          memoryCost={codeCost}
+          maxMemory={actualMaxMemory}
+          canExecute={canExecute}
+        />
 
         <div className="mt-4 flex flex-col sm:flex-row justify-end gap-3">
            <button
-            onClick={handleRunTests}
+            onClick={handleRunTestsInternal}
             className="px-4 py-2 rounded font-semibold bg-yellow-500 hover:bg-yellow-600 text-black transition-colors duration-150 text-sm"
             title={`Cost: ${unitTestCost} Ticks. Verifies code integrity and may grant a temporary buff.`}
           >
             Run Unit Tests (Cost: {unitTestCost} Ticks)
           </button>
           <button
-            onClick={handleRunCode}
+            onClick={handleRunCodeInternal}
             disabled={!canExecute}
             className="px-4 py-2 rounded font-semibold bg-accent-primary hover:bg-green-600 text-black disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-150 text-sm"
             title={!canExecute ? `Memory limit exceeded (${codeCost.toFixed(1)}/${actualMaxMemory.toFixed(0)} CU)` : "Compile and run the high-level code"}

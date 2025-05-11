@@ -1,35 +1,29 @@
 // src/components/PrestigePanel.tsx
 import React from 'react';
-import { type GameState, type MetaKnowledge } from '../types/gameState';
-// Import the centralized getMetaBuffUpgradeCost function
+import { useGameContext } from '../contexts/GameContext'; // ** Import useGameContext **
+import { type MetaKnowledge } from '../types/gameState';
 import { getMetaBuffUpgradeCost } from '../utils/gameCalculations';
-// PRESTIGE_MK_COST_MULTIPLIER_CAP is used by getMetaBuffUpgradeCost, no direct import needed here.
 
-interface PrestigePanelProps {
-  gameState: GameState;
-  onPrestige: () => void;
-  onSpendMetaKnowledge: (buffKey: keyof MetaKnowledge['buffs']) => void;
-  calculateMkGain: () => number;
-}
+const PrestigePanel: React.FC = () => {
+  const { 
+    gameState, 
+    handlePrestige,  // ** Use from context **
+    spendMetaKnowledge, // ** Use from context **
+    calculateMkGain    // ** Use from context **
+  } = useGameContext(); 
 
-const PrestigePanel: React.FC<PrestigePanelProps> = ({
-  gameState,
-  onPrestige,
-  onSpendMetaKnowledge,
-  calculateMkGain,
-}) => {
   const mkToGain = calculateMkGain();
   const { metaKnowledge } = gameState;
 
   const buffInfo: Record<keyof MetaKnowledge['buffs'], { name: string; description: string; formatValue: (val: number) => string }> = {
     tickMultiplier: { 
       name: "Tick Multiplier",
-      description: "Globally increases tick generation by 5% additively per point.", // The original implementation in getMetaBuffUpgradeCost implies this.
+      description: "Globally increases tick generation by 5% additively per point.",
       formatValue: (val) => `x${val.toFixed(2)}`
     },
     costMultiplier: {
       name: "Cost Reduction",
-      description: "Reduces all Ticks-based upgrade costs by 2% per point (max 50% total reduction).", // Matched to PRESTIGE_MK_COST_MULTIPLIER_CAP
+      description: "Reduces all Ticks-based upgrade costs by 2% per point (max 50% total reduction).",
       formatValue: (val) => `${((1 - val) * 100).toFixed(0)}% Cheaper`
     },
     entropyReductionMultiplier: {
@@ -57,9 +51,7 @@ const PrestigePanel: React.FC<PrestigePanelProps> = ({
         <div className="flex flex-col sm:flex-row justify-between items-center gap-2">
           <span className="text-text-primary">Available Meta-Knowledge: {metaKnowledge.points} MK</span>
           <button
-            onClick={onPrestige}
-            // The onPrestige action itself should handle confirmation for 0 MK gain.
-            // Visually, the button text indicates the gain.
+            onClick={handlePrestige} // ** Use from context **
             title={mkToGain < 1 ? "Make more progress to gain MK upon prestige." : `Gain ${mkToGain} MK upon prestige.`}
             className="w-full sm:w-auto px-4 py-2 rounded font-semibold bg-red-600 hover:bg-red-700 text-white transition-colors duration-150"
           >
@@ -73,12 +65,8 @@ const PrestigePanel: React.FC<PrestigePanelProps> = ({
       <div className="space-y-3">
         {(Object.keys(metaKnowledge.buffs) as Array<keyof MetaKnowledge['buffs']>).map((key) => {
           const currentBuffValue = metaKnowledge.buffs[key];
-          // Use the imported getMetaBuffUpgradeCost
           const cost = getMetaBuffUpgradeCost(key, currentBuffValue);
           const info = buffInfo[key];
-          
-          // Check if max level is reached by seeing if cost is Infinity
-          // (as getMetaBuffUpgradeCost returns Infinity for capped buffs)
           const isMaxedOut = cost === Infinity;
 
           return (
@@ -86,7 +74,7 @@ const PrestigePanel: React.FC<PrestigePanelProps> = ({
               <div className="flex flex-col sm:flex-row justify-between sm:items-center mb-1 gap-2">
                 <span className="text-text-primary font-medium">{info.name} ({info.formatValue(currentBuffValue)})</span>
                 <button
-                  onClick={() => onSpendMetaKnowledge(key)}
+                  onClick={() => spendMetaKnowledge(key)} // ** Use from context **
                   disabled={metaKnowledge.points < cost || isMaxedOut}
                   className="w-full sm:w-auto px-3 py-1.5 rounded text-sm font-semibold bg-green-600 hover:bg-green-700 text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-150"
                 >

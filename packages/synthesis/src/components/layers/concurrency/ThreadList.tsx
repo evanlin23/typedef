@@ -1,4 +1,6 @@
 // src/components/layers/concurrency/ThreadList.tsx
+// This component is also largely presentational, mapping over threads and passing props.
+// No direct context usage needed here.
 import React from 'react';
 import { type ThreadState, type GlobalConcurrencyLocks } from '../../../types/gameState';
 import ThreadItem from './ThreadItem';

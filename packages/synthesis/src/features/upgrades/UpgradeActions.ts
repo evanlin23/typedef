@@ -6,13 +6,14 @@ export const buyUpgrade = (
   setGameState: React.Dispatch<React.SetStateAction<GameState>>,
   addToast: (message: string, type?: Toast['type']) => void,
   upgradeKey: keyof UpgradeCosts,
-  costOnClick: number
+  costOnClick: number // Cost at the moment of click, for quick check
 ) => {
   setGameState(prev => {
     const currentStoredBaseCostForNextLevel = prev.upgradeCosts[upgradeKey]; 
     const actualPaymentCost = Math.floor(currentStoredBaseCostForNextLevel * prev.metaKnowledge.buffs.costMultiplier);
 
-    if (prev.resources.ticks < actualPaymentCost) {
+    // Check against costOnClick for rapid changes, then re-verify with actualPaymentCost
+    if (prev.resources.ticks < costOnClick || prev.resources.ticks < actualPaymentCost) {
       if (costOnClick !== actualPaymentCost && Math.abs(costOnClick - actualPaymentCost) > 1) {
            addToast("Upgrade cost has changed. Please try again.", "error");
       } else {
@@ -21,13 +22,13 @@ export const buyUpgrade = (
       return prev;
     }
     
-    const newState = JSON.parse(JSON.stringify(prev)) as GameState;
+    const newState = JSON.parse(JSON.stringify(prev)) as GameState; // Deep copy for mutation
     newState.resources.ticks -= actualPaymentCost;
     
     let upgradeNameForToast = "";
     let newLevelForToast: number | undefined;
 
-    const costMultipliers = { // These could also be defined in gameState.ts if they vary
+    const costMultipliers = { 
       cpu: 1.5, memory: 1.6, optimization: 1.8, aiCore: 1.7, maxThreads: 2.0,
     };
 
@@ -39,7 +40,6 @@ export const buyUpgrade = (
       case 'memory':
         newState.upgrades.memoryLevel += 1;
         newState.upgradeCosts.memory = Math.floor(currentStoredBaseCostForNextLevel * costMultipliers.memory);
-        // Update maxMemory in resources directly
         newState.resources.maxMemory = calculateActualMaxMemoryValue(
             newState.upgrades.memoryLevel, 
             newState.metaKnowledge.buffs.memoryMultiplier
@@ -60,7 +60,7 @@ export const buyUpgrade = (
       default: 
         addToast("Error processing upgrade: Unknown upgrade key.", "error"); 
         console.error("Unknown upgrade key in buyUpgrade:", upgradeKey);
-        return prev;
+        return prev; // Return original state if error
     }
     
     if (upgradeNameForToast && newLevelForToast !== undefined) {

@@ -1,20 +1,15 @@
 // src/components/layers/AILayer.tsx
 import React from 'react';
-import { type GameState, AI_CORE_TICK_RATE_PER_LEVEL, MAX_ENTROPY } from '../../types/gameState';
+import { useGameContext } from '../../contexts/GameContext'; // ** Import useGameContext **
+import { AI_CORE_TICK_RATE_PER_LEVEL, MAX_ENTROPY } from '../../types/gameState';
 
-interface AILayerProps {
-  gameState: GameState;
-}
+const AILayer: React.FC = () => {
+  const { gameState } = useGameContext(); // ** Use context **
 
-const AILayer: React.FC<AILayerProps> = ({ gameState }) => {
-  // Base rate from AI cores
   const baseAiTickRate = AI_CORE_TICK_RATE_PER_LEVEL * gameState.upgrades.aiCoreLevel;
-  // Rate after meta knowledge tick multiplier
   const metaBuffedAiTickRate = baseAiTickRate * gameState.metaKnowledge.buffs.tickMultiplier;
-  // Rate after entropy factor (max 50% reduction from entropy)
   const entropyFactor = 1 - (gameState.resources.entropy / (MAX_ENTROPY * 2));
   const effectiveAiTickRate = metaBuffedAiTickRate * Math.max(0, entropyFactor);
-
 
   return (
     <div className="animate-fadeIn">

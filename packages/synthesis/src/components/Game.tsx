@@ -1,20 +1,21 @@
 // src/components/Game.tsx
-import React, { useCallback, useMemo, useState } from 'react'; // Added useState for activeTab
+import { useCallback, useMemo, useState } from 'react';
 import ResourcePanel from './ResourcePanel';
 import UpgradePanel from './UpgradePanel';
+import GameTabs from './GameTabs';
+import ToastSystem from './ToastSystem';
 
 import { useGameState } from '../hooks/useGameState';
 import { useGameLoop } from '../hooks/useGameLoop';
-import { calculateMkGain as calculateMkGainUtil } from '../utils/gameCalculations';
-import ToastSystem from './ToastSystem';
-import GameTabs from './GameTabs';
+import { GameProvider } from '../contexts/GameContext'; 
 
 import * as ResourceActions from '../features/resources/ResourceActions';
 import * as UpgradeActions from '../features/upgrades/UpgradeActions';
 import * as CodeActions from '../features/code/CodeExecution';
 import * as PrestigeActions from '../features/prestige/PrestigeActions';
+import { calculateMkGain as calculateMkGainUtil } from '../utils/gameCalculations';
 
-import type { GameState } from '../types/gameState'; // For type hint on upgradeKey
+import type { GameState } from '../types/gameState';
 
 const Game = () => {
   const {
@@ -22,6 +23,7 @@ const Game = () => {
     setGameState,
     toasts,
     addToast,
+    // ** Layer-specific handlers for context **
     handleAssemblyCodeChange,
     handleAssemblyOutputSet,
     handleHighLevelCodeChange,
@@ -33,8 +35,9 @@ const Game = () => {
 
   useGameLoop({ gameState, setGameState, addToast });
 
-  const [activeTab, setActiveTab] = useState('machine'); // Active tab state managed here
+  const [activeTab, setActiveTab] = useState('machine');
 
+  // ** Define actions to be passed to context **
   const produceTickManually = useCallback(() => {
     ResourceActions.produceTickManually(setGameState);
   }, [setGameState]);
@@ -59,10 +62,16 @@ const Game = () => {
     return calculateMkGainUtil(gameState);
   }, [gameState]);
 
-  const handlePrestige = useCallback(() => {
-    // setActiveTab is passed directly to be called within handlePrestige action
-    PrestigeActions.handlePrestige(gameState, setGameState, addToast, setActiveTab);
+  // ** Modified handlePrestige to set tab locally after action **
+  const handlePrestigeAction = useCallback(() => {
+    // ** PrestigeActions.handlePrestige now returns a status **
+    const result = PrestigeActions.handlePrestige(gameState, setGameState, addToast);
+    if (result.success) {
+      setActiveTab('machine'); // ** Set active tab here **
+    }
+    return result;
   }, [gameState, setGameState, addToast, setActiveTab]);
+
 
   const spendMetaKnowledge = useCallback((buffKey: keyof GameState['metaKnowledge']['buffs']) => {
     PrestigeActions.spendMetaKnowledge(setGameState, addToast, buffKey);
@@ -73,16 +82,40 @@ const Game = () => {
     [gameState.metaKnowledge.buffs.costMultiplier]
   );
 
+  // ** Prepare context value **
+  const gameContextValue = {
+    gameState,
+    setGameState, // Provide setGameState directly for flexibility
+    addToast,
+    produceTickManually,
+    toggleAutoTick, // Now from useGameState, passed to context
+    buyUpgrade,
+    runCode,
+    runUnitTests,
+    garbageCollect,
+    calculateMkGain,
+    handlePrestige: handlePrestigeAction, // Pass the action wrapper
+    spendMetaKnowledge,
+    handleAssemblyCodeChange,
+    handleAssemblyOutputSet,
+    handleHighLevelCodeChange,
+    handleHighLevelOutputSet,
+    handleConcurrencyThreadsChange,
+    handleConcurrencyGlobalLocksChange,
+  };
+
   return (
-    <>
+    // ** Wrap with GameProvider **
+    <GameProvider value={gameContextValue}>
       <ToastSystem toasts={toasts} />
 
       <div className="flex flex-col lg:flex-row gap-4 sm:gap-6">
         <div className="lg:w-1/3 xl:w-1/4 flex flex-col space-y-4 sm:space-y-6">
-          <ResourcePanel gameState={gameState} />
-          <UpgradePanel gameState={gameState} buyUpgrade={buyUpgrade} />
+          {/* ResourcePanel and UpgradePanel will now use context */}
+          <ResourcePanel />
+          <UpgradePanel />
           <button
-            onClick={garbageCollect}
+            onClick={garbageCollect} // This garbageCollect is the one defined above, passed to context
             disabled={gameState.resources.ticks < garbageCollectionCost}
             title={gameState.resources.ticks < garbageCollectionCost ? `Not enough Ticks (Need ${garbageCollectionCost})` : `Cost: ${garbageCollectionCost} Ticks`}
             className="w-full px-4 py-3 rounded font-semibold bg-yellow-500 hover:bg-yellow-600 text-black disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-150"
@@ -92,25 +125,12 @@ const Game = () => {
         </div>
         
         <GameTabs
-            gameState={gameState}
-            activeTabState={activeTab} // Pass activeTab state
-            setActiveTabState={setActiveTab} // Pass setter for activeTab
-            handleAssemblyCodeChange={handleAssemblyCodeChange}
-            handleAssemblyOutputSet={handleAssemblyOutputSet}
-            handleHighLevelCodeChange={handleHighLevelCodeChange}
-            handleHighLevelOutputSet={handleHighLevelOutputSet}
-            handleConcurrencyThreadsChange={handleConcurrencyThreadsChange}
-            handleConcurrencyGlobalLocksChange={handleConcurrencyGlobalLocksChange}
-            toggleAutoTick={toggleAutoTick}
-            produceTickManually={produceTickManually}
-            runCode={runCode}
-            runUnitTests={runUnitTests}
-            handlePrestige={handlePrestige}
-            spendMetaKnowledge={spendMetaKnowledge}
-            calculateMkGain={calculateMkGain}
+            // ** Pass only activeTab and its setter; other state/actions come from context **
+            activeTabState={activeTab}
+            setActiveTabState={setActiveTab}
         />
       </div>
-    </>
+    </GameProvider>
   );
 };
 

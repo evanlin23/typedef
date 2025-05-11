@@ -1,6 +1,6 @@
 // src/components/GameTabs.tsx
-import React, { useState, useEffect } from 'react'; // Added useEffect
-import type { GameState, ThreadState, GlobalConcurrencyLocks, MetaKnowledge } from '../types/gameState';
+import React from 'react'; 
+
 import MachineLayer from './layers/MachineLayer';
 import AssemblyLayer from './layers/AssemblyLayer';
 import HighLevelLayer from './layers/HighLevelLayer';
@@ -8,46 +8,25 @@ import ConcurrencyLayer from './layers/ConcurrencyLayer';
 import AILayer from './layers/AILayer';
 import PrestigePanel from './PrestigePanel';
 
+// ** Props are significantly reduced as most come from context **
 interface GameTabsProps {
-  gameState: GameState;
-  activeTabState: string; // Receive activeTab from parent
-  setActiveTabState: (tab: string) => void; // Parent's setter for activeTab
-
-  handleAssemblyCodeChange: (newCode: string) => void;
-  handleAssemblyOutputSet: (newOutput: string) => void;
-  handleHighLevelCodeChange: (newCode: string) => void;
-  handleHighLevelOutputSet: (newOutput: string) => void;
-  handleConcurrencyThreadsChange: (updater: (prevThreads: ThreadState[]) => ThreadState[]) => void;
-  handleConcurrencyGlobalLocksChange: (updater: (prevLocks: GlobalConcurrencyLocks) => GlobalConcurrencyLocks) => void;
-  toggleAutoTick: () => void;
-  produceTickManually: () => void;
-  runCode: (codeFromLayer: string, layer: string, threadId?: number) => { success: boolean; ticksGenerated: number };
-  runUnitTests: (layer: string) => void;
-  handlePrestige: () => void;
-  spendMetaKnowledge: (buffKey: keyof MetaKnowledge['buffs']) => void;
-  calculateMkGain: () => number;
+  activeTabState: string;
+  setActiveTabState: (tab: string) => void;
 }
 
 const GameTabs: React.FC<GameTabsProps> = ({
-  gameState,
-  activeTabState, // Use from props
-  setActiveTabState, // Use from props
-  handleAssemblyCodeChange, handleAssemblyOutputSet,
-  handleHighLevelCodeChange, handleHighLevelOutputSet,
-  handleConcurrencyThreadsChange, handleConcurrencyGlobalLocksChange,
-  toggleAutoTick,
-  produceTickManually,
-  runCode, runUnitTests,
-  handlePrestige, spendMetaKnowledge, calculateMkGain,
+  activeTabState,
+  setActiveTabState,
 }) => {
-
+  // ** Components no longer need gameState or actions passed as props here **
+  // ** They will consume them from GameContext directly **
   const tabs = [
-    { key: 'machine', label: 'Machine Core', component: <MachineLayer gameState={gameState} produceTickManually={produceTickManually} toggleAutoTick={toggleAutoTick} /> },
-    { key: 'assembly', label: 'Assembly', component: <AssemblyLayer gameState={gameState} runCode={(code) => runCode(code, 'assembly')} runUnitTests={() => runUnitTests('assembly')} onCodeChange={handleAssemblyCodeChange} onOutputSet={handleAssemblyOutputSet}/> },
-    { key: 'highLevel', label: 'High-Level', component: <HighLevelLayer gameState={gameState} runCode={(code) => runCode(code, 'highLevel')} runUnitTests={() => runUnitTests('highLevel')} onCodeChange={handleHighLevelCodeChange} onOutputSet={handleHighLevelOutputSet}/> },
-    { key: 'concurrency', label: 'Concurrency', component: <ConcurrencyLayer gameState={gameState} runCode={runCode} onThreadsChange={handleConcurrencyThreadsChange} onGlobalLocksChange={handleConcurrencyGlobalLocksChange} /> },
-    { key: 'ai', label: 'AI Subsystem', component: <AILayer gameState={gameState} /> },
-    { key: 'prestige', label: 'Prestige', component: <PrestigePanel gameState={gameState} onPrestige={handlePrestige} onSpendMetaKnowledge={spendMetaKnowledge} calculateMkGain={calculateMkGain} /> },
+    { key: 'machine', label: 'Machine Core', component: <MachineLayer /> },
+    { key: 'assembly', label: 'Assembly', component: <AssemblyLayer /> },
+    { key: 'highLevel', label: 'High-Level', component: <HighLevelLayer /> },
+    { key: 'concurrency', label: 'Concurrency', component: <ConcurrencyLayer /> },
+    { key: 'ai', label: 'AI Subsystem', component: <AILayer /> },
+    { key: 'prestige', label: 'Prestige', component: <PrestigePanel /> },
   ];
   
   return (

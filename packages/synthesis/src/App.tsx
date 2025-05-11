@@ -1,3 +1,4 @@
+// src/App.tsx
 import Game from './components/Game';
 
 function App() {
@@ -20,7 +21,7 @@ function App() {
             <a 
               href="https://github.com/evanlin23/typedef" 
               target="_blank" 
-              rel="noopener noreferrer" // Important for security
+              rel="noopener noreferrer"
               className="text-purple-400 hover:underline mx-2"
             >
               GitHub

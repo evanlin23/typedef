@@ -3,22 +3,23 @@ import {
   type GameState, type LayerBuff, type ActiveLayerBuffs,
   MAX_ENTROPY, CODE_COST_ASSEMBLY_PER_CHAR, CODE_COST_HIGHLEVEL_PER_CHAR 
 } from '../../types/gameState';
-// Removed: import constants from '../../constants/gameConfig';
-import { type Toast } from '../../components/ToastSystem';
-
+import { type Toast } from '../../components/ToastSystem'; // Assuming Toast is defined here
 
 export const runCode = (
   gameState: GameState,
   setGameState: React.Dispatch<React.SetStateAction<GameState>>,
   codeFromLayer: string,
   layer: string,
-  _threadId?: number
+  _threadId?: number // threadId is used by concurrency layer to know which thread ran.
 ): { success: boolean; ticksGenerated: number } => {
   let codeToRun: string;
+  // ** Logic to determine actual code to run based on layer **
+  // ** Concurrency passes codeFromLayer directly, others use gameState **
   switch (layer) {
       case 'assembly': codeToRun = gameState.layerSpecificStates.assemblyCode; break;
       case 'highLevel': codeToRun = gameState.layerSpecificStates.highLevelCode; break;
-      default: codeToRun = codeFromLayer;
+      // For 'concurrency', codeFromLayer is the specific thread's code.
+      default: codeToRun = codeFromLayer; 
   }
 
   let currentCodeCost = 0;
@@ -47,11 +48,12 @@ export const runCode = (
   
   setGameState(prev => {
     let newActiveProcesses = prev.activeProcesses;
+    // Only increment active processes for non-concurrent, successful runs.
+    // Concurrency layer manages its own running state visually.
     if (success && layer !== 'concurrency') {
         newActiveProcesses += 1;
     }
     const cappedActiveProcesses = Math.min(newActiveProcesses, 50 + prev.upgrades.cpuLevel * 5); 
-    // Use maxMemory directly from state.resources
     const newUsedMemory = Math.min(prev.resources.maxMemory, prev.resources.usedMemory + currentCodeCost);
 
     return {
@@ -67,6 +69,7 @@ export const runCode = (
     };
   });
 
+  // Timeout for non-concurrent successful processes to clear up memory and process count
   if (success && layer !== 'concurrency') { 
     setTimeout(() => {
       setGameState(prev => ({
@@ -74,6 +77,7 @@ export const runCode = (
         activeProcesses: Math.max(0, prev.activeProcesses - 1),
         resources: { 
           ...prev.resources, 
+          // Free up memory used by this specific process
           usedMemory: Math.max(0, prev.resources.usedMemory - currentCodeCost)
         }
       }));
@@ -88,7 +92,7 @@ export const runUnitTests = (
   addToast: (message: string, type?: Toast['type']) => void,
   layer: string
 ) => {
-  const testCosts = { assembly: 5, highLevel: 15, concurrency: 10 }; // Could be constants
+  const testCosts = { assembly: 5, highLevel: 15, concurrency: 10 }; 
   const cost = testCosts[layer as keyof typeof testCosts] || 10;
   
   if (gameState.resources.ticks < cost) {
@@ -97,6 +101,7 @@ export const runUnitTests = (
   }
 
   setGameState(prev => {
+    // Re-check cost inside setGameState to avoid race conditions if ticks changed
     if (prev.resources.ticks < cost) return prev; 
     
     const testSuccess = Math.random() < 0.7;

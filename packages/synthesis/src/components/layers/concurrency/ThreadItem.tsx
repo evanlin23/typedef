@@ -1,4 +1,6 @@
 // src/components/layers/concurrency/ThreadItem.tsx
+// This component receives specific handlers as props from ThreadList/ConcurrencyLayer.
+// It doesn't need to access the full GameContext directly if its parent orchestrates.
 import React from 'react';
 import { 
     type ThreadState, 
@@ -10,9 +12,9 @@ interface ThreadItemProps {
   thread: ThreadState;
   availableLocks: string[];
   globalLocks: GlobalConcurrencyLocks;
-  totalCodeSize: number; // To check against max memory for run button
-  actualMaxMemory: number; // To check against max memory for run button
-  deadlockDetected: boolean; // To disable run button
+  totalCodeSize: number;
+  actualMaxMemory: number;
+  deadlockDetected: boolean;
 
   onUpdateCode: (threadId: number, newCode: string) => void;
   onToggleLock: (threadId: number, lockName: string) => void;
@@ -154,5 +156,6 @@ const ThreadItem: React.FC<ThreadItemProps> = React.memo(({
     </div>
   );
 });
+ThreadItem.displayName = 'ThreadItem'; // Add display name for React.memo component
 
 export default ThreadItem;
