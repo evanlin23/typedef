@@ -1,4 +1,3 @@
-// src/components/ResourcePanel.tsx
 import type { Resources } from '../types/gameState';
 
 interface ResourcePanelProps {
@@ -9,8 +8,8 @@ interface ResourcePanelProps {
 
 const ResourcePanel = ({ resources, tickRate, activeProcesses }: ResourcePanelProps) => {
   return (
-    <div className="bg-gray-900 p-4 rounded border border-gray-700 mb-4">
-      <h2 className="text-lg font-semibold mb-2 text-blue-600">Resources</h2>
+    <div className="panel">
+      <h2 className="text-lg font-semibold mb-2 text-blue-400">Resources</h2>
       
       <div className="space-y-2">
         <div className="flex justify-between">
@@ -29,8 +28,8 @@ const ResourcePanel = ({ resources, tickRate, activeProcesses }: ResourcePanelPr
         </div>
         
         <div className="flex justify-between">
-          <span>Entropy:</span>
-          <span className={resources.entropy > 50 ? "text-red-600" : ""}>
+          <span className="flex items-center">Entropy:</span>
+          <span className={resources.entropy > 50 ? "text-red-400" : ""}>
             {resources.entropy.toFixed(1)}%
           </span>
         </div>

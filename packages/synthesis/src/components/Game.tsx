@@ -1,5 +1,4 @@
-// src/components/Game.tsx
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import ResourcePanel from './ResourcePanel';
 import MachineLayer from './layers/MachineLayer';
 import AssemblyLayer from './layers/AssemblyLayer';
@@ -57,7 +56,7 @@ const Game = () => {
   }, []);
 
   // Manually produce a tick
-  const produceTick = () => {
+  const produceTick = useCallback(() => {
     setGameState(prev => ({
       ...prev,
       resources: {
@@ -65,9 +64,9 @@ const Game = () => {
         ticks: prev.resources.ticks + 1
       }
     }));
-  };
+  }, []);
 
-  const buyUpgrade = (upgrade: string, cost: number) => {
+  const buyUpgrade = useCallback((upgrade: string, cost: number) => {
     if (gameState.resources.ticks < cost) return;
     
     setGameState(prev => {
@@ -85,7 +84,7 @@ const Game = () => {
           break;
         case 'memory':
           newState.resources.maxMemory += 10;
-          newState.upgrades.memory += 1; // Fix: Increment memory level counter
+          newState.upgrades.memory += 1;
           newState.upgradeCosts.memory = Math.floor(newState.upgradeCosts.memory * 1.8);
           break;
         case 'optimization':
@@ -96,9 +95,9 @@ const Game = () => {
       
       return newState;
     });
-  };
+  }, [gameState.resources.ticks]);
 
-  const runCode = (code: string, layer: string) => {
+  const runCode = useCallback((code: string, layer: string) => {
     // Simple simulation of running code
     const complexity = code.length / 10;
     const chance = Math.random();
@@ -130,23 +129,23 @@ const Game = () => {
         Math.floor(complexity * (layer === 'assembly' ? 2 : 5)) : 
         Math.floor(complexity * 0.2)
     };
-  };
+  }, []);
 
-  const garbageCollect = () => {
+  const garbageCollect = useCallback(() => {
     if (gameState.resources.ticks < 10) return;
     
     setGameState(prev => ({
       ...prev,
       resources: {
         ...prev.resources,
-        ticks: Math.max(0, prev.resources.ticks - 10), // Prevent negative ticks
+        ticks: Math.max(0, prev.resources.ticks - 10),
         entropy: Math.max(0, prev.resources.entropy - 20)
       }
     }));
-  };
+  }, [gameState.resources.ticks]);
 
   return (
-    <div className="bg-gray-900 min-h-screen p-4 text-gray-200">      
+    <div className="bg-gray-900 min-h-screen text-gray-200">      
       <div className="flex flex-col lg:flex-row gap-4">
         <div className="lg:w-1/4">
           <ResourcePanel 
@@ -165,38 +164,25 @@ const Game = () => {
           <button
             onClick={garbageCollect}
             disabled={gameState.resources.ticks < 10}
-            className="w-full mt-4 bg-gray-900 p-2 rounded border border-gray-300 hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full mt-4 bg-gray-800 p-2 rounded border border-gray-700 hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Garbage Collection (10 ticks)
           </button>
         </div>
         
-        <div className="lg:w-3/4 bg-gray-900 rounded border border-gray-300 p-4">
-          <div className="flex border-b border-gray-300 mb-4">
-            <button 
-              onClick={() => setActiveTab('machine')}
-              className={`px-4 py-2 ${activeTab === 'machine' ? 'text-green-400 border-b-2 border-green-400' : ''}`}
-            >
-              Machine
-            </button>
-            <button 
-              onClick={() => setActiveTab('assembly')}
-              className={`px-4 py-2 ${activeTab === 'assembly' ? 'text-green-400 border-b-2 border-green-400' : ''}`}
-            >
-              Assembly
-            </button>
-            <button 
-              onClick={() => setActiveTab('highlevel')}
-              className={`px-4 py-2 ${activeTab === 'highlevel' ? 'text-green-400 border-b-2 border-green-400' : ''}`}
-            >
-              High-Level Language
-            </button>
-            <button 
-              onClick={() => setActiveTab('concurrency')}
-              className={`px-4 py-2 ${activeTab === 'concurrency' ? 'text-green-400 border-b-2 border-green-400' : ''}`}
-            >
-              Concurrency
-            </button>
+        <div className="lg:w-3/4 bg-gray-800 rounded border border-gray-700 p-4">
+          <div className="flex border-b border-gray-700 mb-4">
+            {['machine', 'assembly', 'highlevel', 'concurrency'].map((tab) => (
+              <button 
+                key={tab}
+                onClick={() => setActiveTab(tab)}
+                className={`px-4 py-2 ${activeTab === tab ? 'text-green-400 border-b-2 border-green-400' : 'text-gray-400 hover:text-gray-200'}`}
+              >
+                {tab === 'machine' ? 'Machine' : 
+                 tab === 'assembly' ? 'Assembly' :
+                 tab === 'highlevel' ? 'High-Level Language' : 'Concurrency'}
+              </button>
+            ))}
           </div>
           
           {activeTab === 'machine' && (

@@ -1,5 +1,4 @@
-// src/components/layers/MachineLayer.tsx
-import { useEffect } from 'react';
+import { useEffect, useCallback } from 'react';
 
 interface MachineLayerProps {
   produceTick: () => void;
@@ -8,16 +7,17 @@ interface MachineLayerProps {
   setAutoTickEnabled: (enabled: boolean) => void;
 }
 
-const MachineLayer = ({ produceTick, tickRate, autoTickEnabled, setAutoTickEnabled }: MachineLayerProps) => {
-  // For manual clicking
-  const handleClick = () => {
-    produceTick();
-  };
+const MachineLayer = ({ 
+  produceTick, 
+  tickRate, 
+  autoTickEnabled, 
+  setAutoTickEnabled 
+}: MachineLayerProps) => {
   
   // Toggle automatic ticking
-  const toggleAutoTick = () => {
+  const toggleAutoTick = useCallback(() => {
     setAutoTickEnabled(!autoTickEnabled);
-  };
+  }, [autoTickEnabled, setAutoTickEnabled]);
   
   // Auto tick effect
   useEffect(() => {
@@ -38,28 +38,28 @@ const MachineLayer = ({ produceTick, tickRate, autoTickEnabled, setAutoTickEnabl
     <div>
       <h3 className="text-xl mb-4 text-green-400">Machine Layer</h3>
       
-      <div className="bg-gray-900 p-4 rounded border border-gray-700 mb-4">
-        <div className="mb-4">
+      <div className="panel">
+        <div className="mb-6">
           <p>The Machine Layer represents the fundamental hardware of your virtual machine.</p>
           <p className="mt-2">Click the button to manually execute a single tick, or enable auto-execution.</p>
         </div>
         
-        <div className="flex flex-col items-center space-y-4">
+        <div className="flex flex-col items-center space-y-6">
           <button
-            onClick={handleClick}
-            className="bg-green-400 text-white font-bold py-8 px-16 rounded-full hover:bg-green-700 transition-colors duration-300"
+            onClick={produceTick}
+            className="bg-green-500 text-white font-bold py-8 px-16 rounded-full hover:bg-green-600 active:bg-green-700 transition-colors duration-300 shadow-lg"
           >
             EXECUTE TICK
           </button>
           
-          <div className="flex items-center space-x-2">
+          <div className="flex items-center space-x-3">
             <span>Auto-Execute:</span>
             <button
               onClick={toggleAutoTick}
-              className={`px-4 py-2 rounded ${
+              className={`px-4 py-2 rounded transition-colors duration-200 ${
                 autoTickEnabled 
-                  ? 'bg-green-400 text-white' 
-                  : 'bg-gray-900 text-gray-200'
+                  ? 'bg-green-500 text-white' 
+                  : 'bg-gray-700 text-gray-300 border border-gray-600'
               }`}
             >
               {autoTickEnabled ? 'ON' : 'OFF'}
@@ -68,7 +68,7 @@ const MachineLayer = ({ produceTick, tickRate, autoTickEnabled, setAutoTickEnabl
         </div>
       </div>
       
-      <div className="bg-gray-900 p-4 rounded border border-gray-700">
+      <div className="panel mt-4">
         <h4 className="font-semibold mb-2">Machine Status</h4>
         <div className="space-y-2 pl-4 border-l-2 border-gray-700">
           <div className="flex justify-between">
