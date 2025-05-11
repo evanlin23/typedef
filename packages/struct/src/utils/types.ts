@@ -10,11 +10,14 @@ export type PDF = {
   classId: number;
 }
 
-export type Class = {
+export interface Class {
   id?: number;
   name: string;
   dateCreated: number;
   pdfCount: number;
+  isPinned?: boolean;
   doneCount?: number;
   progress?: number;
+  completedItems?: number;
+  totalItems?: number;
 }

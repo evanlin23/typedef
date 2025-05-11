@@ -53,8 +53,6 @@ export const initDB = (): Promise<IDBDatabase> => {
 };
 
 // --- Class related functions ---
-
-// Add Class (with doneCount initialized to 0)
 export const addClass = async (classData: Class): Promise<number> => {
   const db = await initDB();
   return new Promise((resolve, reject) => {
@@ -64,7 +62,14 @@ export const addClass = async (classData: Class): Promise<number> => {
       console.error('Transaction error while adding class:', event);
       reject('Transaction error while adding class');
     };
-    const newClass = { ...classData, pdfCount: 0, doneCount: 0 };
+    // Ensure isPinned is initialized
+    const newClass = { 
+      ...classData, 
+      pdfCount: 0, 
+      doneCount: 0,
+      isPinned: classData.isPinned || false
+    };
+    
     const request = store.add(newClass);
     request.onsuccess = (event) => {
       const id = (event.target as IDBRequest).result as number;
@@ -419,4 +424,47 @@ export const deletePDF = async (id: number): Promise<void> => {
       };
     }
   });
+};
+
+export const toggleClassPin = async (id: number): Promise<void> => {
+  const db = await initDB();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction([CLASS_STORE], 'readwrite');
+    const store = transaction.objectStore(CLASS_STORE);
+    transaction.onerror = (event) => {
+      console.error('Transaction error while toggling pin status:', event);
+      reject('Transaction error while toggling pin status');
+    };
+    
+    const getRequest = store.get(id);
+    getRequest.onsuccess = (event) => {
+      const classData = (event.target as IDBRequest).result as Class;
+      if (classData) {
+        const updatedClass = { 
+          ...classData, 
+          isPinned: !classData.isPinned 
+        };
+        
+        const updateRequest = store.put(updatedClass);
+        updateRequest.onsuccess = () => resolve();
+        updateRequest.onerror = (event) => {
+          console.error('Error updating pin status:', event);
+          reject('Error updating pin status');
+        };
+      } else {
+        reject('Class not found');
+      }
+    };
+    
+    getRequest.onerror = (event) => {
+      console.error('Error getting class for pin toggle:', event);
+      reject('Error getting class for pin toggle');
+    };
+  });
+};
+
+// Get all pinned classes
+export const getPinnedClasses = async (): Promise<Class[]> => {
+  const classes = await getClasses();
+  return classes.filter(cls => cls.isPinned);
 };

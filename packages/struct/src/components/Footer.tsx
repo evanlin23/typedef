@@ -1,8 +1,6 @@
-// test rebuild
-
 export default function Footer() {
   return (
-    <footer className="mt-auto py-4 bg-gray-800">
+    <footer className="bg-gray-800 py-4 mt-8">
       <div className="container mx-auto px-4 text-center">
         <div className="flex justify-center">
           <a 

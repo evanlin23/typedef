@@ -1,6 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import type { Class } from '../utils/types';
-import { getClasses, addClass, deleteClass } from '../utils/db';
+import { getClasses, deleteClass } from '../utils/db';
+import ClassCreator from './ClassCreator';
+import ClassList from './ClassList';
+import ConfirmationModal from './ConfirmationModal';
+import Footer from './Footer';
 
 interface ClassManagementProps {
   onSelectClass: (classId: number) => void;
@@ -9,9 +13,13 @@ interface ClassManagementProps {
 
 const ClassManagement: React.FC<ClassManagementProps> = ({ onSelectClass, onCreateClass }) => {
   const [classes, setClasses] = useState<Class[]>([]);
-  const [newClassName, setNewClassName] = useState('');
   const [isLoading, setIsLoading] = useState(true);
-
+  const [confirmDelete, setConfirmDelete] = useState<{ isOpen: boolean; classId: number | null }>({
+    isOpen: false,
+    classId: null,
+  });
+  const [showOnlyPinned, setShowOnlyPinned] = useState(false);
+  
   useEffect(() => {
     loadClasses();
   }, []);
@@ -21,14 +29,10 @@ const ClassManagement: React.FC<ClassManagementProps> = ({ onSelectClass, onCrea
     try {
       const classData = await getClasses();
       
-      // Use the actual doneCount from the class data
-      // Calculate progress based on doneCount and pdfCount
+      // Process class data with progress calculation
       const classesWithProgress = classData.map(cls => {
-        // If doneCount is not set, default to 0
         const doneCount = cls.doneCount || 0;
         const totalItems = cls.pdfCount;
-        
-        // Calculate progress percentage
         const progress = totalItems > 0 ? Math.round((doneCount / totalItems) * 100) : 0;
         
         return {
@@ -39,7 +43,14 @@ const ClassManagement: React.FC<ClassManagementProps> = ({ onSelectClass, onCrea
         };
       });
       
-      setClasses(classesWithProgress);
+      // Sort classes: pinned first, then by name
+      const sortedClasses = classesWithProgress.sort((a, b) => {
+        if (a.isPinned && !b.isPinned) return -1;
+        if (!a.isPinned && b.isPinned) return 1;
+        return a.name.localeCompare(b.name);
+      });
+      
+      setClasses(sortedClasses);
     } catch (error) {
       console.error('Failed to load classes:', error);
     } finally {
@@ -47,48 +58,39 @@ const ClassManagement: React.FC<ClassManagementProps> = ({ onSelectClass, onCrea
     }
   };
 
-  const handleCreateClass = async () => {
-    if (!newClassName.trim()) return;
-    
-    try {
-      const classId = await addClass({
-        name: newClassName.trim(),
-        dateCreated: Date.now(),
-        pdfCount: 0
-      });
-      
-      setNewClassName('');
-      await loadClasses();
-      onCreateClass(classId);
-    } catch (error) {
-      console.error('Failed to create class:', error);
-    }
+  const handleConfirmDelete = (classId: number) => {
+    setConfirmDelete({ isOpen: true, classId });
   };
 
-  const handleDeleteClass = async (id: number, e: React.MouseEvent) => {
-    e.stopPropagation();
+  const handleDeleteClass = async () => {
+    if (confirmDelete.classId === null) return;
     
     try {
-      await deleteClass(id);
+      await deleteClass(confirmDelete.classId);
+      setConfirmDelete({ isOpen: false, classId: null });
       await loadClasses();
     } catch (error) {
       console.error('Failed to delete class:', error);
+      setConfirmDelete({ isOpen: false, classId: null });
     }
   };
 
-  const formatDate = (timestamp: number) => {
-    return new Date(timestamp).toLocaleDateString();
+  const handleCancelDelete = () => {
+    setConfirmDelete({ isOpen: false, classId: null });
   };
 
-  // Function to determine the color of the progress bar based on completion percentage
-  const getProgressColor = (progress: number) => {
-    if (progress < 30) return 'bg-red-500';
-    if (progress < 70) return 'bg-yellow-500';
-    return 'bg-green-500';
+  const handleTogglePinnedFilter = () => {
+    setShowOnlyPinned(prev => !prev);
   };
 
+  const filteredClasses = showOnlyPinned 
+    ? classes.filter(cls => cls.isPinned) 
+    : classes;
+    
   return (
-    <div className="bg-gray-900 min-h-screen">
+    <div className="bg-gray-900 text-gray-200 min-h-screen flex flex-col">
+      {/* Add overflow-x-hidden to prevent horizontal scrollbar */}
+      <div className="fixed inset-0 bg-gray-900 -z-10" aria-hidden="true"></div>
       <div className="bg-gray-800 py-8 mb-8">
         <div className="container mx-auto px-4">
           <h1 className="text-3xl font-bold text-center text-green-400">
@@ -97,113 +99,31 @@ const ClassManagement: React.FC<ClassManagementProps> = ({ onSelectClass, onCrea
         </div>
       </div>
 
-      <div className="container mx-auto px-4">
-        <div className="mb-8">
-          <h2 className="text-xl font-bold mb-4 text-gray-200">Create New Class</h2>
-          <div className="flex">
-            <input
-              type="text"
-              value={newClassName}
-              onChange={(e) => setNewClassName(e.target.value)}
-              placeholder="Enter class name"
-              className="flex-1 p-2 rounded-l bg-gray-800 border border-gray-700 text-gray-200"
-              onKeyPress={(e) => e.key === 'Enter' && handleCreateClass()}
-            />
-            <button
-              onClick={handleCreateClass}
-              className="bg-green-500 text-white px-4 py-2 rounded-r hover:bg-green-600 transition-colors"
-            >
-              Create
-            </button>
-          </div>
-        </div>
-
-        <h2 className="text-xl font-bold mb-4 text-gray-200">Your Classes</h2>
+      <div className="container mx-auto px-4 pb-16 flex-grow">
+        <ClassCreator onClassCreated={loadClasses} onCreateClass={onCreateClass} />
         
-        {isLoading ? (
-          <div className="flex justify-center items-center h-64">
-            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-green-400"></div>
-          </div>
-        ) : classes.length === 0 ? (
-          <div className="text-center py-12 bg-gray-800 rounded-lg">
-            <svg 
-              className="mx-auto h-12 w-12 text-gray-400" 
-              viewBox="0 0 24 24" 
-              fill="none" 
-              stroke="currentColor" 
-              strokeWidth="2" 
-              strokeLinecap="round" 
-              strokeLinejoin="round"
-            >
-              <path d="M12 20v-6M6 20V10M18 20V4"></path>
-            </svg>
-            <h3 className="mt-2 text-lg font-medium text-gray-200">No classes yet</h3>
-            <p className="mt-1 text-gray-400">
-              Create your first class to get started
-            </p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {classes.map((cls) => (
-              <div
-                key={cls.id}
-                onClick={() => onSelectClass(cls.id!)}
-                className="bg-gray-800 p-6 rounded-lg shadow-lg cursor-pointer hover:bg-gray-700 transition-colors"
-              >
-                <div className="flex justify-between items-start">
-                  <h3 className="text-xl font-bold text-gray-200 truncate">{cls.name}</h3>
-                  <button
-                    onClick={(e) => handleDeleteClass(cls.id!, e)}
-                    className="text-gray-400 hover:text-red-500 transition-colors"
-                  >
-                    <svg
-                      className="h-5 w-5"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    >
-                      <polyline points="3 6 5 6 21 6"></polyline>
-                      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                    </svg>
-                  </button>
-                </div>
-                <div className="mt-2 text-gray-400 text-sm">
-                  Created: {formatDate(cls.dateCreated)}
-                </div>
-                <div className="mt-1 text-gray-400 text-sm">
-                  {cls.pdfCount} {cls.pdfCount === 1 ? 'PDF' : 'PDFs'}
-                </div>
-                
-                {/* Progress section */}
-                <div className="mt-4">
-                  <div className="flex justify-between text-sm text-gray-400 mb-1">
-                    <span>Progress</span>
-                    <span>{cls.progress}%</span>
-                  </div>
-                  <div className="w-full bg-gray-700 rounded-full h-2">
-                    <div 
-                      className={`${getProgressColor(cls.progress || 0)} h-2 rounded-full`} 
-                      style={{ width: `${cls.progress}%` }}
-                    ></div>
-                  </div>
-                  <div className="text-xs text-gray-400 mt-1">
-                    {cls.doneCount || 0} of {cls.pdfCount} PDFs completed
-                  </div>
-                </div>
-                
-                <div className="mt-4">
-                  <button className="w-full bg-blue-500 text-center py-2 rounded text-gray-200 hover:bg-blue-600 transition-colors">
-                    Open Class
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
+        <ClassList 
+          classes={filteredClasses}
+          isLoading={isLoading}
+          showOnlyPinned={showOnlyPinned}
+          onTogglePinnedFilter={handleTogglePinnedFilter}
+          onSelectClass={onSelectClass}
+          onRequestDelete={handleConfirmDelete}
+          onDataChanged={loadClasses}
+        />
       </div>
+
+      <Footer />
+
+      <ConfirmationModal
+        isOpen={confirmDelete.isOpen}
+        title="Delete Class"
+        message="Are you sure you want to delete this class? All PDFs associated with this class will also be deleted. This action cannot be undone."
+        confirmText="Delete"
+        cancelText="Cancel"
+        onConfirm={handleDeleteClass}
+        onCancel={handleCancelDelete}
+      />
     </div>
   );
 };

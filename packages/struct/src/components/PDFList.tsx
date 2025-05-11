@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import type { PDF } from '../utils/types';
 import PDFViewer from './PDFViewer';
+import ConfirmationModal from './ConfirmationModal';
 
 interface PDFListProps {
   pdfs: PDF[];
@@ -10,6 +11,10 @@ interface PDFListProps {
 
 const PDFList: React.FC<PDFListProps> = ({ pdfs, onStatusChange, onDelete }) => {
   const [selectedPDF, setSelectedPDF] = useState<PDF | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<{ isOpen: boolean; pdfId: number | null }>({
+    isOpen: false,
+    pdfId: null,
+  });
   
   const formatDate = (timestamp: number) => {
     return new Date(timestamp).toLocaleDateString();
@@ -40,6 +45,27 @@ const PDFList: React.FC<PDFListProps> = ({ pdfs, onStatusChange, onDelete }) => 
     if (selectedPDF && selectedPDF.id === id) {
       setSelectedPDF({...selectedPDF, status: newStatus});
     }
+  };
+
+  const handleConfirmDelete = (pdfId: number, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setConfirmDelete({ isOpen: true, pdfId });
+  };
+
+  const handleDeletePDF = () => {
+    if (confirmDelete.pdfId === null) return;
+    
+    onDelete(confirmDelete.pdfId);
+    setConfirmDelete({ isOpen: false, pdfId: null });
+    
+    // If the deleted PDF is the one being viewed, close the viewer
+    if (selectedPDF && selectedPDF.id === confirmDelete.pdfId) {
+      setSelectedPDF(null);
+    }
+  };
+
+  const handleCancelDelete = () => {
+    setConfirmDelete({ isOpen: false, pdfId: null });
   };
 
   if (pdfs.length === 0) {
@@ -132,7 +158,7 @@ const PDFList: React.FC<PDFListProps> = ({ pdfs, onStatusChange, onDelete }) => 
                     </button>
                     
                     <button
-                      onClick={() => onDelete(pdf.id!)}
+                      onClick={(e) => handleConfirmDelete(pdf.id!, e)}
                       className="px-3 py-1 text-sm bg-red-600 text-gray-200 rounded hover:opacity-90 transition-opacity"
                     >
                       Delete
@@ -144,6 +170,16 @@ const PDFList: React.FC<PDFListProps> = ({ pdfs, onStatusChange, onDelete }) => 
           ))}
         </div>
       )}
+      
+      <ConfirmationModal
+        isOpen={confirmDelete.isOpen}
+        title="Delete PDF"
+        message="Are you sure you want to delete this PDF? This action cannot be undone."
+        confirmText="Delete"
+        cancelText="Cancel"
+        onConfirm={handleDeletePDF}
+        onCancel={handleCancelDelete}
+      />
     </div>
   );
 };
