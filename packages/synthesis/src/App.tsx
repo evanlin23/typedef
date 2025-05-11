@@ -15,8 +15,17 @@ function App() {
         
         <Game />
         
-        <footer className="mt-8 pt-4 border-t border-border-primary text-center text-text-secondary text-xs">
-          <p>Synthesis v0.2.0 - © {new Date().getFullYear()}</p>
+        <footer className="p-4 text-center text-gray-400 text-sm">
+          <div className="flex justify-center">
+            <a 
+              href="https://github.com/evanlin23/typedef" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="text-purple-400 hover:underline mx-2"
+            >
+              GitHub
+            </a>
+          </div>
         </footer>
       </div>
     </div>
