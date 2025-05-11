@@ -1,0 +1,24 @@
+# .github/workflows/synthesis-deploy.yml
+# This workflow deploys the synthesis project to a separate repository
+name: Deploy Synthesis
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'packages/synthesis/**'
+      - '.github/workflows/synthesis-deploy.yml'
+  workflow_dispatch:
+
+jobs:
+  call-deploy:
+    permissions:
+      contents: write
+    uses: ./.github/workflows/reusable-deploy.yml
+    with:
+      package-name: synthesis
+      dist-folder: packages/synthesis/dist
+      repository-name: evanlin23/synthesis
+      external: true
+    secrets:
+      REPO_ACCESS_TOKEN: ${{ secrets.REPO_ACCESS_TOKEN }}

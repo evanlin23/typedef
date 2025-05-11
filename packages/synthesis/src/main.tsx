@@ -1,4 +1,3 @@
-import React from 'react' // React 19 doesn't require StrictMode explicitly for its benefits.
 import { createRoot } from 'react-dom/client'
 import './index.css' // Ensure Tailwind base, components, utilities are imported here
 import App from './App.tsx'

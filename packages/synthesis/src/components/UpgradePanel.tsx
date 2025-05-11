@@ -1,4 +1,4 @@
-import type { Upgrades, UpgradeCosts, GameState } from '../types/gameState'; // Added GameState
+import type { UpgradeCosts, GameState } from '../types/gameState'; // Added GameState
 import { calculateActualMaxMemory, calculateMaxThreads } from '../types/gameState'; // Import helpers
 
 interface UpgradePanelProps {

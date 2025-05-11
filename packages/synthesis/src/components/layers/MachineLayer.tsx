@@ -1,4 +1,3 @@
-import { useCallback } from 'react';
 import { type GameState, calculateEffectiveTickRate } from '../../types/gameState';
 
 interface MachineLayerProps {

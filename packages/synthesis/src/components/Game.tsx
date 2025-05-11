@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import ResourcePanel from './ResourcePanel';
 import MachineLayer from './layers/MachineLayer';
 import AssemblyLayer from './layers/AssemblyLayer';
@@ -10,7 +10,7 @@ import PrestigePanel, { getMetaBuffUpgradeCost } from './PrestigePanel'; // Impo
 import { 
   type GameState, initialGameState, GAME_LOOP_INTERVAL_MS, MAX_ENTROPY,
   ENTROPY_PER_PROCESS_PER_SEC, OPTIMIZATION_ENTROPY_REDUCTION_PER_LEVEL,
-  calculateActualMaxMemory, calculateEffectiveTickRate, calculateMaxThreads,
+  calculateActualMaxMemory, calculateEffectiveTickRate,
   type UpgradeCosts, type MetaKnowledge, type LayerBuff, type ActiveLayerBuffs,
   CODE_COST_ASSEMBLY_PER_CHAR, CODE_COST_HIGHLEVEL_PER_CHAR,
   BASE_TICK_RATE_PER_CPU_LEVEL, AI_CORE_TICK_RATE_PER_LEVEL,
@@ -294,7 +294,7 @@ const Game = () => {
     });
   }, [addToast]);
 
-  const runCode = useCallback((codeFromLayer: string, layer: string, threadId?: number): { success: boolean; ticksGenerated: number } => {
+  const runCode = useCallback((codeFromLayer: string, layer: string, _threadId?: number): { success: boolean; ticksGenerated: number } => {
     let codeToRun: string;
     switch (layer) {
         case 'assembly': codeToRun = gameState.layerSpecificStates.assemblyCode; break;

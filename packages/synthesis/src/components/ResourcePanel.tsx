@@ -1,4 +1,4 @@
-import type { Resources, GameState } from '../types/gameState'; // Added GameState
+import type { GameState } from '../types/gameState'; // Added GameState
 import { calculateEffectiveTickRate, calculateActualMaxMemory } from '../types/gameState'; // Import helpers
 
 interface ResourcePanelProps {
