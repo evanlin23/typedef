@@ -39,7 +39,7 @@ jobs:
         uses: JamesIves/github-pages-deploy-action@v4
         with:
           folder: packages/echo/dist
-          token: ${{ secrets.REPO_ACCESS_TOKEN }}
+          token: ${{ secrets.REPO_ACCESS_TOKEN }}  # Renamed for clarity
           repository-name: evanlin23/echo
           branch: gh-pages
           clean: true
