@@ -7,6 +7,8 @@ import { LibraryPanel } from './components/LibraryPanel';
 import { MusicPlayer } from './components/MusicPlayer';
 import { Footer } from './components/Footer';
 
+// this is a test
+
 export default function App() {
   // State for song list, current song, playback status, etc.
   const [songs, setSongs] = useState<Song[]>([]);

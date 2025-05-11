@@ -1,0 +1,45 @@
+# .github/workflows/echo-deploy.yml
+# This workflow deploys the echo project to a separate repository
+name: Deploy Echo
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'packages/echo/**'
+      - '.github/workflows/echo-deploy.yml'
+  # Manual trigger option
+  workflow_dispatch:
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '20'
+
+      - name: Setup PNPM
+        uses: pnpm/action-setup@v2
+        with:
+          version: '9'
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Build Echo
+        run: pnpm --filter echo build
+
+      - name: Deploy to GitHub Pages repository
+        uses: JamesIves/github-pages-deploy-action@v4
+        with:
+          folder: packages/echo/dist
+          token: ${{ secrets.REPO_ACCESS_TOKEN }}
+          repository-name: evanlin23/echo
+          branch: gh-pages
+          clean: true
