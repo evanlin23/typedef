@@ -92,8 +92,8 @@ const ClassCard: React.FC<ClassCardProps> = ({
             onClick={(e) => e.stopPropagation()}
           />
         ) : (
-          <div className="flex items-center">
-            <h3 className="text-xl font-bold text-gray-200 truncate">
+          <div className="flex items-center space-x-2 max-w-full overflow-hidden">
+            <h3 className="text-xl font-bold text-gray-200 truncate max-w-[180px]">
               {classData.name}
             </h3>
             <button
