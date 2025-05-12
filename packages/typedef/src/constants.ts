@@ -1,7 +1,7 @@
 export const MAX_OVERFLOW_CHARS = 19;
 
 export const API = {
-  WORD_API: 'https://random-word-api.herokuapp.com/word',
+  WORD_API: 'https://random-word-api.vercel.app/api?words=1',
   DEFINITION_API: 'https://api.dictionaryapi.dev/api/v2/entries/en/',
   TIMEOUT: 5000,
   MAX_RETRIES: 5,
