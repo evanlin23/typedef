@@ -1,47 +1,77 @@
 // src/components/ClassCreator.tsx
-import React, { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { addClass } from '../utils/db';
 import type { Class } from '../utils/types';
 
+/**
+ * Props for the ClassCreator component
+ */
 interface ClassCreatorProps {
+  /** Callback to refresh classes after creation */
   onClassCreated: () => Promise<void>;
-  onCreateClass: (classId: string) => void; // Changed: classId is string (UUID)
+  /** Callback with the ID of the newly created class */
+  onCreateClass: (classId: string) => void;
 }
 
-const ClassCreator: React.FC<ClassCreatorProps> = ({ onClassCreated, onCreateClass }) => {
+/**
+ * Component for creating new classes
+ * Provides a form to enter class name and handles the creation process
+ */
+const ClassCreator = ({ onClassCreated, onCreateClass }: ClassCreatorProps) => {
+  // State for the class name input field
   const [newClassName, setNewClassName] = useState('');
+  // State to track when a class is being created
   const [isCreating, setIsCreating] = useState(false);
 
-  const handleCreateClass = async () => {
+  /**
+   * Creates a new class with the provided name
+   */
+  const handleCreateClass = useCallback(async () => {
     const trimmedName = newClassName.trim();
-    if (!trimmedName || isCreating) { return; }
+    // Prevent empty submissions or multiple submissions while creating
+    if (!trimmedName || isCreating) return;
 
     setIsCreating(true);
     try {
-      // Prepare data for addClass (id, pdfCount, doneCount, notes are handled by addClass)
+      // Prepare class data for database
       const classDataForDb: Omit<Class, 'id' | 'pdfCount' | 'doneCount' | 'notes'> = {
         name: trimmedName,
         dateCreated: Date.now(),
-        isPinned: false, // Default to not pinned
+        isPinned: false,
       };
-      const classId = await addClass(classDataForDb); // addClass now returns a string (UUID)
+      
+      // Add class to database and get the new class ID
+      const classId = await addClass(classDataForDb);
 
+      // Reset form and notify parent components
       setNewClassName('');
       await onClassCreated();
-      onCreateClass(classId); // Pass the string UUID
+      onCreateClass(classId);
     } catch (error) {
       console.error('Failed to create class:', error);
-      // Optionally: alert('Failed to create class. Please try again.');
     } finally {
       setIsCreating(false);
     }
-  };
+  }, [newClassName, isCreating, onClassCreated, onCreateClass]);
 
-  const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
+  /**
+   * Handles Enter key press to submit the form
+   */
+  const handleKeyPress = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
       handleCreateClass();
     }
-  };
+  }, [handleCreateClass]);
+
+  /**
+   * Updates the class name state when input changes
+   */
+  const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    setNewClassName(e.target.value);
+  }, []);
+
+  // Determine if the create button should be disabled
+  const isCreateButtonDisabled = isCreating || !newClassName.trim();
 
   return (
     <div className="mb-8">
@@ -50,7 +80,7 @@ const ClassCreator: React.FC<ClassCreatorProps> = ({ onClassCreated, onCreateCla
         <input
           type="text"
           value={newClassName}
-          onChange={(e) => setNewClassName(e.target.value)}
+          onChange={handleInputChange}
           onKeyPress={handleKeyPress}
           placeholder="Enter class name (e.g., Math 101)"
           className="flex-1 p-2 rounded-l bg-gray-800 border border-gray-700 text-gray-200 focus:ring-2 focus:ring-green-400 outline-none"
@@ -60,7 +90,8 @@ const ClassCreator: React.FC<ClassCreatorProps> = ({ onClassCreated, onCreateCla
         <button
           onClick={handleCreateClass}
           className="bg-green-500 text-white px-4 py-2 rounded-r hover:bg-green-600 transition-colors disabled:opacity-50"
-          disabled={isCreating || !newClassName.trim()}
+          disabled={isCreateButtonDisabled}
+          aria-busy={isCreating}
         >
           {isCreating ? 'Creating...' : 'Create'}
         </button>

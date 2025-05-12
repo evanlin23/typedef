@@ -1,4 +1,4 @@
-import React from 'react';
+// import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { vi } from 'vitest';
@@ -22,17 +22,19 @@ describe('PDFViewer Component', () => {
     dateAdded: Date.now(),
     size: 1024 * 1024,
     status: 'to-study',
-    classId: '123',
-    data: new Uint8Array([1, 2, 3, 4]), // Mock PDF data
-    order: 0
+    classId: 'class-1',
+    lastModified: Date.now(),
+    data: new Uint8Array([1, 2, 3])
   };
   
   const mockProps = {
     pdf: mockPDF,
     onClose: vi.fn(),
-    onStatusChange: vi.fn(),
+    onDelete: vi.fn().mockResolvedValue(undefined),
+    onStatusChange: vi.fn().mockResolvedValue(undefined),
     classNotes: 'Initial class notes',
-    onClassNotesChange: vi.fn()
+    onClassNotesChange: vi.fn(),
+    pdfArrayBuffer: new ArrayBuffer(8)
   };
 
   beforeEach(() => {

@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { vi } from 'vitest';
 import PDFList from '../../components/PDFList';
@@ -59,21 +59,23 @@ describe('PDFList Component', () => {
   const mockPDFs: PDF[] = [
     {
       id: 1,
-      name: 'Sample PDF 1.pdf',
+      name: 'PDF 1.pdf',
       dateAdded: Date.now(),
       size: 1024 * 1024, // 1MB
       status: 'to-study',
       classId: '123',
-      order: 0
+      lastModified: Date.now(),
+      data: new Uint8Array([1, 2, 3])
     },
     {
       id: 2,
-      name: 'Sample PDF 2.pdf',
-      dateAdded: Date.now() - 86400000, // 1 day ago
+      name: 'PDF 2.pdf',
+      dateAdded: Date.now(),
       size: 2 * 1024 * 1024, // 2MB
       status: 'done',
       classId: '123',
-      order: 1
+      lastModified: Date.now(),
+      data: new Uint8Array([4, 5, 6])
     }
   ];
   
@@ -93,7 +95,7 @@ describe('PDFList Component', () => {
   test('renders PDFs correctly', () => {
     render(<PDFList {...mockProps} />);
     
-    expect(screen.getByText('Sample PDF 1.pdf')).toBeInTheDocument();
+    expect(screen.getByText('PDF 1.pdf')).toBeInTheDocument();
     expect(screen.getByText('1 MB')).toBeInTheDocument();
   });
 

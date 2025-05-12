@@ -1,5 +1,5 @@
-import { render, screen } from '@testing-library/react';
-import { vi, expect, describe, test } from 'vitest';
+import { render } from '@testing-library/react';
+import { expect, describe, test } from 'vitest';
 import PinIcon from '../../components/PinIcon';
 
 // Add the necessary matchers for testing-library

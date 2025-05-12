@@ -1,5 +1,5 @@
 import { render, screen } from '@testing-library/react';
-import { vi, expect, describe, test } from 'vitest';
+import { expect, describe, test } from 'vitest';
 import Footer from '../../components/Footer';
 
 // Add the necessary matchers for testing-library

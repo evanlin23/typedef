@@ -1,5 +1,4 @@
 import { vi, describe, test, expect, beforeEach } from 'vitest';
-import type { Class, PDF } from '../../utils/types';
 
 // Mock the entire database module
 vi.mock('../../utils/db', () => {

@@ -4,7 +4,7 @@ export type PDF = {
   name: string;
   size: number;
   lastModified: number;
-  data: ArrayBuffer;
+  data?: ArrayBuffer;
   status: 'to-study' | 'done';
   dateAdded: number;
   classId: string; // Changed: Class ID is now a string (UUID)
