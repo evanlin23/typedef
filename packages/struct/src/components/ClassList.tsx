@@ -22,10 +22,6 @@ const ClassList: React.FC<ClassListProps> = ({
   onRequestDelete,
   onDataChanged,
 }) => {
-  if (classes.length === 0) {
-    return <EmptyClassList />;
-  }
-
   return (
     <div>
       <div className="flex justify-between items-center mb-6">
@@ -43,21 +39,22 @@ const ClassList: React.FC<ClassListProps> = ({
           {showOnlyPinned ? 'Show All Classes' : 'Show Pinned Only'}
         </button>
       </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {classes.map((cls) => (
-          <ClassCard
-            key={cls.id} // cls.id is now string (UUID)
-            classData={cls}
-            onSelect={() => { if (cls.id) { onSelectClass(cls.id); } }} // cls.id is string
-            onRequestDelete={(e) => {
-              e.stopPropagation();
-              if (cls.id) { onRequestDelete(cls.id); } // cls.id is string
-            }}
-            onDataChanged={onDataChanged}
-          />
-        ))}
-      </div>
+      {classes.length === 0 ? <EmptyClassList /> : 
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {classes.map((cls) => (
+            <ClassCard
+              key={cls.id} // cls.id is now string (UUID)
+              classData={cls}
+              onSelect={() => { if (cls.id) { onSelectClass(cls.id); } }} // cls.id is string
+              onRequestDelete={(e) => {
+                e.stopPropagation();
+                if (cls.id) { onRequestDelete(cls.id); } // cls.id is string
+              }}
+              onDataChanged={onDataChanged}
+            />
+          ))}
+        </div>
+      }
     </div>
   );
 };

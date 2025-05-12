@@ -1,6 +1,6 @@
 @import "tailwindcss";
 
-@theme {
+:root {
   /* Color System */
   /* Background colors */
   --color-bg-primary: oklch(21% 0.034 264.665);          /* gray-900 */

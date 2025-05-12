@@ -238,16 +238,18 @@ export const getClassPDFs = async (classId: string): Promise<PDF[]> => {
   const transaction = db.transaction([PDF_STORE], 'readonly');
   const store = transaction.objectStore(PDF_STORE);
   const index = store.index('classId');
-  const pdfs = await idbRequestToPromise<PDF[]>(index.getAll(IDBKeyRange.only(classId)));
+  const pdfs = await idbRequestToPromise<PDF[]>(index.getAll(IDBKeyRange.only(classId))) || [];
 
-  pdfs.sort((a, b) => {
-    const aHasOrder = a.orderIndex !== undefined && a.orderIndex !== null;
-    const bHasOrder = b.orderIndex !== undefined && b.orderIndex !== null;
-    if (aHasOrder && bHasOrder) return a.orderIndex! - b.orderIndex!;
-    if (aHasOrder) return -1;
-    if (bHasOrder) return 1;
-    return a.name.localeCompare(b.name);
-  });
+  if (pdfs && pdfs.length > 0) {
+    pdfs.sort((a, b) => {
+      const aHasOrder = a.orderIndex !== undefined && a.orderIndex !== null;
+      const bHasOrder = b.orderIndex !== undefined && b.orderIndex !== null;
+      if (aHasOrder && bHasOrder) return a.orderIndex! - b.orderIndex!;
+      if (aHasOrder) return -1;
+      if (bHasOrder) return 1;
+      return a.name.localeCompare(b.name);
+    });
+  }
   return pdfs;
 };
 
@@ -268,13 +270,16 @@ export const updatePDFStatus = async (pdfId: number, newStatus: 'to-study' | 'do
   const pdfStore = transaction.objectStore(PDF_STORE);
   const classStore = transaction.objectStore(CLASS_STORE);
 
+  // Update the PDF status
   const updatedPDFData = { ...pdf, status: newStatus };
   await idbRequestToPromise(pdfStore.put(updatedPDFData));
 
+  // Calculate the change in done count
   const doneDelta = newStatus === 'done' ? 1 : (pdf.status === 'done' ? -1 : 0);
   if (doneDelta !== 0) {
     await _updateClassCountersInTransaction(classStore, pdf.classId, 0, doneDelta);
   }
+  
   await idbTransactionToPromise(transaction);
 };
 
@@ -290,9 +295,13 @@ export const deletePDF = async (pdfId: number): Promise<void> => {
   const pdfStore = transaction.objectStore(PDF_STORE);
   const classStore = transaction.objectStore(CLASS_STORE);
 
+  // Delete the PDF first
   await idbRequestToPromise(pdfStore.delete(pdfId));
+  
+  // Update class counters
   const doneDelta = pdf.status === 'done' ? -1 : 0;
   await _updateClassCountersInTransaction(classStore, pdf.classId, -1, doneDelta);
+  
   await idbTransactionToPromise(transaction);
 };
 
@@ -303,15 +312,20 @@ export const updateMultiplePDFOrders = async (updates: Array<{ id: number; order
   const transaction = db.transaction([PDF_STORE], 'readwrite');
   const store = transaction.objectStore(PDF_STORE);
 
+  // Process each update in sequence
   for (const update of updates) {
     const pdf = await idbRequestToPromise<PDF | undefined>(store.get(update.id));
     if (pdf) {
+      // Create a new object with the updated orderIndex
       const updatedPDF = { ...pdf, orderIndex: update.orderIndex };
+      // Update the PDF in the store
       await idbRequestToPromise(store.put(updatedPDF));
     } else {
       console.warn(`PDF with ID ${update.id} not found for order update.`);
     }
   }
+  
+  // Complete the transaction
   await idbTransactionToPromise(transaction);
 };
 

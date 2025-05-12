@@ -16,7 +16,7 @@ export const Header: React.FC<HeaderProps> = ({
 }) => {
   return (
     <header className="p-4 flex justify-between items-center border-b border-gray-800">
-      <h1 className="text-2xl font-bold text-purple-400">Echo</h1>
+      <h1 className="text-2xl font-bold text-purple-400">echo</h1>
       <div className="flex gap-4">
         <button 
           onClick={() => setShowLibrary(!showLibrary)}
