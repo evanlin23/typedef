@@ -79,6 +79,13 @@ importers:
       react-dom:
         specifier: ^19.1.0
         version: 19.1.0(react@19.1.0)
+      "vite\n\n":
+        specifier: |+
+          link:@tailwindcss/vite
+
+        version: |+
+          link:@tailwindcss/vite
+
     devDependencies:
       '@eslint/js':
         specifier: ^9.25.0

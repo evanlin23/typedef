@@ -1,0 +1,24 @@
+# .github/workflows/ioctl-deploy.yml
+# This workflow deploys the ioctl project to a separate repository
+name: Deploy Ioctl
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'packages/ioctl/**'
+      - '.github/workflows/ioctl-deploy.yml'
+  workflow_dispatch:
+
+jobs:
+  call-deploy:
+    permissions:
+      contents: write
+    uses: ./.github/workflows/reusable-deploy.yml
+    with:
+      package-name: ioctl
+      dist-folder: packages/ioctl/dist
+      repository-name: evanlin23/ioctl
+      external: true
+    secrets:
+      REPO_ACCESS_TOKEN: ${{ secrets.REPO_ACCESS_TOKEN }}
