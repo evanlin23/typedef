@@ -2,19 +2,10 @@ import { Outlet, Link } from 'react-router-dom'
 
 export default function Layout() {
   return (
-    <div className="min-h-screen flex flex-col">
-      <header className="bg-slate-800 text-white p-4 shadow-md">
+    <div className="min-h-screen flex flex-col bg-gray-800 text-gray-200">
+      <header className="bg-gray-900 text-gray-200 p-4 shadow-md">
         <div className="container mx-auto flex justify-between items-center">
-          <Link to="/" className="text-xl font-bold">ioctl</Link>
-          <nav>
-            <ul className="flex space-x-4">
-              <li>
-                <Link to="/" className="hover:text-slate-300 transition-colors">
-                  Home
-                </Link>
-              </li>
-            </ul>
-          </nav>
+          <Link to="/" className="text-xl font-bold text-orange-400">ioctl</Link>
         </div>
       </header>
       
@@ -22,9 +13,16 @@ export default function Layout() {
         <Outlet />
       </main>
       
-      <footer className="bg-slate-800 text-white p-4 mt-auto">
-        <div className="container mx-auto text-center">
-          <p>© {new Date().getFullYear()} ioctl — Collection of random utils</p>
+      <footer className="bg-gray-900 text-gray-300 p-4 mt-auto">
+        <div className="flex justify-center">
+          <a 
+            href="https://github.com/evanlin23/typedef" 
+            target="_blank" 
+            rel="noopener noreferrer"
+            className="text-purple-400 hover:underline mx-2"
+          >
+            GitHub
+          </a>
         </div>
       </footer>
     </div>
