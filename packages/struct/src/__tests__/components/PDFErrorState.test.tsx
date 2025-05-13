@@ -1,8 +1,11 @@
+// Original path: __tests__/components/PDFErrorState.test.tsx
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { vi } from 'vitest';
 
 // Import the ErrorIcon component from our test file
+// Note: This import doesn't actually import the component, it ensures the test file runs.
+// The ErrorIcon is recreated below.
 import '../components/ErrorIcon.test';
 
 // Recreate the PDFErrorState component for testing

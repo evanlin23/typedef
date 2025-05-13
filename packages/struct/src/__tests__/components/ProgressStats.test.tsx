@@ -1,3 +1,4 @@
+// Original path: __tests__/components/ProgressStats.test.tsx
 import { render, screen } from '@testing-library/react';
 import { vi, expect, describe, test } from 'vitest';
 import ProgressStats from '../../components/ProgressStats';
@@ -13,7 +14,9 @@ vi.mock('../../components/ProgressBar', () => ({
 }));
 
 // Add the necessary matchers for testing-library
+ 
 declare global {
+  // eslint-disable-next-line @typescript-eslint/no-namespace
   namespace Vi {
     interface AsymmetricMatchersContaining {
       toBeInTheDocument(): void;

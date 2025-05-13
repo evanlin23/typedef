@@ -42,14 +42,19 @@ export function useClassNotes({
 
   const handleClassNotesChange = useCallback((newNotes: string) => {
     // Update local state immediately for better UX
+    // Check against the ref for the most up-to-date ID associated with this hook instance
     if (selectedClass && selectedClass.id === currentSelectedClassIdRef.current) {
       setSelectedClass(prevClass => {
+        // Double-check inside the updater function as well
         if (prevClass && prevClass.id === currentSelectedClassIdRef.current) {
           return { ...prevClass, notes: newNotes };
         }
-        return prevClass;
+        return prevClass; // Return previous state if class changed unexpectedly
       });
+    } else if (selectedClass && selectedClass.id !== currentSelectedClassIdRef.current) {
+      console.warn("useClassNotes: selectedClass.id does not match currentSelectedClassIdRef. Skipping local update.");
     }
+
 
     // Debounce the database update to avoid excessive writes
     if (notesUpdateDebounceTimeoutRef.current) {
@@ -57,11 +62,14 @@ export function useClassNotes({
     }
 
     notesUpdateDebounceTimeoutRef.current = setTimeout(() => {
-      if (currentSelectedClassIdRef.current !== null) {
+      // === Use typeof check for robustness ===
+      if (typeof currentSelectedClassIdRef.current === 'string' && currentSelectedClassIdRef.current.length > 0) {
         saveNotesToDB(currentSelectedClassIdRef.current, newNotes);
+      } else {
+        console.warn("Skipping notes save: classId is not a valid string.", currentSelectedClassIdRef.current);
       }
-    }, 750);
-  }, [saveNotesToDB, selectedClass, setSelectedClass]);
+    }, 750); // Debounce time (750ms)
+  }, [saveNotesToDB, selectedClass, setSelectedClass]); // Dependencies
 
   return {
     handleClassNotesChange

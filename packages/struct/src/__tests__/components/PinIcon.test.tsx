@@ -1,9 +1,12 @@
+// Original path: __tests__/components/PinIcon.test.tsx
 import { render } from '@testing-library/react';
 import { expect, describe, test } from 'vitest';
 import PinIcon from '../../components/PinIcon';
 
 // Add the necessary matchers for testing-library
+ 
 declare global {
+  // eslint-disable-next-line @typescript-eslint/no-namespace
   namespace Vi {
     interface AsymmetricMatchersContaining {
       toBeInTheDocument(): void;
@@ -20,7 +23,7 @@ declare global {
 
 describe('PinIcon Component', () => {
   test('renders correctly when pinned', () => {
-    render(<PinIcon isPinned={true} data-testid="pin-icon" />);
+    render(<PinIcon isPinned={true} />);
     
     // Check if the SVG element exists
     const svgElement = document.querySelector('svg');
@@ -33,7 +36,7 @@ describe('PinIcon Component', () => {
   });
 
   test('renders correctly when not pinned', () => {
-    render(<PinIcon isPinned={false} data-testid="pin-icon" />);
+    render(<PinIcon isPinned={false} />);
     
     // Check if the SVG element exists
     const svgElement = document.querySelector('svg');

@@ -1,3 +1,4 @@
+// Original path: __tests__/hooks/usePDFOperations.test.ts
 import { renderHook, act } from '@testing-library/react';
 import { vi, describe, test, expect, beforeEach, afterAll } from 'vitest';
 import { usePDFOperations } from '../../hooks/usePDFOperations';
@@ -35,11 +36,18 @@ class MockDataTransfer {
     this.items = {
       add: (file: File) => fileList.push(file)
     };
-    this.files = Object.assign(fileList, { item: (index: number) => fileList[index] });
+    this.files = Object.assign(fileList, {
+      item: (index: number) => fileList[index],
+      [Symbol.iterator]: function* () {
+        for (let i = 0; i < fileList.length; i++) {
+          yield fileList[i];
+        }
+      }
+    });
   }
 }
 
-global.DataTransfer = MockDataTransfer as any;
+global.DataTransfer = MockDataTransfer as unknown as typeof DataTransfer;
 
 describe('usePDFOperations Hook', () => {
   const mockPDFs: PDF[] = [
@@ -278,7 +286,7 @@ describe('usePDFOperations Hook', () => {
 
     test('handles errors during status update', async () => {
       // Mock updatePDFStatus to reject
-      (updatePDFStatus as jest.Mock).mockRejectedValueOnce(new Error('DB error'));
+      vi.mocked(updatePDFStatus).mockRejectedValueOnce(new Error('DB error'));
       
       const { result } = renderHook(() => usePDFOperations(defaultProps));
       
@@ -344,7 +352,7 @@ describe('usePDFOperations Hook', () => {
 
     test('handles errors during PDF deletion', async () => {
       // Mock deletePDF to reject
-      (deletePDF as jest.Mock).mockRejectedValueOnce(new Error('DB error'));
+      vi.mocked(deletePDF).mockRejectedValueOnce(new Error('DB error'));
       
       const { result } = renderHook(() => usePDFOperations(defaultProps));
       
@@ -450,7 +458,7 @@ describe('usePDFOperations Hook', () => {
 
     test('handles errors during order update', async () => {
       // Mock updateMultiplePDFOrders to reject
-      (updateMultiplePDFOrders as jest.Mock).mockRejectedValueOnce(new Error('DB error'));
+      vi.mocked(updateMultiplePDFOrders).mockRejectedValueOnce(new Error('DB error'));
       
       const { result } = renderHook(() => usePDFOperations(defaultProps));
       

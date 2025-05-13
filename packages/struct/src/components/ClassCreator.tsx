@@ -1,3 +1,4 @@
+// Original path: components/ClassCreator.tsx
 // src/components/ClassCreator.tsx
 import { useState, useCallback } from 'react';
 import { addClass } from '../utils/db';
@@ -34,7 +35,7 @@ const ClassCreator = ({ onClassCreated, onCreateClass }: ClassCreatorProps) => {
     setIsCreating(true);
     try {
       // Prepare class data for database
-      const classDataForDb: Omit<Class, 'id' | 'pdfCount' | 'doneCount' | 'notes'> = {
+      const classDataForDb: Omit<Class, 'id' | 'pdfCount' | 'doneCount' | 'notes' | 'progress' | 'totalItems' | 'completedItems'> = {
         name: trimmedName,
         dateCreated: Date.now(),
         isPinned: false,

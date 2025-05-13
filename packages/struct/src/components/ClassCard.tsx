@@ -1,3 +1,4 @@
+// Original path: components/ClassCard.tsx
 // src/components/ClassCard.tsx
 import { useState, useEffect, useRef } from 'react';
 import type { Class } from '../utils/types';
@@ -13,8 +14,8 @@ interface ClassCardProps {
   classData: Class;
   /** Callback when the class is selected */
   onSelect: () => void;
-  /** Callback when class deletion is requested */
-  onRequestDelete: (e: React.MouseEvent) => void;
+  /** Callback when class deletion is requested (called with no arguments, ID is implicit to the card) */
+  onRequestDelete: () => void; // Changed from onRequestDelete taking MouseEvent
   /** Callback to refresh class data */
   onDataChanged: () => Promise<void>;
 }
@@ -51,10 +52,10 @@ const formatDate = (timestamp: number): string => {
 /**
  * Component for displaying and interacting with a class card
  */
-const ClassCard = ({ 
-  classData, 
-  onSelect, 
-  onRequestDelete,
+const ClassCard = ({
+  classData,
+  onSelect,
+  onRequestDelete, // Use new prop name
   onDataChanged
 }: ClassCardProps) => {
   // State for tracking name editing
@@ -65,9 +66,9 @@ const ClassCard = ({
    * Toggle the pinned status of the class
    */
   const handleTogglePin = async (e: React.MouseEvent) => {
-    e.stopPropagation(); 
+    e.stopPropagation();
     if (!classData.id) return;
-    
+
     try {
       await updateClass(classData.id, { isPinned: !classData.isPinned });
       await onDataChanged();
@@ -95,7 +96,6 @@ const ClassCard = ({
    * Save the edited class name
    */
   const saveClassName = async () => {
-    // Only save if the name has changed and is not empty
     const trimmedName = editingName?.trim();
     if (trimmedName && trimmedName !== classData.name && classData.id) {
       try {
@@ -107,7 +107,7 @@ const ClassCard = ({
     }
     setEditingName(null);
   };
-  
+
   /**
    * Handle keyboard events in the name input
    */
@@ -115,23 +115,23 @@ const ClassCard = ({
     if (e.key === 'Enter') {
       saveClassName();
     } else if (e.key === 'Escape') {
-      setEditingName(null); 
+      setEditingName(null);
     }
   };
 
   /**
-   * Handle delete button click
+   * Handle delete button click: stops its own event and calls the onRequestDelete prop.
    */
   const handleDeleteClick = (e: React.MouseEvent) => {
-    e.stopPropagation(); 
-    onRequestDelete(e);
+    e.stopPropagation(); // ClassCard handles stopping its own event propagation
+    onRequestDelete();  // Call the prop (which now expects no args or the ID directly if designed so)
   };
 
   // Focus and select the input when editing starts
   useEffect(() => {
     if (editingName !== null && inputRef.current) {
       inputRef.current.focus();
-      inputRef.current.select(); 
+      inputRef.current.select();
     }
   }, [editingName]);
 
@@ -144,15 +144,15 @@ const ClassCard = ({
 
   // Determine pin button class based on state
   const pinButtonClassName = `
-    p-1.5 rounded-full transition-colors 
-    ${classData.isPinned 
-      ? 'text-green-400 hover:text-green-300 bg-gray-700 hover:bg-gray-600' 
-      : 'text-gray-400 hover:text-green-400 hover:bg-gray-700'}
+    p-1.5 rounded-full transition-colors
+    ${classData.isPinned
+    ? 'text-green-400 hover:text-green-300 bg-gray-700 hover:bg-gray-600'
+    : 'text-gray-400 hover:text-green-400 hover:bg-gray-700'}
   `;
 
   return (
     <div
-      onClick={editingName === null ? onSelect : undefined} 
+      onClick={editingName === null ? onSelect : undefined}
       className={cardClassName.trim()}
       role="button"
       tabIndex={editingName === null ? 0 : -1}
@@ -173,7 +173,7 @@ const ClassCard = ({
           <PinIcon isPinned={classData.isPinned || false} className="h-4 w-4"/>
         </button>
         <button
-          onClick={handleDeleteClick}
+          onClick={handleDeleteClick} // Calls internal handler
           className="p-1.5 text-gray-400 hover:text-red-500 rounded-full hover:bg-gray-700 transition-colors"
           aria-label="Delete class"
           title="Delete class"
@@ -183,7 +183,7 @@ const ClassCard = ({
       </div>
 
       {/* Class name - editable or display */}
-      <div className="mb-2 pr-16"> 
+      <div className="mb-2 pr-16">
         {editingName !== null ? (
           <input
             ref={inputRef}
@@ -191,13 +191,13 @@ const ClassCard = ({
             value={editingName}
             onChange={handleEditNameChange}
             onKeyDown={handleKeyDown}
-            onBlur={saveClassName} 
+            onBlur={saveClassName}
             className="text-xl font-bold bg-gray-700 text-gray-200 p-1 rounded w-full focus:ring-2 focus:ring-green-400 outline-none"
-            onClick={(e) => e.stopPropagation()} 
+            onClick={(e) => e.stopPropagation()}
             aria-label="Edit class name"
           />
         ) : (
-          <div className="flex items-center space-x-2 min-w-0 group/name_edit"> 
+          <div className="flex items-center space-x-2 min-w-0 group/name_edit">
             <h3 className="text-xl font-bold text-gray-200 truncate" title={classData.name}>
               {classData.name}
             </h3>
@@ -211,18 +211,18 @@ const ClassCard = ({
           </div>
         )}
       </div>
-      
+
       {/* Class metadata */}
       <div className="text-sm text-gray-400 mb-1">
         Created: {formatDate(classData.dateCreated)}
       </div>
-      
+
       <div className="text-sm text-gray-400">
         {classData.totalItems || 0} {(classData.totalItems || 0) === 1 ? 'PDF' : 'PDFs'}
       </div>
-      
+
       {/* Progress bar */}
-      <ProgressBar 
+      <ProgressBar
         progress={classData.progress || 0}
         completedItems={classData.completedItems || 0}
         totalItems={classData.totalItems || 0}

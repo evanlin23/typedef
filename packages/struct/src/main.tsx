@@ -1,8 +1,9 @@
 // src/main.tsx
-import React from 'react'; 
+import React from 'react';
 import { createRoot } from 'react-dom/client';
+import { BrowserRouter } from 'react-router-dom'; // Import BrowserRouter
 import './index.css';
-import App from './App'; 
+import App from './App';
 
 const container = document.getElementById('root');
 if (!container) {
@@ -12,6 +13,9 @@ if (!container) {
 const root = createRoot(container);
 root.render(
   <React.StrictMode>
-    <App />
+    {/* Wrap App with BrowserRouter and set basename */}
+    <BrowserRouter basename="/struct">
+      <App />
+    </BrowserRouter>
   </React.StrictMode>,
 );

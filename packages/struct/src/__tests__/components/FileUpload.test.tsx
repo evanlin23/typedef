@@ -1,9 +1,12 @@
+// Original path: __tests__/components/FileUpload.test.tsx
 import { render, screen, fireEvent } from '@testing-library/react';
 import { vi, expect, describe, beforeEach, test } from 'vitest';
 import FileUpload from '../../components/FileUpload';
 
 // Add the necessary matchers for testing-library
+ 
 declare global {
+  // eslint-disable-next-line @typescript-eslint/no-namespace
   namespace Vi {
     interface Assertion {
       toBeInTheDocument(): void;

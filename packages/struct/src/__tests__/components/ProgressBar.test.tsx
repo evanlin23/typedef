@@ -1,3 +1,4 @@
+// Original path: __tests__/components/ProgressBar.test.tsx
 import { render, screen } from '@testing-library/react';
 import ProgressBar from '../../components/ProgressBar';
 

@@ -1,3 +1,4 @@
+// Original path: __tests__/components/LoadingSpinner.test.tsx
 import { render, screen } from '@testing-library/react';
 import LoadingSpinner from '../../components/LoadingSpinner';
 

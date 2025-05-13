@@ -17,6 +17,8 @@ describe('ClassCreator Component', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    // Reset specific mock implementations if they were changed in a test
+    vi.mocked(addClass).mockResolvedValue('new-class-id-123');
   });
 
   test('renders correctly', () => {
@@ -100,7 +102,7 @@ describe('ClassCreator Component', () => {
 
   test('shows "Creating..." text while creating class', async () => {
     // Mock addClass to delay resolution
-    (addClass as jest.Mock).mockImplementationOnce(() => {
+    vi.mocked(addClass).mockImplementationOnce(() => {
       return new Promise(resolve => setTimeout(() => resolve('new-class-id-123'), 100));
     });
     
@@ -142,7 +144,7 @@ describe('ClassCreator Component', () => {
     const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     
     // Mock addClass to reject
-    (addClass as jest.Mock).mockRejectedValueOnce(new Error('Database error'));
+    vi.mocked(addClass).mockRejectedValueOnce(new Error('Database error'));
     
     const user = userEvent.setup();
     render(<ClassCreator {...mockProps} />);

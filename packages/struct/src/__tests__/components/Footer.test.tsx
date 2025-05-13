@@ -1,9 +1,12 @@
+// Original path: __tests__/components/Footer.test.tsx
 import { render, screen } from '@testing-library/react';
 import { expect, describe, test } from 'vitest';
 import Footer from '../../components/Footer';
 
 // Add the necessary matchers for testing-library
+ 
 declare global {
+  // eslint-disable-next-line @typescript-eslint/no-namespace
   namespace Vi {
     interface AsymmetricMatchersContaining {
       toBeInTheDocument(): void;

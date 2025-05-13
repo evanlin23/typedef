@@ -1,3 +1,4 @@
+// Original path: __tests__/components/EmptyClassList.test.tsx
 
 import { render, screen } from '@testing-library/react';
 import EmptyClassList from '../../components/EmptyClassList';

@@ -6,7 +6,9 @@ import { updateClass } from '../../utils/db';
 import type { Class } from '../../utils/types';
 
 // Add the necessary matchers for testing-library
+ 
 declare global {
+  // eslint-disable-next-line @typescript-eslint/no-namespace
   namespace Vi {
     interface AsymmetricMatchersContaining {
       toBeInTheDocument(): void;
@@ -48,7 +50,7 @@ describe('ClassCard Component', () => {
   const mockProps = {
     classData: mockClassData,
     onSelect: vi.fn(),
-    onRequestDelete: vi.fn(),
+    onRequestDelete: vi.fn(), // Corrected prop name
     onDataChanged: vi.fn().mockResolvedValue(undefined)
   };
 
@@ -59,25 +61,25 @@ describe('ClassCard Component', () => {
   test('renders correctly with class data', () => {
     render(<ClassCard {...mockProps} />);
     
-    expect(screen.getByText('Math 101')).toBeInTheDocument();
+    expect(screen.getByText(mockClassData.name)).toBeInTheDocument();
     // The date is formatted, so we need to check for partial text
     expect(screen.getByText(/Created:/)).toBeInTheDocument();
     expect(screen.getByText(`${mockClassData.pdfCount} PDFs`)).toBeInTheDocument();
   });
 
-  test('renders correctly', () => {
+  test('selects class on click', () => {
     render(<ClassCard {...mockProps} />);
     
     // Test class selection
-    const card = screen.getByRole('button', { name: /math 101/i });
+    const card = screen.getByRole('button', { name: new RegExp(mockClassData.name, 'i') });
     fireEvent.click(card);
     
     expect(mockProps.onSelect).toHaveBeenCalledTimes(1);
   });
 
   test('toggles pin status', async () => {
-    // Mock the updateClass to call onDataChanged when it resolves
-    (updateClass as jest.Mock).mockImplementation(() => {
+    // Mock updateClass to call onDataChanged when it resolves
+    vi.mocked(updateClass).mockImplementation(async () => {
       mockProps.onDataChanged();
       return Promise.resolve();
     });
@@ -94,8 +96,8 @@ describe('ClassCard Component', () => {
   });
 
   test('allows editing class name', async () => {
-    // Mock the updateClass to call onDataChanged when it resolves
-    (updateClass as jest.Mock).mockImplementation(() => {
+    // Mock updateClass to call onDataChanged when it resolves
+    vi.mocked(updateClass).mockImplementation(async () => {
       mockProps.onDataChanged();
       return Promise.resolve();
     });
@@ -107,7 +109,7 @@ describe('ClassCard Component', () => {
     await userEvent.click(editButton);
     
     // Input field should appear
-    const inputField = screen.getByDisplayValue('Math 101');
+    const inputField = screen.getByDisplayValue(mockClassData.name);
     
     // Mock the input change directly to ensure the value is set correctly
     fireEvent.change(inputField, { target: { value: 'New Class Name' } });
@@ -125,13 +127,13 @@ describe('ClassCard Component', () => {
     const onRequestDeleteMock = vi.fn();
     
     // Render with the new mock
-    render(<ClassCard {...mockProps} onRequestDelete={onRequestDeleteMock} />);
+    render(<ClassCard {...mockProps} onRequestDelete={onRequestDeleteMock} />); // Use correct prop name
     
     // Find the delete button
     const deleteButton = screen.getByTitle('Delete class');
     
-    // Use fireEvent instead of userEvent for this case
-    fireEvent.click(deleteButton);
+    // Use userEvent for simulating user interaction
+    await userEvent.click(deleteButton);
     
     // Check if onRequestDelete was called
     expect(onRequestDeleteMock).toHaveBeenCalled();
@@ -141,7 +143,7 @@ describe('ClassCard Component', () => {
     render(<ClassCard {...mockProps} />);
     
     // Get the main card element which is the first element with role button and class containing bg-gray-800
-    const card = screen.getByRole('button', { name: /math 101/i });
+    const card = screen.getByRole('button', { name: new RegExp(mockClassData.name, 'i') });
     card.focus();
     
     fireEvent.keyDown(card, { key: 'Enter', code: 'Enter' });
@@ -160,7 +162,7 @@ describe('ClassCard Component', () => {
       <ClassCard
         classData={testClass}
         onSelect={mockProps.onSelect}
-        onRequestDelete={mockProps.onRequestDelete}
+        onRequestDelete={mockProps.onRequestDelete} // Corrected prop name
         onDataChanged={mockProps.onDataChanged}
       />
     );
@@ -182,7 +184,7 @@ describe('ClassCard Component', () => {
     fireEvent.keyDown(input, { key: 'Escape', code: 'Escape' });
     
     // Input should be hidden - we can check by verifying the class name is visible again
-    expect(screen.getByText('Math 101')).toBeInTheDocument();
+    expect(screen.getByText(mockClassData.name)).toBeInTheDocument();
     expect(updateClass).not.toHaveBeenCalled();
   });
 });

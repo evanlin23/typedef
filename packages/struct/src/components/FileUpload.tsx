@@ -125,8 +125,8 @@ const FileUpload = ({ onUpload }: FileUploadProps) => {
     border-2 border-dashed rounded-lg p-6 text-center 
     transition-colors duration-200 ease-in-out
     ${isDragging 
-      ? 'border-green-400 bg-gray-800 ring-2 ring-green-400' 
-      : 'border-gray-700 hover:border-gray-600'}
+    ? 'border-green-400 bg-gray-800 ring-2 ring-green-400' 
+    : 'border-gray-700 hover:border-gray-600'}
   `;
 
   return (

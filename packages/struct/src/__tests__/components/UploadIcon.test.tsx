@@ -1,3 +1,4 @@
+// Original path: __tests__/components/UploadIcon.test.tsx
 import { render } from '@testing-library/react';
 
 // Recreate the UploadIcon component for testing

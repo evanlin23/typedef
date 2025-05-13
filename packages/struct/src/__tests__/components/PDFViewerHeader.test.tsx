@@ -1,3 +1,4 @@
+// Original path: __tests__/components/PDFViewerHeader.test.tsx
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { vi } from 'vitest';
@@ -26,8 +27,8 @@ const PDFViewerHeader = ({ pdfName, pdfStatus, onStatusToggle, onClose }: PDFVie
           px-3 py-1.5 text-xs sm:text-sm rounded transition-colors 
           focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 
           ${pdfStatus === 'to-study'
-            ? 'bg-green-500 hover:bg-green-600 text-white focus:ring-green-400'
-            : 'bg-blue-500 hover:bg-blue-600 text-white focus:ring-blue-400'}
+    ? 'bg-green-500 hover:bg-green-600 text-white focus:ring-green-400'
+    : 'bg-blue-500 hover:bg-blue-600 text-white focus:ring-blue-400'}
         `}
       >
         {pdfStatus === 'to-study' ? 'Mark as Done' : 'Mark To Study'}

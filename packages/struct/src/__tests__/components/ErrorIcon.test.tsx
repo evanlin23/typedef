@@ -1,3 +1,4 @@
+// Original path: __tests__/components/ErrorIcon.test.tsx
 import { render } from '@testing-library/react';
 
 // Recreate the ErrorIcon component for testing

@@ -3,13 +3,13 @@ import React from 'react';
 import type { PDF, Class } from '../utils/types';
 import FileUpload from './FileUpload';
 import ProgressStats from './ProgressStats';
-import PDFList from './PDFList';
+import PDFList from './PDFList'; // Ensure PDFList accepts classId
 import LoadingSpinner from './LoadingSpinner';
 import TabNavigation from './TabNavigation';
 import type { TabType } from './TabNavigation';
 
 interface ClassViewProps {
-  selectedClass: Class;
+  selectedClass: Class; // Contains the ID
   pdfs: PDF[];
   activeTab: TabType;
   isProcessing: boolean;
@@ -17,13 +17,13 @@ interface ClassViewProps {
   onFileUpload: (files: FileList) => Promise<void>;
   onStatusChange: (id: number, newStatus: 'to-study' | 'done') => Promise<void>;
   onDeletePDF: (id: number) => Promise<void>;
-  onViewPDF: (pdf: PDF) => void;
+  // onViewPDF prop is removed as navigation is handled internally by PDFList
   onPDFOrderChange: (orderedPDFs: PDF[]) => Promise<void>;
   onNotesChange: (notes: string) => void;
 }
 
 const ClassView: React.FC<ClassViewProps> = ({
-  selectedClass,
+  selectedClass, // Use selectedClass.id
   pdfs,
   activeTab,
   isProcessing,
@@ -31,13 +31,13 @@ const ClassView: React.FC<ClassViewProps> = ({
   onFileUpload,
   onStatusChange,
   onDeletePDF,
-  onViewPDF,
+  // onViewPDF prop removed
   onPDFOrderChange,
   onNotesChange,
 }) => {
   const toStudyPDFs = pdfs.filter(pdf => pdf.status === 'to-study');
   const donePDFs = pdfs.filter(pdf => pdf.status === 'done');
-  
+
   const statsData = {
     total: selectedClass?.pdfCount || 0,
     toStudy: (selectedClass?.pdfCount || 0) - (selectedClass?.doneCount || 0),
@@ -50,7 +50,7 @@ const ClassView: React.FC<ClassViewProps> = ({
         <FileUpload onUpload={onFileUpload} />
         <ProgressStats stats={statsData} />
       </div>
-      
+
       <div className="w-full md:w-2/3">
         <div className="bg-gray-800 rounded-lg p-6 shadow-lg">
           <TabNavigation
@@ -59,7 +59,7 @@ const ClassView: React.FC<ClassViewProps> = ({
             toStudyCount={toStudyPDFs.length}
             doneCount={donePDFs.length}
           />
-          
+
           {isProcessing && (activeTab !== 'notes' && pdfs.length === 0) ? (
             <LoadingSpinner />
           ) : (
@@ -78,10 +78,13 @@ const ClassView: React.FC<ClassViewProps> = ({
                 <PDFList
                   pdfs={activeTab === 'to-study' ? toStudyPDFs : donePDFs}
                   listType={activeTab as 'to-study' | 'done'}
+                  classId={selectedClass.id} // Pass selectedClass.id HERE
                   onStatusChange={onStatusChange}
                   onDelete={onDeletePDF}
-                  onViewPDF={onViewPDF}
+                  // onViewPDF prop removed from here
                   onOrderChange={onPDFOrderChange}
+                  // Add dummy onViewPDF if PDFList still requires it, otherwise remove from PDFList props
+                  onViewPDF={() => {}} // Dummy prop if needed temporarily
                 />
               )}
             </>

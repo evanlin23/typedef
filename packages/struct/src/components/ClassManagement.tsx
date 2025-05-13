@@ -1,3 +1,4 @@
+// Original path: components/ClassManagement.tsx
 // src/components/ClassManagement.tsx
 import { useState, useEffect, useCallback } from 'react';
 import type { Class } from '../utils/types';
@@ -30,7 +31,7 @@ interface DeleteConfirmationState {
 /**
  * Component for managing classes, including creation, listing, and deletion
  */
-const ClassManagement = ({ onSelectClass, onCreateClass }: ClassManagementProps) => {
+const ClassManagement = ({ onCreateClass }: ClassManagementProps) => {
   // State management
   const [classes, setClasses] = useState<Class[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -60,8 +61,8 @@ const ClassManagement = ({ onSelectClass, onCreateClass }: ClassManagementProps)
   /**
    * Sort classes with pinned classes first, then alphabetically
    */
-  const sortClasses = (classes: Class[]): Class[] => {
-    return [...classes].sort((a, b) => {
+  const sortClasses = (classesToSort: Class[]): Class[] => {
+    return [...classesToSort].sort((a, b) => {
       // Pinned classes come first
       if (a.isPinned && !b.isPinned) return -1;
       if (!a.isPinned && b.isPinned) return 1;
@@ -158,9 +159,9 @@ const ClassManagement = ({ onSelectClass, onCreateClass }: ClassManagementProps)
             classes={filteredClasses}
             showOnlyPinned={showOnlyPinned}
             onTogglePinnedFilter={handleTogglePinnedFilter}
-            onSelectClass={onSelectClass}
-            onRequestDelete={requestDeleteConfirmation}
+            onRequestDelete={requestDeleteConfirmation} // Use consistent prop name
             onDataChanged={loadClasses}
+            // onSelectClass prop is removed as it's handled by ClassCard via navigate
           />
         )}
       </div>

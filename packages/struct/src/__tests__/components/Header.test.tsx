@@ -1,10 +1,13 @@
+// Original path: __tests__/components/Header.test.tsx
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { vi, expect, describe, test } from 'vitest';
 import Header from '../../components/Header';
 
 // Add the necessary matchers for testing-library
+ 
 declare global {
+  // eslint-disable-next-line @typescript-eslint/no-namespace
   namespace Vi {
     interface AsymmetricMatchersContaining {
       toBeInTheDocument(): void;
