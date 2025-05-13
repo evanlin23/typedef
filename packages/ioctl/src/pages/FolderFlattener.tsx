@@ -1,6 +1,5 @@
 import React, { useState, useCallback, useRef, DragEvent, ChangeEvent } from 'react';
 import JSZip from 'jszip';
-import './FolderFlattener.css'; // Ensure this CSS file exists
 
 // Interfaces remain the same
 interface ProcessedFile {
