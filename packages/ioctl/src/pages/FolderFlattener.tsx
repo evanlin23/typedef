@@ -277,15 +277,15 @@ function FolderFlattener() {
 
   // --- Render ---
   return (
-    <div className="folder-flattener">
-      <h2>Project Folder Flattener (TS/TSX)</h2>
+    <div className="max-w-4xl mx-auto p-6 bg-white shadow-lg rounded-lg">
+      <h2 className="text-2xl font-bold text-gray-800 mb-6">Project Folder Flattener (TS/TSX)</h2>
 
       {/* Hidden File Input */}
       <input
           type="file"
           webkitdirectory="" // Note: empty string value often needed
           directory=""       // Standard attribute
-          style={{ display: 'none' }} // Hide it visually
+          className="hidden" // Tailwind's hidden class
           ref={fileInputRef}
           onChange={handleFileSelect}
           multiple // Important for folder selection
@@ -294,7 +294,10 @@ function FolderFlattener() {
       {/* Clickable Drop Zone */}
       <div
         id="drop-zone"
-        className={`drop-zone ${isDraggingOver ? 'dragging-over' : ''}`}
+        className={`border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors duration-200 
+          ${isDraggingOver 
+            ? 'border-blue-500 bg-blue-50' 
+            : 'border-gray-300 hover:border-gray-400 hover:bg-gray-50'}`}
         onDragEnter={handleDragEnter}
         onDragLeave={handleDragLeave}
         onDragOver={handleDragOver}
@@ -306,34 +309,48 @@ function FolderFlattener() {
         title="Click to select folder or drag and drop here" // Tooltip
       >
         {isProcessing ? (
-          <p>Processing folder '{droppedFolderName || '...'}'...</p>
+          <p className="text-gray-600 font-medium">
+            Processing folder '{droppedFolderName || '...'}'...
+          </p>
         ) : (
           // Updated prompt
-          <p>Drag & drop your project folder here, or click to select</p>
+          <p className="text-gray-600 font-medium">
+            Drag & drop your project folder here, or click to select
+          </p>
         )}
       </div>
 
-      {error && <p className="error-message">Error: {error}</p>}
+      {error && <p className="mt-4 p-3 bg-red-100 text-red-700 rounded-md">Error: {error}</p>}
 
       {processedFiles.length > 0 && !isProcessing && (
-        <div className="results">
-          <h3>
+        <div className="mt-8 bg-gray-50 p-6 rounded-md">
+          <h3 className="text-xl font-semibold text-gray-700 mb-4">
             Processed Files from "{droppedFolderName || 'Selected Folder'}" ({processedFiles.length}):
           </h3>
-           <button onClick={handleDownloadZip} disabled={isProcessing || !droppedFolderName}>
+           <button 
+             onClick={handleDownloadZip} 
+             disabled={isProcessing || !droppedFolderName}
+             className="mb-4 bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-md 
+                       transition-colors duration-200 disabled:bg-gray-400 disabled:cursor-not-allowed"
+           >
               Download All as ZIP
            </button>
-          <ul>
+          <ul className="space-y-2 mt-4">
             {processedFiles.map((file) => (
-              <li key={file.flattenedName}>
-                <code>{file.flattenedName}</code> (Original: <code>{file.originalPath}</code>)
+              <li key={file.flattenedName} className="border-b border-gray-200 pb-2">
+                <code className="bg-gray-100 text-blue-600 px-1 rounded">{file.flattenedName}</code> 
+                <span className="text-gray-600 ml-2">
+                  (Original: <code className="bg-gray-100 text-violet-600 px-1 rounded">{file.originalPath}</code>)
+                </span>
               </li>
             ))}
           </ul>
         </div>
       )}
        {!processedFiles.length && !isProcessing && !error && droppedFolderName && (
-          <p>No .ts or .tsx files found in "{droppedFolderName}".</p>
+          <p className="mt-4 text-gray-600 italic">
+            No .ts or .tsx files found in "{droppedFolderName}".
+          </p>
        )}
     </div>
   );
