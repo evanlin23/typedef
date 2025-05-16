@@ -45,6 +45,11 @@ jobs:
       - name: Build ${{ inputs.package-name }}
         run: pnpm --filter ${{ inputs.package-name }} build
 
+      # --- Add this step ---
+      - name: Create 404.html for SPA fallback
+        run: cp ${{ inputs.dist-folder }}/index.html ${{ inputs.dist-folder }}/404.html
+      # --- End of added step ---
+
       - name: Deploy to GitHub Pages
         uses: JamesIves/github-pages-deploy-action@v4
         with:
