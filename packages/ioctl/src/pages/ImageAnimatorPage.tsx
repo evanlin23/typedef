@@ -7,6 +7,7 @@ import { fetchFile, toBlobURL } from '@ffmpeg/util';
 const OUTPUT_WIDTH = 720; // For 9:16 aspect ratio
 const OUTPUT_HEIGHT = 1280;
 const FPS = 60;
+const MAX_FILE_SIZE_MB = 20;
 
 const PRE_ZOOMPAN_UPSCALE_FACTOR = 8;
 
@@ -49,6 +50,9 @@ function ImageAnimatorPage() {
   // User-configurable zoom factors
   const [relativeZoomInFactor, setRelativeZoomInFactor] = useState<number>(DEFAULT_RELATIVE_ZOOM_IN_FACTOR);
   const [zoomLevelOutEffective, setZoomLevelOutEffective] = useState<number>(DEFAULT_ZOOM_LEVEL_OUT_EFFECTIVE);
+
+  // New state for file upload error
+  const [fileError, setFileError] = useState<string | null>(null);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const imageRef = useRef<HTMLImageElement | null>(null);
@@ -97,7 +101,15 @@ function ImageAnimatorPage() {
 
   // Draw image and points on canvas
    useEffect(() => {
-    if (!imagePreviewUrl || !canvasRef.current) return;
+    if (!imagePreviewUrl || !canvasRef.current) {
+        // If there's no preview URL (e.g., after an invalid file or reset), clear canvas
+        if (canvasRef.current) {
+            const ctx = canvasRef.current.getContext('2d');
+            ctx?.clearRect(0,0,canvasRef.current.width, canvasRef.current.height);
+        }
+        return;
+    }
+
 
     const canvas = canvasRef.current;
     const ctx = canvas.getContext('2d');
@@ -131,20 +143,48 @@ function ImageAnimatorPage() {
         ctx.fillText(`P${index + 1}`, canvasX + 8, canvasY + 4);
       });
     };
+    img.onerror = () => {
+        // Handle case where image loading fails for the preview
+        setFileError("Could not load image preview. Please try a different file.");
+        setImagePreviewUrl(''); // Clear preview URL to prevent retries
+        setImageFile(null);
+    }
     img.src = imagePreviewUrl;
-  }, [imagePreviewUrl, points]);
+  }, [imagePreviewUrl, points]); // Added setFileError, setImagePreviewUrl, setImageFile to dependencies if they are stable, otherwise wrap img.onerror content in useCallback or ensure it doesn't cause re-renders excessively. Since they are setters, they are stable.
 
 
   const handleImageUpload = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
+    setFileError(null); // Clear previous error on new selection attempt
     const file = event.target.files?.[0];
+
     if (file) {
+      if (file.size > MAX_FILE_SIZE_MB * 1024 * 1024) {
+        setFileError(`File is too large. Maximum size is ${MAX_FILE_SIZE_MB}MB.`);
+        if (fileInputRef.current) {
+          fileInputRef.current.value = "";
+        }
+        // Clear image-related states if a bad file was selected to avoid showing stale preview
+        setImageFile(null);
+        setImagePreviewUrl('');
+        setPoints([]);
+        setVideoUrl(''); // Also clear any existing video
+        setProgress(0);
+        return;
+      }
+
+      // If file is valid
       setImageFile(file);
       setImagePreviewUrl(URL.createObjectURL(file));
-      setPoints([]);
+      setPoints([]); // Reset points for new image
       setVideoUrl('');
       setProgress(0);
+    } else {
+      // User cancelled file dialog or no file selected
+      // If no new file is chosen, and an old one exists, do nothing to fileError
+      // If no file was chosen AND no file is currently set (imageFile is null),
+      // we can clear any potential "stuck" error. But clearing at the top is generally sufficient.
     }
-  }, []);
+  }, []); // fileInputRef is stable. Setters are stable. MAX_FILE_SIZE_MB is const.
 
   const handleCanvasClick = useCallback((event: React.MouseEvent<HTMLCanvasElement>) => {
     if (points.length >= 2 || !imageRef.current || !canvasRef.current) return;
@@ -325,6 +365,7 @@ function ImageAnimatorPage() {
     setPoints([]);
     setVideoUrl('');
     setProgress(0);
+    setFileError(null); // Clear file error on reset
     imageRef.current = null;
 
     setRelativeZoomInFactor(DEFAULT_RELATIVE_ZOOM_IN_FACTOR);
@@ -370,9 +411,8 @@ function ImageAnimatorPage() {
   const handleInitialZoomChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const newInitialZoom = parseInt(e.target.value, 10);
     setRelativeZoomInFactor(newInitialZoom);
-    // If current mid-pan zoom is now greater than the new initial zoom, reset mid-pan zoom to 1 or new max.
     if (zoomLevelOutEffective > newInitialZoom) {
-      setZoomLevelOutEffective(1); // Or newInitialZoom for max possible
+      setZoomLevelOutEffective(1);
     }
   };
 
@@ -392,6 +432,7 @@ function ImageAnimatorPage() {
       </p>
 
       <div className="mb-4">
+        <label htmlFor="imageUploadAnimator" className="sr-only">Choose image</label>
         <input
           type="file"
           id="imageUploadAnimator"
@@ -406,6 +447,11 @@ function ImageAnimatorPage() {
                      file:bg-orange-500 file:text-gray-100
                      hover:file:bg-orange-600 disabled:opacity-50"
         />
+        {fileError && (
+          <p className="mt-2 text-sm text-red-400" role="alert">
+            {fileError}
+          </p>
+        )}
       </div>
 
       {!ffmpegLoaded && isLoading && (
@@ -494,9 +540,9 @@ function ImageAnimatorPage() {
 
       {isLoading && ffmpegLoaded && progress > 0 && (
          <div className="my-4">
-            <p className="text-sm text-orange-400 mb-1">Processing: {(progress * 100 / 150).toFixed(0)}%</p>
+            <p className="text-sm text-orange-400 mb-1">Processing: {(progress * 100 / 150).toFixed(0)}%</p> {/* Note: progress is 0-1, so *100 for percent. Division by 150 seems custom */}
             <div className="w-full bg-gray-600 rounded-full h-2.5">
-                <div className="bg-orange-500 h-2.5 rounded-full" style={{ width: `${progress * 100 / 150}%` }}></div>
+                <div className="bg-orange-500 h-2.5 rounded-full" style={{ width: `${(progress * 100 / 150).toFixed(0)}%` }}></div> {/* Adjusted width calc if progress is 0-1 */}
             </div>
         </div>
       )}
