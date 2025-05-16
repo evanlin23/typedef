@@ -1,3 +1,4 @@
+// src/pages/Home.tsx
 import UtilCard from '../components/UtilCard'
 
 export default function Home() {
@@ -15,6 +16,12 @@ export default function Home() {
           description="Upload multiple PDF files, reorder them, and combine them into a single document."
           linkTo="/pdf-combiner"
           linkText="Open PDF Combiner"
+        />
+        <UtilCard
+          title="Image Animator"
+          description="Upload an image, select two points, and generate a 9:16 MP4 video with a zoom-pan-zoom animation."
+          linkTo="/image-animator"
+          linkText="Open Image Animator"
         />
       </div>
     </div>
