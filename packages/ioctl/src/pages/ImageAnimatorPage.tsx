@@ -8,10 +8,13 @@ const OUTPUT_WIDTH = 720; // For 9:16 aspect ratio
 const OUTPUT_HEIGHT = 1280;
 const FPS = 60;
 
-const PRE_ZOOMPAN_UPSCALE_FACTOR = 8; 
+const PRE_ZOOMPAN_UPSCALE_FACTOR = 8;
 
-const RELATIVE_ZOOM_IN_FACTOR = 6; 
-const ZOOM_LEVEL_OUT_EFFECTIVE = 2; 
+// Default zoom levels (user-configurable)
+const DEFAULT_RELATIVE_ZOOM_IN_FACTOR = 6;
+const DEFAULT_ZOOM_LEVEL_OUT_EFFECTIVE = 2;
+
+const INITIAL_ZOOM_OPTIONS = [2, 3, 4, 5, 6, 7, 8, 9, 10];
 
 // Durations in seconds for each animation phase
 const DURATION_HOLD_START = 0.5;
@@ -43,10 +46,20 @@ function ImageAnimatorPage() {
   const [ffmpegLoaded, setFfmpegLoaded] = useState<boolean>(false);
   const [progress, setProgress] = useState(0); // progress is expected to be 0 to 1
 
+  // User-configurable zoom factors
+  const [relativeZoomInFactor, setRelativeZoomInFactor] = useState<number>(DEFAULT_RELATIVE_ZOOM_IN_FACTOR);
+  const [zoomLevelOutEffective, setZoomLevelOutEffective] = useState<number>(DEFAULT_ZOOM_LEVEL_OUT_EFFECTIVE);
+
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const imageRef = useRef<HTMLImageElement | null>(null); 
+  const imageRef = useRef<HTMLImageElement | null>(null);
   const ffmpegRef = useRef(new FFmpeg());
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Generate options for Mid-Pan Zoom based on Initial/Final Zoom
+  const midPanZoomOptions = Array.from(
+    { length: relativeZoomInFactor },
+    (_, i) => i + 1 // Creates [1, 2, ..., relativeZoomInFactor]
+  );
 
   // Load FFmpeg
   useEffect(() => {
@@ -60,13 +73,13 @@ function ImageAnimatorPage() {
         }
       });
       ffmpeg.on('progress', (event: ProgressEvent) => {
-        setProgress(event.progress); 
+        setProgress(event.progress);
       });
-      
+
       try {
         const coreURL = await toBlobURL('https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm/ffmpeg-core.js', 'text/javascript');
         const wasmURL = await toBlobURL('https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm/ffmpeg-core.wasm', 'application/wasm');
-        
+
         await ffmpeg.load({ coreURL, wasmURL });
         setFfmpegLog(prev => prev + '\nFFmpeg loaded successfully!');
         setFfmpegLoaded(true);
@@ -92,9 +105,9 @@ function ImageAnimatorPage() {
 
     const img = new Image();
     img.onload = () => {
-      imageRef.current = img; 
+      imageRef.current = img;
 
-      const canvasMaxWidth = 600; 
+      const canvasMaxWidth = 600;
       const scale = Math.min(canvasMaxWidth / img.naturalWidth, 1);
       canvas.width = img.naturalWidth * scale;
       canvas.height = img.naturalHeight * scale;
@@ -127,7 +140,7 @@ function ImageAnimatorPage() {
     if (file) {
       setImageFile(file);
       setImagePreviewUrl(URL.createObjectURL(file));
-      setPoints([]); 
+      setPoints([]);
       setVideoUrl('');
       setProgress(0);
     }
@@ -138,7 +151,7 @@ function ImageAnimatorPage() {
 
     const canvas = canvasRef.current;
     const rect = canvas.getBoundingClientRect();
-    const scaleX = imageRef.current.naturalWidth / canvas.width; 
+    const scaleX = imageRef.current.naturalWidth / canvas.width;
     const scaleY = imageRef.current.naturalHeight / canvas.height;
 
     const canvasX = event.clientX - rect.left;
@@ -155,10 +168,19 @@ function ImageAnimatorPage() {
       alert('Please upload an image, select two points, ensure FFmpeg is loaded, and image dimensions are available.');
       return;
     }
+    // Basic validation, though dropdowns limit choices
+    if (relativeZoomInFactor < 2 || zoomLevelOutEffective < 1 || zoomLevelOutEffective > relativeZoomInFactor) {
+      alert('Invalid zoom factor selection. Please check your choices.');
+      return;
+    }
+    if (relativeZoomInFactor <= zoomLevelOutEffective && DURATION_ZOOM_OUT > 0) {
+        setFfmpegLog(prev => prev + `\nWarning: Initial/Final zoom (${relativeZoomInFactor}x) is not greater than Mid-Pan zoom (${zoomLevelOutEffective}x). This will result in zooming *in* or staying same during the 'zoom-out' phase.`);
+    }
 
     setIsLoading(true);
     setVideoUrl('');
-    setFfmpegLog(prev => prev.split('\n').slice(0,2).join('\n') + '\nStarting animation process...'); 
+    setFfmpegLog(prev => prev.split('\n').slice(0,2).join('\n') + '\nStarting animation process...');
+    setFfmpegLog(prev => prev + `\nUser Zoom Settings: Initial/Final=${relativeZoomInFactor}x, Mid-Pan=${zoomLevelOutEffective}x`);
     setProgress(0);
 
     const ffmpeg = ffmpegRef.current;
@@ -176,18 +198,18 @@ function ImageAnimatorPage() {
       if (lastDot === -1 || lastDot === 0 || lastDot === filename.length - 1) { return ''; }
       return filename.slice(lastDot + 1).toLowerCase();
     };
-    
+
     let extension = getFileExtension(imageFile.name);
     if (!extension) {
         if (imageFile.type.startsWith('image/')) {
             extension = imageFile.type.substring('image/'.length);
             if (extension === 'jpeg') extension = 'jpg';
         } else {
-            extension = 'png'; 
+            extension = 'png';
             setFfmpegLog(prev => prev + `\nWarning: Could not determine image extension, defaulting to .png for input.`);
         }
     }
-    const inputFileName = `input.${extension}`; 
+    const inputFileName = `input.${extension}`;
     const outputFileName = 'output.mp4';
 
     try {
@@ -217,7 +239,7 @@ function ImageAnimatorPage() {
         x: p2_orig.x * intermediate_scale_factor + intermediate_pad_x,
         y: p2_orig.y * intermediate_scale_factor + intermediate_pad_y,
       };
-      
+
       const p1_interm_t_x_rounded = parseFloat(p1_intermediate_transformed.x.toFixed(4));
       const p1_interm_t_y_rounded = parseFloat(p1_intermediate_transformed.y.toFixed(4));
       const p2_interm_t_x_rounded = parseFloat(p2_intermediate_transformed.x.toFixed(4));
@@ -232,31 +254,33 @@ function ImageAnimatorPage() {
       const f_zoom_out_end = f_hold_start_end + Math.round(DURATION_ZOOM_OUT * FPS);
       const f_pan_end = f_zoom_out_end + Math.round(DURATION_PAN * FPS);
       const f_zoom_in_end = f_pan_end + Math.round(DURATION_ZOOM_IN * FPS);
+      
+      const currentRelativeZoomIn = parseFloat(relativeZoomInFactor.toFixed(4));
+      const currentZoomOutEffective = parseFloat(zoomLevelOutEffective.toFixed(4));
 
-      const zoomExpr = 
-        `if(lt(on,${f_hold_start_end}),${RELATIVE_ZOOM_IN_FACTOR},` +
-        `if(lt(on,${f_zoom_out_end}),${RELATIVE_ZOOM_IN_FACTOR} - (${RELATIVE_ZOOM_IN_FACTOR}-${ZOOM_LEVEL_OUT_EFFECTIVE})*(on-${f_hold_start_end})/(${DURATION_ZOOM_OUT*FPS}),` +
-        `if(lt(on,${f_pan_end}),${ZOOM_LEVEL_OUT_EFFECTIVE},` +
-        `if(lt(on,${f_zoom_in_end}),${ZOOM_LEVEL_OUT_EFFECTIVE} + (${RELATIVE_ZOOM_IN_FACTOR}-${ZOOM_LEVEL_OUT_EFFECTIVE})*(on-${f_pan_end})/(${DURATION_ZOOM_IN*FPS}),` +
-        `${RELATIVE_ZOOM_IN_FACTOR}))))`;
+      const zoomExpr =
+        `if(lt(on,${f_hold_start_end}),${currentRelativeZoomIn},` +
+        `if(lt(on,${f_zoom_out_end}),${currentRelativeZoomIn} - (${currentRelativeZoomIn}-${currentZoomOutEffective})*(on-${f_hold_start_end})/(${DURATION_ZOOM_OUT*FPS}),` +
+        `if(lt(on,${f_pan_end}),${currentZoomOutEffective},` +
+        `if(lt(on,${f_zoom_in_end}),${currentZoomOutEffective} + (${currentRelativeZoomIn}-${currentZoomOutEffective})*(on-${f_pan_end})/(${DURATION_ZOOM_IN*FPS}),` +
+        `${currentRelativeZoomIn}))))`;
 
-      const targetXTimelineExpr_intermediate = 
+      const targetXTimelineExpr_intermediate =
         `if(lt(on,${f_zoom_out_end}),${p1_interm_t_x_rounded},` +
         `if(lt(on,${f_pan_end}),${p1_interm_t_x_rounded} + (${p2_interm_t_x_rounded}-${p1_interm_t_x_rounded})*(on-${f_zoom_out_end})/(${DURATION_PAN*FPS}),` +
         `${p2_interm_t_x_rounded}))`;
 
-      const targetYTimelineExpr_intermediate = 
+      const targetYTimelineExpr_intermediate =
         `if(lt(on,${f_zoom_out_end}),${p1_interm_t_y_rounded},` +
         `if(lt(on,${f_pan_end}),${p1_interm_t_y_rounded} + (${p2_interm_t_y_rounded}-${p1_interm_t_y_rounded})*(on-${f_zoom_out_end})/(${DURATION_PAN*FPS}),` +
         `${p2_interm_t_y_rounded}))`;
-      
-      // Round zoompan x/y to nearest integer
+
       const zoompanXExpr = `round((${targetXTimelineExpr_intermediate}) - ((${INTERMEDIATE_CANVAS_WIDTH})/(${zoomExpr}))/2)`;
       const zoompanYExpr = `round((${targetYTimelineExpr_intermediate}) - ((${INTERMEDIATE_CANVAS_HEIGHT})/(${zoomExpr}))/2)`;
 
-      const filterGraph = 
-        `scale=w=${INTERMEDIATE_CANVAS_WIDTH}:h=${INTERMEDIATE_CANVAS_HEIGHT}:force_original_aspect_ratio=decrease:eval=frame,` +
-        `pad=width=${INTERMEDIATE_CANVAS_WIDTH}:height=${INTERMEDIATE_CANVAS_HEIGHT}:x='(ow-iw)/2':y='(oh-ih)/2':color=black:eval=frame,` +
+      const filterGraph =
+        `scale=w=${INTERMEDIATE_CANVAS_WIDTH}:h=${INTERMEDIATE_CANVAS_HEIGHT}:force_original_aspect_ratio=decrease,` +
+        `pad=width=${INTERMEDIATE_CANVAS_WIDTH}:height=${INTERMEDIATE_CANVAS_HEIGHT}:x='(ow-iw)/2':y='(oh-ih)/2':color=black,` +
         `zoompan=z='${zoomExpr}':x='${zoompanXExpr}':y='${zoompanYExpr}':d=${totalFrames}:s=${OUTPUT_WIDTH}x${OUTPUT_HEIGHT}:fps=${FPS},` +
         `format=yuv420p`;
 
@@ -264,16 +288,16 @@ function ImageAnimatorPage() {
         '-i', inputFileName,
         '-vf', filterGraph,
         '-c:v', 'libx264',
-        '-preset', 'ultrafast', 
-        '-crf', '28', 
-        '-t', TOTAL_DURATION_SEC.toString(), 
+        '-preset', 'ultrafast',
+        '-crf', '28',
+        '-t', TOTAL_DURATION_SEC.toString(),
         outputFileName
       ];
-      
+
       setFfmpegLog(prev => prev + `\nFull filter graph: ${filterGraph}`);
       setFfmpegLog(prev => prev + `\nExecuting: ffmpeg ${command.join(' ')}`);
       await ffmpeg.exec(command);
-      
+
       setFfmpegLog(prev => prev + '\nProcessing complete. Reading output file...');
       const data = await ffmpeg.readFile(outputFileName);
       setVideoUrl(URL.createObjectURL(new Blob([(data as Uint8Array).buffer], { type: 'video/mp4' })));
@@ -293,7 +317,7 @@ function ImageAnimatorPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [imageFile, points, ffmpegLoaded]);
+  }, [imageFile, points, ffmpegLoaded, relativeZoomInFactor, zoomLevelOutEffective]);
 
   const handleReset = useCallback(() => {
     setImageFile(null);
@@ -301,12 +325,15 @@ function ImageAnimatorPage() {
     setPoints([]);
     setVideoUrl('');
     setProgress(0);
-    imageRef.current = null; 
-    
+    imageRef.current = null;
+
+    setRelativeZoomInFactor(DEFAULT_RELATIVE_ZOOM_IN_FACTOR);
+    setZoomLevelOutEffective(DEFAULT_ZOOM_LEVEL_OUT_EFFECTIVE);
+
     let resetLogMessage = "Loading ffmpeg-core.js...";
     const successMsg = "FFmpeg loaded successfully!";
     const loadingMsg = "Loading ffmpeg-core.js...";
-    const currentLog = ffmpegLog; 
+    const currentLog = ffmpegLog;
 
     if (ffmpegLoaded) {
         if (currentLog.includes(loadingMsg) && currentLog.includes(successMsg)) {
@@ -314,8 +341,8 @@ function ImageAnimatorPage() {
             const successIndex = currentLog.indexOf(successMsg, loadingIndex);
             if (loadingIndex !== -1 && successIndex !== -1 && successIndex > loadingIndex) {
                 resetLogMessage = currentLog.substring(loadingIndex, successIndex + successMsg.length);
-            } else { 
-                 resetLogMessage = `${loadingMsg}\n${successMsg}`; 
+            } else {
+                 resetLogMessage = `${loadingMsg}\n${successMsg}`;
             }
         } else {
              resetLogMessage = successMsg;
@@ -324,7 +351,7 @@ function ImageAnimatorPage() {
         if (currentLog.startsWith(loadingMsg)) {
             const firstLineEnd = currentLog.indexOf('\n');
             resetLogMessage = firstLineEnd > -1 ? currentLog.substring(0, firstLineEnd) : currentLog;
-            if (!resetLogMessage.trim().endsWith("...")) { 
+            if (!resetLogMessage.trim().endsWith("...")) {
                 resetLogMessage = loadingMsg;
             }
         } else {
@@ -338,27 +365,40 @@ function ImageAnimatorPage() {
         ctx?.clearRect(0,0,canvasRef.current.width, canvasRef.current.height);
     }
     if (fileInputRef.current) fileInputRef.current.value = "";
-  }, [ffmpegLoaded, ffmpegLog]); 
+  }, [ffmpegLoaded, ffmpegLog]);
+
+  const handleInitialZoomChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const newInitialZoom = parseInt(e.target.value, 10);
+    setRelativeZoomInFactor(newInitialZoom);
+    // If current mid-pan zoom is now greater than the new initial zoom, reset mid-pan zoom to 1 or new max.
+    if (zoomLevelOutEffective > newInitialZoom) {
+      setZoomLevelOutEffective(1); // Or newInitialZoom for max possible
+    }
+  };
+
+  const handleMidPanZoomChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    setZoomLevelOutEffective(parseInt(e.target.value, 10));
+  };
 
   // --- JSX ---
   return (
     <div className="max-w-4xl mx-auto p-6 bg-gray-700 shadow-lg rounded-lg text-gray-200">
       <h2 className="text-2xl font-bold text-orange-400 mb-2">Image Animator (Ken Burns Style)</h2>
       <p className="text-gray-300 mb-6">
-        Upload an image, select two points (start and end), and click "Animate!" 
-        to generate a 9:16 MP4 video. The image will be fit within the frame (with black bars if needed),
-        then zoom in on the first point, pan to the second point, and zoom in there.
+        Upload an image, select two points (start and end), adjust zoom levels, and click "Animate!"
+        to generate a 9:16 MP4 video. The image will be fit within the frame,
+        then zoom based on your settings, pan between points, and zoom again.
         Uses an internal upscale factor of {PRE_ZOOMPAN_UPSCALE_FACTOR}x before zoom/pan to potentially reduce jitter.
       </p>
-      
+
       <div className="mb-4">
-        <input 
-          type="file" 
+        <input
+          type="file"
           id="imageUploadAnimator"
           ref={fileInputRef}
-          accept="image/*" 
-          onChange={handleImageUpload} 
-          disabled={isLoading} 
+          accept="image/*"
+          onChange={handleImageUpload}
+          disabled={isLoading}
           className="block w-full text-sm text-gray-300
                      file:mr-4 file:py-2 file:px-4
                      file:rounded-md file:border-0
@@ -367,7 +407,7 @@ function ImageAnimatorPage() {
                      hover:file:bg-orange-600 disabled:opacity-50"
         />
       </div>
-      
+
       {!ffmpegLoaded && isLoading && (
          <div className="my-4 p-3 bg-blue-900 text-blue-100 rounded-md">
             Loading FFmpeg core, please wait... (this might take a moment on first visit)
@@ -377,13 +417,51 @@ function ImageAnimatorPage() {
         </div>
       )}
 
+      {/* Zoom Configuration Dropdowns */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6 p-4 border border-gray-600 rounded-md">
+        <div>
+          <label htmlFor="initialZoomFactor" className="block text-sm font-medium text-gray-300 mb-1">
+            Initial/Final Zoom:
+          </label>
+          <select
+            id="initialZoomFactor"
+            value={relativeZoomInFactor}
+            onChange={handleInitialZoomChange}
+            disabled={isLoading}
+            className="w-full p-2.5 rounded bg-gray-600 border border-gray-500 focus:ring-orange-500 focus:border-orange-500 text-gray-100"
+          >
+            {INITIAL_ZOOM_OPTIONS.map(zoom => (
+              <option key={zoom} value={zoom}>{zoom}x Zoom</option>
+            ))}
+          </select>
+          <p className="text-xs text-gray-400 mt-1">Zoom level at start and end points.</p>
+        </div>
+        <div>
+          <label htmlFor="midPanZoomFactor" className="block text-sm font-medium text-gray-300 mb-1">
+            Mid-Pan Zoom:
+          </label>
+          <select
+            id="midPanZoomFactor"
+            value={zoomLevelOutEffective}
+            onChange={handleMidPanZoomChange}
+            disabled={isLoading}
+            className="w-full p-2.5 rounded bg-gray-600 border border-gray-500 focus:ring-orange-500 focus:border-orange-500 text-gray-100"
+          >
+            {midPanZoomOptions.map(zoom => (
+              <option key={zoom} value={zoom}>{zoom}x Zoom</option>
+            ))}
+          </select>
+          <p className="text-xs text-gray-400 mt-1">Zoom level during pan. Cannot exceed Initial/Final Zoom.</p>
+        </div>
+      </div>
+
 
       {imagePreviewUrl && (
         <div className="my-4">
           <p className="text-gray-300 mb-2">Click on the image to select two points (P1 then P2).</p>
-          <canvas 
-            ref={canvasRef} 
-            onClick={handleCanvasClick} 
+          <canvas
+            ref={canvasRef}
+            onClick={handleCanvasClick}
             className={`border border-gray-500 max-w-full rounded ${points.length < 2 ? 'cursor-crosshair' : 'cursor-default'}`}
           />
           {points.length > 0 && (
@@ -396,29 +474,29 @@ function ImageAnimatorPage() {
       )}
 
       <div className="my-4 space-x-3">
-        <button 
-          onClick={handleAnimate} 
+        <button
+          onClick={handleAnimate}
           disabled={isLoading || !ffmpegLoaded || points.length < 2 || !imageFile || !imageRef.current}
           className="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded
                      disabled:bg-gray-500 disabled:cursor-not-allowed transition-colors"
         >
           {isLoading && ffmpegLoaded ? 'Animating...' : 'Animate!'}
         </button>
-        <button 
-          onClick={handleReset} 
-          disabled={isLoading && ffmpegLoaded} 
+        <button
+          onClick={handleReset}
+          disabled={isLoading && ffmpegLoaded}
           className="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded
                      disabled:bg-gray-500 disabled:opacity-70 transition-colors"
         >
           Reset
         </button>
       </div>
-      
+
       {isLoading && ffmpegLoaded && progress > 0 && (
          <div className="my-4">
             <p className="text-sm text-orange-400 mb-1">Processing: {(progress * 100 / 150).toFixed(0)}%</p>
             <div className="w-full bg-gray-600 rounded-full h-2.5">
-                <div className="bg-orange-500 h-2.5 rounded-full" style={{ width: `${Math.min(progress * 100 / 150, 100)}%` }}></div>
+                <div className="bg-orange-500 h-2.5 rounded-full" style={{ width: `${progress * 100 / 150}%` }}></div>
             </div>
         </div>
       )}
@@ -427,15 +505,15 @@ function ImageAnimatorPage() {
       {videoUrl && (
         <div className="my-6">
           <h3 className="text-xl font-semibold text-orange-400 mb-3">Generated Video:</h3>
-          <video 
-            src={videoUrl} 
-            controls 
-            width={OUTPUT_WIDTH / 2.5} 
+          <video
+            src={videoUrl}
+            controls
+            width={OUTPUT_WIDTH / 2.5}
             height={OUTPUT_HEIGHT / 2.5}
             className="rounded border border-gray-500"
           />
-          <a 
-            href={videoUrl} 
+          <a
+            href={videoUrl}
             download="animated_image.mp4"
             className="mt-3 inline-block bg-orange-500 hover:bg-orange-600 text-gray-100 py-2 px-4 rounded transition-colors"
           >
@@ -447,8 +525,8 @@ function ImageAnimatorPage() {
       {ffmpegLog && (
         <div className="mt-6">
           <h4 className="text-md font-semibold text-orange-400 mb-1">FFmpeg Log:</h4>
-          <pre 
-           className="bg-gray-800 text-xs text-gray-300 p-3 rounded-md max-h-48 overflow-y-auto 
+          <pre
+           className="bg-gray-800 text-xs text-gray-300 p-3 rounded-md max-h-48 overflow-y-auto
                       whitespace-pre-wrap break-all border border-gray-600"
           >
             {ffmpegLog}
