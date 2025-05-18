@@ -250,6 +250,8 @@ function MultiImageAnimatorPage() {
     if (activeImageIndex === null || !activeImageRef.current || !canvasRef.current || !imageItems[activeImageIndex]) return;
     
     const activeItem = imageItems[activeImageIndex];
+    
+    // If the active item already has 2 points, do nothing further (don't add more points or auto-advance).
     if (activeItem.points.length >= 2) return;
 
     const canvas = canvasRef.current;
@@ -263,6 +265,9 @@ function MultiImageAnimatorPage() {
     const originalX = Math.round(canvasX * scaleX);
     const originalY = Math.round(canvasY * scaleY);
 
+    // Check if this click will complete the points for the current item (i.e., it currently has 1 point).
+    const willCompletePointsWithThisClick = activeItem.points.length === 1;
+
     setImageItems(prevItems =>
       prevItems.map((item, index) =>
         index === activeImageIndex
@@ -270,6 +275,15 @@ function MultiImageAnimatorPage() {
           : item
       )
     );
+
+    // If points were just completed for this item with this click,
+    // and there's a next image in the queue, advance to it.
+    if (willCompletePointsWithThisClick) {
+        const nextIndex = activeImageIndex + 1;
+        if (nextIndex < imageItems.length) {
+            setActiveImageIndex(nextIndex);
+        }
+    }
   }, [activeImageIndex, imageItems]);
 
   const handleAnimate = useCallback(async () => {
@@ -312,6 +326,8 @@ function MultiImageAnimatorPage() {
       if (lastDot === -1 || lastDot === 0 || lastDot === filename.length - 1) return '';
       return filename.slice(lastDot + 1).toLowerCase();
     };
+
+    let currentVideoFile = ""; // Keep track of the latest merged video file
 
     try {
       for (let i = 0; i < imageItems.length; i++) {
@@ -409,11 +425,12 @@ function MultiImageAnimatorPage() {
       if (imageItems.length === 1) {
         setCurrentTaskDescription("Finalizing video...");
         setCurrentOperationProgress(0); 
-        const data = await ffmpeg.readFile(tempClipNames[0]);
+        currentVideoFile = tempClipNames[0];
+        const data = await ffmpeg.readFile(currentVideoFile);
         setVideoUrl(URL.createObjectURL(new Blob([(data as Uint8Array).buffer], { type: 'video/mp4' })));
         setFfmpegLog(prev => prev + '\nSingle video generated successfully!');
       } else {
-        let currentVideoFile = tempClipNames[0];
+        currentVideoFile = tempClipNames[0];
         let currentVideoDuration = TOTAL_DURATION_SEC;
 
         for (let j = 1; j < tempClipNames.length; j++) {
@@ -438,15 +455,16 @@ function MultiImageAnimatorPage() {
           setFfmpegLog(prev => prev + `\nTransition ${j} (distance effect): ffmpeg ${xfadeCommand.join(' ')}`);
           await ffmpeg.exec(xfadeCommand);
 
-          if (j > 1) { 
-             try { await ffmpeg.deleteFile(`merged_${j - 2}.mp4`); } catch(e){ console.warn("Failed to delete merged file", e)}
+          // Clean up previous files
+          if (j > 1) { // Not the first merge, so a previous merged file exists
+             try { await ffmpeg.deleteFile(`merged_${j - 2}.mp4`); } catch(e){ console.warn("Failed to delete previous merged file", e)}
           }
-          if (j === 1 && currentVideoFile !== tempClipNames[0]) { 
-            try { await ffmpeg.deleteFile(currentVideoFile); } catch(e){ console.warn("Failed to delete prev merged file", e)}
-          } else if (j === 1 && currentVideoFile === tempClipNames[0]) { 
+           // Delete the first individual clip after its first use in merge
+          if (j === 1 && currentVideoFile === tempClipNames[0]) { 
             try { await ffmpeg.deleteFile(tempClipNames[0]); } catch(e){ console.warn("Failed to delete first clip", e)}
           }
-           try { await ffmpeg.deleteFile(nextClipFile); } catch(e){ console.warn("Failed to delete next clip", e)} 
+          // Delete the "nextClipFile" as it's now part of the new merged file
+           try { await ffmpeg.deleteFile(nextClipFile); } catch(e){ console.warn("Failed to delete next clip file", e)} 
 
           currentVideoFile = transitionedFile;
           currentVideoDuration = currentVideoDuration + TOTAL_DURATION_SEC - TRANSITION_DURATION_SEC;
@@ -476,21 +494,46 @@ function MultiImageAnimatorPage() {
       setCurrentTaskDescription("");
       setCurrentOperationProgress(0);
       setFfmpegLog(prev => prev + '\nCleaning up temporary files...');
+      
+      // Clean up individual input files
       for (const name of tempInputFileNames) { 
         try { await ffmpeg.deleteFile(name); } catch (e) { console.warn(`Failed to delete input file ${name}`, e); }
       }
+      
+      // Clean up individual clip_i.mp4 files (if not the final video and not already deleted)
+      for (let k = 0; k < tempClipNames.length; k++) {
+          if (tempClipNames[k] !== currentVideoFile) { // Don't delete if it's the final output
+              let alreadyDeletedDuringMerge = false;
+              if (imageItems.length > 1) {
+                  if (k === 0 && `merged_0.mp4` === currentVideoFile ) { // first clip used in first merge
+                    // it would have been deleted if `currentVideoFile` was `tempClipNames[0]` and j === 1
+                  } else if (k > 0) { // other clips were deleted as `nextClipFile`
+                    // this condition is a bit complex due to iterative merging, so a simple try-catch is safer
+                  }
+              }
+              try { 
+                  // A more robust check: if tempClipNames[k] is NOT currentVideoFile, and not videoUrl (meaning it's an intermediate)
+                  const dataExists = await ffmpeg.readFile(tempClipNames[k]).then(() => true).catch(() => false);
+                  if(dataExists && tempClipNames[k] !== currentVideoFile) {
+                    await ffmpeg.deleteFile(tempClipNames[k]);
+                  }
+              } catch (e) { /* Gulp: File might have been deleted during merging process */ }
+          }
+      }
+
+      // Clean up intermediate merged files (merged_0.mp4, merged_1.mp4, etc.)
+      // The final `currentVideoFile` (e.g., merged_N-1.mp4) should NOT be deleted here if it's what videoUrl is based on.
       if (imageItems.length > 1) {
-          try {
-            for (let k=0; k < imageItems.length -1; k++) {
-                if (`merged_${k}.mp4` !== currentVideoFile || videoUrl) { 
-                    try { await ffmpeg.deleteFile(`merged_${k}.mp4`); } catch (e) { /* Gulp */ }
-                }
-            }
-          } catch (e) { console.warn("Error during final merged file cleanup", e)}
+          for (let k=0; k < imageItems.length - 2; k++) { // Iterate up to the second to last possible merge
+              const intermediateMergedFile = `merged_${k}.mp4`;
+              if (intermediateMergedFile !== currentVideoFile) { // Don't delete if it became the final file
+                  try { await ffmpeg.deleteFile(intermediateMergedFile); } catch (e) { /* Gulp */ }
+              }
+          }
       }
       setFfmpegLog(prev => prev + '\nCleanup attempt complete.');
     }
-  }, [imageItems, ffmpegLoaded, relativeZoomInFactor, zoomLevelOutEffective, videoUrl]); 
+  }, [imageItems, ffmpegLoaded, relativeZoomInFactor, zoomLevelOutEffective]); 
 
   const handleReset = useCallback(() => {
     imageItems.forEach(item => URL.revokeObjectURL(item.previewUrl));
@@ -549,7 +592,10 @@ function MultiImageAnimatorPage() {
                 } else if (itemIndex >= newItems.length) { 
                     setActiveImageIndex(newItems.length - 1);
                 } else { 
-                    setActiveImageIndex(itemIndex);
+                    // If the removed item was active, and there are still items at or after its original position,
+                    // the new item at that position becomes active.
+                    // This usually means the index stays the same unless it was the last item.
+                    setActiveImageIndex(itemIndex < newItems.length ? itemIndex : newItems.length - 1);
                 }
             } else if (activeImageIndex !== null && activeImageIndex > itemIndex) {
                 setActiveImageIndex(prevIdx => prevIdx! - 1);
@@ -619,11 +665,15 @@ function MultiImageAnimatorPage() {
       const newItems = [...prevItems];
       const [draggedItem] = newItems.splice(draggedItemIndex, 1);
       
-      // Adjust target index if dragging downwards
+      // Re-calculate target index in the modified array if item was moved downwards
       if (draggedItemIndex < targetItemIndex) {
-        // No adjustment needed when inserting before target, but if inserting after and targetItemIndex was based on original array:
-        // targetItemIndex = prevItems.findIndex(item => item.id === targetItemId); // re-fetch if necessary
+         targetItemIndex = newItems.findIndex(item => item.id === targetItemId) +1; // find it in the new array and place before it
+      } else {
+         targetItemIndex = newItems.findIndex(item => item.id === targetItemId);
       }
+      // Ensure targetItemIndex is valid after splice
+      if (targetItemIndex < 0) targetItemIndex = 0; // Should not happen with valid IDs
+      
       newItems.splice(targetItemIndex, 0, draggedItem);
       
       const prevActiveItemId = activeImageIndex !== null ? prevItems[activeImageIndex]?.id : null;
@@ -744,7 +794,8 @@ function MultiImageAnimatorPage() {
           {activeImageIndex !== null && imageItems[activeImageIndex] ? (
             <div>
               <p className="text-gray-300 mb-2">
-                Editing points for: <span className="font-semibold text-orange-300">{imageItems[activeImageIndex].file.name}</span>. Click to select P1 then P2.
+                Editing points for: <span className="font-semibold text-orange-300">{imageItems[activeImageIndex].file.name}</span>. 
+                {imageItems[activeImageIndex].points.length < 2 ? " Click to select P1 then P2." : " Points selected."}
               </p>
               <canvas
                 ref={canvasRef}
