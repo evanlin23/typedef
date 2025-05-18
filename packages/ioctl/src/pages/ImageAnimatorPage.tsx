@@ -19,11 +19,11 @@ const DEFAULT_ZOOM_LEVEL_OUT_EFFECTIVE = 2;
 const INITIAL_ZOOM_OPTIONS = [2, 3, 4, 5, 6, 7, 8, 9, 10];
 
 // Durations in seconds for each animation phase
-const DURATION_HOLD_START = 0.01;
-const DURATION_ZOOM_OUT = 1.5;
-const DURATION_PAN = 2.0;
-const DURATION_ZOOM_IN = 1.5;
-const DURATION_HOLD_END = 0.01;
+const DURATION_HOLD_START = 0.05;
+const DURATION_ZOOM_OUT = 0.90;
+const DURATION_PAN = 1.0;
+const DURATION_ZOOM_IN = 0.90;
+const DURATION_HOLD_END = 0.05;
 
 const TOTAL_DURATION_SEC =
   DURATION_HOLD_START +
@@ -209,7 +209,6 @@ function ImageAnimatorPage() {
       alert('Please upload an image, select two points, ensure FFmpeg is loaded, and image dimensions are available.');
       return;
     }
-    // Basic validation, though dropdowns limit choices
     if (relativeZoomInFactor < 2 || zoomLevelOutEffective < 1 || zoomLevelOutEffective > relativeZoomInFactor) {
       alert('Invalid zoom factor selection. Please check your choices.');
       return;
@@ -286,19 +285,11 @@ function ImageAnimatorPage() {
 
       // --- Stage 2: Create larger Zoompan Input (ZPI) canvas with borders ---
       const min_zoom_for_border_calc = Math.max(1, zoomLevelOutEffective); // Ensure zoom_min is at least 1
-      
-      // Calculate the base size of the viewport at minimum zoom (on IC)
-      const viewport_width_at_min_zoom_on_ic = IC_WIDTH / min_zoom_for_border_calc;
-      const viewport_height_at_min_zoom_on_ic = IC_HEIGHT / min_zoom_for_border_calc;
-
-      // Calculate border needed so that the center of the viewport can reach the edge of IC.
-      // Then apply the OVERSCAN_BORDER_FACTOR to make it larger.
-      const PAD_X_BORDER = Math.ceil((viewport_width_at_min_zoom_on_ic / 2) * OVERSCAN_BORDER_FACTOR);
-      const PAD_Y_BORDER = Math.ceil((viewport_height_at_min_zoom_on_ic / 2) * OVERSCAN_BORDER_FACTOR);
+      const PAD_X_BORDER = Math.ceil((IC_WIDTH / min_zoom_for_border_calc) / 2);
+      const PAD_Y_BORDER = Math.ceil((IC_HEIGHT / min_zoom_for_border_calc) / 2);
 
       const ZPI_WIDTH = IC_WIDTH + 2 * PAD_X_BORDER;
       const ZPI_HEIGHT = IC_HEIGHT + 2 * PAD_Y_BORDER;
-      setFfmpegLog(prev => prev + `\nOverscan border factor: ${OVERSCAN_BORDER_FACTOR}`);
       setFfmpegLog(prev => prev + `\nZoompan Input (ZPI) border padding (each side): X=${PAD_X_BORDER}, Y=${PAD_Y_BORDER}`);
       setFfmpegLog(prev => prev + `\nZoompan Input (ZPI) canvas size (IC + borders): ${ZPI_WIDTH}x${ZPI_HEIGHT}`);
 
@@ -320,7 +311,7 @@ function ImageAnimatorPage() {
       const f_zoom_in_end = f_pan_end + Math.round(DURATION_ZOOM_IN * FPS);
       
       const currentRelativeZoomIn = parseFloat(relativeZoomInFactor.toFixed(4));
-      const currentZoomOutEffective = parseFloat(zoomLevelOutEffective.toFixed(4));
+      const currentZoomOutEffective = parseFloat((zoomLevelOutEffective * OVERSCAN_BORDER_FACTOR).toFixed(4));
 
       const zoomExpr =
         `if(lt(on,${f_hold_start_end}),${currentRelativeZoomIn},` +
@@ -349,7 +340,6 @@ function ImageAnimatorPage() {
         `scale=w=${IC_WIDTH}:h=${IC_HEIGHT}:force_original_aspect_ratio=decrease,` +
         `pad=width=${IC_WIDTH}:height=${IC_HEIGHT}:x='(ow-iw)/2':y='(oh-ih)/2':color=black,` +
         // Stage 2: Pad the IC to ZPI_WIDTHxZPI_HEIGHT, creating borders for overscan
-        // The x and y for this pad correctly center the IC content within the ZPI.
         `pad=width=${ZPI_WIDTH}:height=${ZPI_HEIGHT}:x=${PAD_X_BORDER}:y=${PAD_Y_BORDER}:color=black,` +
         // Stage 3: Zoompan on the ZPI canvas
         `zoompan=z='${zoomExpr}':x='${zoompanXExpr}':y='${zoompanYExpr}':d=${totalFrames}:s=${OUTPUT_WIDTH}x${OUTPUT_HEIGHT}:fps=${FPS},` +
