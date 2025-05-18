@@ -10,6 +10,7 @@ const FPS = 60;
 const MAX_FILE_SIZE_MB = 20;
 
 const PRE_ZOOMPAN_UPSCALE_FACTOR = 8;
+const OVERSCAN_BORDER_FACTOR = 1.5;
 
 // Default zoom levels (user-configurable)
 const DEFAULT_RELATIVE_ZOOM_IN_FACTOR = 6;
@@ -18,11 +19,11 @@ const DEFAULT_ZOOM_LEVEL_OUT_EFFECTIVE = 2;
 const INITIAL_ZOOM_OPTIONS = [2, 3, 4, 5, 6, 7, 8, 9, 10];
 
 // Durations in seconds for each animation phase
-const DURATION_HOLD_START = 0.5;
+const DURATION_HOLD_START = 0.01;
 const DURATION_ZOOM_OUT = 1.5;
 const DURATION_PAN = 2.0;
 const DURATION_ZOOM_IN = 1.5;
-const DURATION_HOLD_END = 0.5;
+const DURATION_HOLD_END = 0.01;
 
 const TOTAL_DURATION_SEC =
   DURATION_HOLD_START +
@@ -203,7 +204,7 @@ function ImageAnimatorPage() {
     setPoints(prevPoints => [...prevPoints, { x: originalX, y: originalY }]);
   }, [points.length]);
 
-  const handleAnimate = useCallback(async () => {
+    const handleAnimate = useCallback(async () => {
     if (!imageFile || points.length < 2 || !ffmpegLoaded || !imageRef.current) {
       alert('Please upload an image, select two points, ensure FFmpeg is loaded, and image dimensions are available.');
       return;
@@ -245,7 +246,7 @@ function ImageAnimatorPage() {
             extension = imageFile.type.substring('image/'.length);
             if (extension === 'jpeg') extension = 'jpg';
         } else {
-            extension = 'png';
+            extension = 'png'; // Default fallback
             setFfmpegLog(prev => prev + `\nWarning: Could not determine image extension, defaulting to .png for input.`);
         }
     }
@@ -260,35 +261,58 @@ function ImageAnimatorPage() {
       const p2_orig = points[1];
       const totalFrames = Math.round(TOTAL_DURATION_SEC * FPS);
 
-      const INTERMEDIATE_CANVAS_WIDTH = OUTPUT_WIDTH * PRE_ZOOMPAN_UPSCALE_FACTOR;
-      const INTERMEDIATE_CANVAS_HEIGHT = OUTPUT_HEIGHT * PRE_ZOOMPAN_UPSCALE_FACTOR;
+      // --- Stage 1: Fit image to output aspect ratio (INTERMEDIATE_CANVAS) ---
+      const IC_WIDTH = OUTPUT_WIDTH * PRE_ZOOMPAN_UPSCALE_FACTOR; // IC = Intermediate Canvas
+      const IC_HEIGHT = OUTPUT_HEIGHT * PRE_ZOOMPAN_UPSCALE_FACTOR;
       setFfmpegLog(prev => prev + `\nUsing pre-zoompan upscale factor: ${PRE_ZOOMPAN_UPSCALE_FACTOR}`);
-      setFfmpegLog(prev => prev + `\nIntermediate canvas size for zoompan input: ${INTERMEDIATE_CANVAS_WIDTH}x${INTERMEDIATE_CANVAS_HEIGHT}`);
+      setFfmpegLog(prev => prev + `\nIntermediate Canvas (IC) size (content area for zoompan): ${IC_WIDTH}x${IC_HEIGHT}`);
 
-      const intermediate_scale_factor = Math.min(INTERMEDIATE_CANVAS_WIDTH / orig_iw, INTERMEDIATE_CANVAS_HEIGHT / orig_ih);
-      const intermediate_scaled_iw = orig_iw * intermediate_scale_factor;
-      const intermediate_scaled_ih = orig_ih * intermediate_scale_factor;
-      const intermediate_pad_x = (INTERMEDIATE_CANVAS_WIDTH - intermediate_scaled_iw) / 2;
-      const intermediate_pad_y = (INTERMEDIATE_CANVAS_HEIGHT - intermediate_scaled_ih) / 2;
+      // Calculate scaling and padding for original image onto IC
+      const ic_scale_factor = Math.min(IC_WIDTH / orig_iw, IC_HEIGHT / orig_ih);
+      const ic_scaled_iw = orig_iw * ic_scale_factor;
+      const ic_scaled_ih = orig_ih * ic_scale_factor;
+      const ic_pad_x = (IC_WIDTH - ic_scaled_iw) / 2;
+      const ic_pad_y = (IC_HEIGHT - ic_scaled_ih) / 2;
 
-      const p1_intermediate_transformed = {
-        x: p1_orig.x * intermediate_scale_factor + intermediate_pad_x,
-        y: p1_orig.y * intermediate_scale_factor + intermediate_pad_y,
+      // Transform points from original image coords to IC coords
+      const p1_ic_transformed = {
+        x: p1_orig.x * ic_scale_factor + ic_pad_x,
+        y: p1_orig.y * ic_scale_factor + ic_pad_y,
       };
-      const p2_intermediate_transformed = {
-        x: p2_orig.x * intermediate_scale_factor + intermediate_pad_x,
-        y: p2_orig.y * intermediate_scale_factor + intermediate_pad_y,
+      const p2_ic_transformed = {
+        x: p2_orig.x * ic_scale_factor + ic_pad_x,
+        y: p2_orig.y * ic_scale_factor + ic_pad_y,
       };
 
-      const p1_interm_t_x_rounded = parseFloat(p1_intermediate_transformed.x.toFixed(4));
-      const p1_interm_t_y_rounded = parseFloat(p1_intermediate_transformed.y.toFixed(4));
-      const p2_interm_t_x_rounded = parseFloat(p2_intermediate_transformed.x.toFixed(4));
-      const p2_interm_t_y_rounded = parseFloat(p2_intermediate_transformed.y.toFixed(4));
+      // --- Stage 2: Create larger Zoompan Input (ZPI) canvas with borders ---
+      const min_zoom_for_border_calc = Math.max(1, zoomLevelOutEffective); // Ensure zoom_min is at least 1
+      
+      // Calculate the base size of the viewport at minimum zoom (on IC)
+      const viewport_width_at_min_zoom_on_ic = IC_WIDTH / min_zoom_for_border_calc;
+      const viewport_height_at_min_zoom_on_ic = IC_HEIGHT / min_zoom_for_border_calc;
 
-      setFfmpegLog(prev => prev + `\nImage will be scaled by ${intermediate_scale_factor.toFixed(4)} to ${intermediate_scaled_iw.toFixed(1)}x${intermediate_scaled_ih.toFixed(1)} on intermediate canvas.`);
-      setFfmpegLog(prev => prev + `\nPadding on intermediate canvas (x,y): ${intermediate_pad_x.toFixed(2)}, ${intermediate_pad_y.toFixed(2)}`);
-      setFfmpegLog(prev => prev + `\nP1 original: (${p1_orig.x}, ${p1_orig.y}), intermediate transformed rounded: (${p1_interm_t_x_rounded}, ${p1_interm_t_y_rounded})`);
-      setFfmpegLog(prev => prev + `\nP2 original: (${p2_orig.x}, ${p2_orig.y}), intermediate transformed rounded: (${p2_interm_t_x_rounded}, ${p2_interm_t_y_rounded})`);
+      // Calculate border needed so that the center of the viewport can reach the edge of IC.
+      // Then apply the OVERSCAN_BORDER_FACTOR to make it larger.
+      const PAD_X_BORDER = Math.ceil((viewport_width_at_min_zoom_on_ic / 2) * OVERSCAN_BORDER_FACTOR);
+      const PAD_Y_BORDER = Math.ceil((viewport_height_at_min_zoom_on_ic / 2) * OVERSCAN_BORDER_FACTOR);
+
+      const ZPI_WIDTH = IC_WIDTH + 2 * PAD_X_BORDER;
+      const ZPI_HEIGHT = IC_HEIGHT + 2 * PAD_Y_BORDER;
+      setFfmpegLog(prev => prev + `\nOverscan border factor: ${OVERSCAN_BORDER_FACTOR}`);
+      setFfmpegLog(prev => prev + `\nZoompan Input (ZPI) border padding (each side): X=${PAD_X_BORDER}, Y=${PAD_Y_BORDER}`);
+      setFfmpegLog(prev => prev + `\nZoompan Input (ZPI) canvas size (IC + borders): ${ZPI_WIDTH}x${ZPI_HEIGHT}`);
+
+      // Transform points from IC coords to ZPI coords
+      const p1_zpi_transformed_x = parseFloat((p1_ic_transformed.x + PAD_X_BORDER).toFixed(4));
+      const p1_zpi_transformed_y = parseFloat((p1_ic_transformed.y + PAD_Y_BORDER).toFixed(4));
+      const p2_zpi_transformed_x = parseFloat((p2_ic_transformed.x + PAD_X_BORDER).toFixed(4));
+      const p2_zpi_transformed_y = parseFloat((p2_ic_transformed.y + PAD_Y_BORDER).toFixed(4));
+
+      setFfmpegLog(prev => prev + `\nImage scaled by ${ic_scale_factor.toFixed(4)} to ${ic_scaled_iw.toFixed(1)}x${ic_scaled_ih.toFixed(1)} on IC.`);
+      setFfmpegLog(prev => prev + `\nPadding on IC (x,y): ${ic_pad_x.toFixed(2)}, ${ic_pad_y.toFixed(2)}`);
+      setFfmpegLog(prev => prev + `\nP1 on IC: (${p1_ic_transformed.x.toFixed(2)}, ${p1_ic_transformed.y.toFixed(2)}), on ZPI: (${p1_zpi_transformed_x}, ${p1_zpi_transformed_y})`);
+      setFfmpegLog(prev => prev + `\nP2 on IC: (${p2_ic_transformed.x.toFixed(2)}, ${p2_ic_transformed.y.toFixed(2)}), on ZPI: (${p2_zpi_transformed_x}, ${p2_zpi_transformed_y})`);
+
 
       const f_hold_start_end = Math.round(DURATION_HOLD_START * FPS);
       const f_zoom_out_end = f_hold_start_end + Math.round(DURATION_ZOOM_OUT * FPS);
@@ -305,22 +329,29 @@ function ImageAnimatorPage() {
         `if(lt(on,${f_zoom_in_end}),${currentZoomOutEffective} + (${currentRelativeZoomIn}-${currentZoomOutEffective})*(on-${f_pan_end})/(${DURATION_ZOOM_IN*FPS}),` +
         `${currentRelativeZoomIn}))))`;
 
-      const targetXTimelineExpr_intermediate =
-        `if(lt(on,${f_zoom_out_end}),${p1_interm_t_x_rounded},` +
-        `if(lt(on,${f_pan_end}),${p1_interm_t_x_rounded} + (${p2_interm_t_x_rounded}-${p1_interm_t_x_rounded})*(on-${f_zoom_out_end})/(${DURATION_PAN*FPS}),` +
-        `${p2_interm_t_x_rounded}))`;
+      const targetXTimelineExpr_zpi = // Now uses ZPI-coordinates for points
+        `if(lt(on,${f_zoom_out_end}),${p1_zpi_transformed_x},` +
+        `if(lt(on,${f_pan_end}),${p1_zpi_transformed_x} + (${p2_zpi_transformed_x}-${p1_zpi_transformed_x})*(on-${f_zoom_out_end})/(${DURATION_PAN*FPS}),` +
+        `${p2_zpi_transformed_x}))`;
 
-      const targetYTimelineExpr_intermediate =
-        `if(lt(on,${f_zoom_out_end}),${p1_interm_t_y_rounded},` +
-        `if(lt(on,${f_pan_end}),${p1_interm_t_y_rounded} + (${p2_interm_t_y_rounded}-${p1_interm_t_y_rounded})*(on-${f_zoom_out_end})/(${DURATION_PAN*FPS}),` +
-        `${p2_interm_t_y_rounded}))`;
+      const targetYTimelineExpr_zpi = // Now uses ZPI-coordinates for points
+        `if(lt(on,${f_zoom_out_end}),${p1_zpi_transformed_y},` +
+        `if(lt(on,${f_pan_end}),${p1_zpi_transformed_y} + (${p2_zpi_transformed_y}-${p1_zpi_transformed_y})*(on-${f_zoom_out_end})/(${DURATION_PAN*FPS}),` +
+        `${p2_zpi_transformed_y}))`;
 
-      const zoompanXExpr = `round((${targetXTimelineExpr_intermediate}) - ((${INTERMEDIATE_CANVAS_WIDTH})/(${zoomExpr}))/2)`;
-      const zoompanYExpr = `round((${targetYTimelineExpr_intermediate}) - ((${INTERMEDIATE_CANVAS_HEIGHT})/(${zoomExpr}))/2)`;
-
+      // Viewport dimensions on ZPI are calculated based on IC dimensions and zoom
+      // This is because zoom factor is relative to the content size (IC), not ZPI.
+      const zoompanXExpr = `round((${targetXTimelineExpr_zpi}) - ((${IC_WIDTH})/(${zoomExpr}))/2)`;
+      const zoompanYExpr = `round((${targetYTimelineExpr_zpi}) - ((${IC_HEIGHT})/(${zoomExpr}))/2)`;
+      
       const filterGraph =
-        `scale=w=${INTERMEDIATE_CANVAS_WIDTH}:h=${INTERMEDIATE_CANVAS_HEIGHT}:force_original_aspect_ratio=decrease,` +
-        `pad=width=${INTERMEDIATE_CANVAS_WIDTH}:height=${INTERMEDIATE_CANVAS_HEIGHT}:x='(ow-iw)/2':y='(oh-ih)/2':color=black,` +
+        // Stage 1: Scale original image to fit IC_WIDTHxIC_HEIGHT, then pad to fill it (letterbox/pillarbox)
+        `scale=w=${IC_WIDTH}:h=${IC_HEIGHT}:force_original_aspect_ratio=decrease,` +
+        `pad=width=${IC_WIDTH}:height=${IC_HEIGHT}:x='(ow-iw)/2':y='(oh-ih)/2':color=black,` +
+        // Stage 2: Pad the IC to ZPI_WIDTHxZPI_HEIGHT, creating borders for overscan
+        // The x and y for this pad correctly center the IC content within the ZPI.
+        `pad=width=${ZPI_WIDTH}:height=${ZPI_HEIGHT}:x=${PAD_X_BORDER}:y=${PAD_Y_BORDER}:color=black,` +
+        // Stage 3: Zoompan on the ZPI canvas
         `zoompan=z='${zoomExpr}':x='${zoompanXExpr}':y='${zoompanYExpr}':d=${totalFrames}:s=${OUTPUT_WIDTH}x${OUTPUT_HEIGHT}:fps=${FPS},` +
         `format=yuv420p`;
 
@@ -328,7 +359,7 @@ function ImageAnimatorPage() {
         '-i', inputFileName,
         '-vf', filterGraph,
         '-c:v', 'libx264',
-        '-preset', 'ultrafast',
+        '-preset', 'ultrafast', 
         '-crf', '28',
         '-t', TOTAL_DURATION_SEC.toString(),
         outputFileName
@@ -350,7 +381,7 @@ function ImageAnimatorPage() {
        if (errorMessage.includes("FS error") || errorMessage.includes("Aborted") || (error && typeof error === 'object' && 'message' in error && typeof error.message === 'string' && error.message.includes("Invalid argument"))) {
           setFfmpegLog(prev => prev + `\nFFmpeg aborted or encountered an error. This might be due to an issue with the input file, filter parameters (e.g. division by zero if a duration is 0, or invalid coordinates), or an internal FFmpeg error. Check the full log for details from FFmpeg itself.`);
           if (errorMessage.includes("Invalid argument")) {
-            setFfmpegLog(prev => prev + `\nTip: 'Invalid argument' often means an expression in the filter chain evaluated to something FFmpeg didn't like (e.g., NaN, infinity, or unexpected value). Double-check point coordinates, durations, and transformed point values. The use of round() might also interact strangely if intermediate values are non-numeric due to an earlier issue.`);
+            setFfmpegLog(prev => prev + `\nTip: 'Invalid argument' often means an expression in the filter chain evaluated to something FFmpeg didn't like (e.g., NaN, infinity, or unexpected value). Double-check point coordinates, durations, and transformed point values.`);
           }
       }
       alert(`An error occurred: ${errorMessage}`);
