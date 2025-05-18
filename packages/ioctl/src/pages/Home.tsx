@@ -23,6 +23,12 @@ export default function Home() {
           linkTo="/image-animator"
           linkText="Open Image Animator"
         />
+        <UtilCard
+          title="Multi Image Animator"
+          description="Upload multiple image, select two points in each, and generate a 9:16 MP4 video with a zoom-pan-zoom animation for each image with transitions in between"
+          linkTo="/multi-animator"
+          linkText="Open Multi Image Animator"
+        />
       </div>
     </div>
   )
