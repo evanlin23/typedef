@@ -1,116 +1,70 @@
 // src/pages/ImageAnimatorPage.tsx
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { FFmpeg, type ProgressEvent } from '@ffmpeg/ffmpeg'; // FFmpeg type
-import { fetchFile, toBlobURL } from '@ffmpeg/util';
+import { fetchFile } from '@ffmpeg/util';
 
-// --- Configuration Constants ---
-const OUTPUT_WIDTH = 720; // For 9:16 aspect ratio
-const OUTPUT_HEIGHT = 1280;
-const FPS = 60;
-const MAX_FILE_SIZE_MB = 20;
-
-const PRE_ZOOMPAN_UPSCALE_FACTOR = 8;
-const OVERSCAN_BORDER_FACTOR = 1.5;
-
-// Default zoom levels (user-configurable)
-const DEFAULT_RELATIVE_ZOOM_IN_FACTOR = 6;
-const DEFAULT_ZOOM_LEVEL_OUT_EFFECTIVE = 2;
-
-const INITIAL_ZOOM_OPTIONS = [2, 3, 4, 5, 6, 7, 8, 9, 10];
-
-// Durations in seconds for each animation phase
-const DURATION_HOLD_START = 0.05;
-const DURATION_ZOOM_OUT = 0.90;
-const DURATION_PAN = 1.0;
-const DURATION_ZOOM_IN = 0.90;
-const DURATION_HOLD_END = 0.05;
-
-const TOTAL_DURATION_SEC =
-  DURATION_HOLD_START +
-  DURATION_ZOOM_OUT +
-  DURATION_PAN +
-  DURATION_ZOOM_IN +
-  DURATION_HOLD_END;
-
-// --- TypeScript Interfaces ---
-interface Point {
-  x: number;
-  y: number;
-}
+import {
+  OUTPUT_WIDTH, OUTPUT_HEIGHT, FPS, MAX_FILE_SIZE_MB, PRE_ZOOMPAN_UPSCALE_FACTOR,
+  DEFAULT_RELATIVE_ZOOM_IN_FACTOR, DEFAULT_ZOOM_LEVEL_OUT_EFFECTIVE,
+  INITIAL_ZOOM_OPTIONS, TOTAL_DURATION_SEC, DURATION_ZOOM_OUT
+} from '../features/animation/ffmpegConstants';
+import type { Point, AnimationItemData, ZoomSettings } from '../../../features/animation/ffmpegTypes';
+import { useFFmpeg } from '../features/animation/useFFmpeg';
+import {
+  generateSingleClipFilterGraph,
+  getDefaultFfmpegCommandArgs,
+  getFileExtension,
+} from '../features/animation/ffmpegAnimationCore';
 
 function ImageAnimatorPage() {
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string>('');
   const [points, setPoints] = useState<Point[]>([]);
   const [videoUrl, setVideoUrl] = useState<string>('');
-  const [isLoading, setIsLoading] = useState<boolean>(false);
-  const [ffmpegLog, setFfmpegLog] = useState<string>('');
+  
+  const [isAnimating, setIsAnimating] = useState<boolean>(false); // For animation process
+  const [isFFmpegCoreLoading, setIsFFmpegCoreLoading] = useState<boolean>(true); // For FFmpeg.js loading
   const [ffmpegLoaded, setFfmpegLoaded] = useState<boolean>(false);
-  const [progress, setProgress] = useState(0); // progress is expected to be 0 to 1
+  const [ffmpegLog, setFfmpegLog] = useState<string>('');
+  const [progress, setProgress] = useState(0); // 0-1 for current ffmpeg task
 
-  // User-configurable zoom factors
   const [relativeZoomInFactor, setRelativeZoomInFactor] = useState<number>(DEFAULT_RELATIVE_ZOOM_IN_FACTOR);
   const [zoomLevelOutEffective, setZoomLevelOutEffective] = useState<number>(DEFAULT_ZOOM_LEVEL_OUT_EFFECTIVE);
-
-  // New state for file upload error
   const [fileError, setFileError] = useState<string | null>(null);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const imageRef = useRef<HTMLImageElement | null>(null);
-  const ffmpegRef = useRef(new FFmpeg());
+  const imageRef = useRef<HTMLImageElement | null>(null); // For natural dimensions
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Generate options for Mid-Pan Zoom based on Initial/Final Zoom
+  const { ffmpeg } = useFFmpeg({
+    onLogMessage: (message) => {
+      // Initialize log or append
+      if (ffmpegLog === '' && message.startsWith('Loading ffmpeg-core.js...')) {
+        setFfmpegLog(message);
+      } else {
+        setFfmpegLog(prev => `${prev}\n${message}`);
+      }
+    },
+    onProgress: setProgress,
+    onLoadedChange: setFfmpegLoaded,
+    onCoreLoadingChange: setIsFFmpegCoreLoading,
+  });
+
+  const isLoading = isAnimating || isFFmpegCoreLoading;
+
   const midPanZoomOptions = Array.from(
     { length: relativeZoomInFactor },
-    (_, i) => i + 1 // Creates [1, 2, ..., relativeZoomInFactor]
+    (_, i) => i + 1
   );
 
-  // Load FFmpeg
-  useEffect(() => {
-    const loadFFmpeg = async () => {
-      setIsLoading(true);
-      setFfmpegLog('Loading ffmpeg-core.js...');
-      const ffmpeg = ffmpegRef.current;
-      ffmpeg.on('log', ({ message }: { type: string; message: string }) => {
-        if (!message.startsWith("frame=") && !message.startsWith("size=") && !message.includes("pts_time")) {
-          setFfmpegLog(prev => `${prev}\n${message}`);
-        }
-      });
-      ffmpeg.on('progress', (event: ProgressEvent) => {
-        setProgress(event.progress);
-      });
-
-      try {
-        const coreURL = await toBlobURL('https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm/ffmpeg-core.js', 'text/javascript');
-        const wasmURL = await toBlobURL('https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm/ffmpeg-core.wasm', 'application/wasm');
-
-        await ffmpeg.load({ coreURL, wasmURL });
-        setFfmpegLog(prev => prev + '\nFFmpeg loaded successfully!');
-        setFfmpegLoaded(true);
-      } catch (err) {
-        console.error("FFmpeg load error:", err);
-        setFfmpegLog(prev => prev + `\nError loading FFmpeg: ${err instanceof Error ? err.message : String(err)}`);
-        alert("Failed to load FFmpeg. Check console for details. You might need to enable SharedArrayBuffer or use a different core version if issues persist with COOP/COEP headers.");
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    loadFFmpeg();
-  }, []);
-
-
-  // Draw image and points on canvas
    useEffect(() => {
     if (!imagePreviewUrl || !canvasRef.current) {
-        // If there's no preview URL (e.g., after an invalid file or reset), clear canvas
         if (canvasRef.current) {
             const ctx = canvasRef.current.getContext('2d');
             ctx?.clearRect(0,0,canvasRef.current.width, canvasRef.current.height);
         }
+        imageRef.current = null; // Clear image ref if no preview
         return;
     }
-
 
     const canvas = canvasRef.current;
     const ctx = canvas.getContext('2d');
@@ -118,9 +72,9 @@ function ImageAnimatorPage() {
 
     const img = new Image();
     img.onload = () => {
-      imageRef.current = img;
+      imageRef.current = img; // Store image element to access naturalWidth/Height later
 
-      const canvasMaxWidth = 600;
+      const canvasMaxWidth = 600; 
       const scale = Math.min(canvasMaxWidth / img.naturalWidth, 1);
       canvas.width = img.naturalWidth * scale;
       canvas.height = img.naturalHeight * scale;
@@ -131,7 +85,6 @@ function ImageAnimatorPage() {
       points.forEach((point, index) => {
         const canvasX = (point.x / img.naturalWidth) * canvas.width;
         const canvasY = (point.y / img.naturalHeight) * canvas.height;
-
         ctx.beginPath();
         ctx.arc(canvasX, canvasY, 5, 0, 2 * Math.PI);
         ctx.fillStyle = index === 0 ? 'red' : 'blue';
@@ -145,47 +98,37 @@ function ImageAnimatorPage() {
       });
     };
     img.onerror = () => {
-        // Handle case where image loading fails for the preview
         setFileError("Could not load image preview. Please try a different file.");
-        setImagePreviewUrl(''); // Clear preview URL to prevent retries
+        setImagePreviewUrl(''); 
         setImageFile(null);
+        imageRef.current = null;
     }
     img.src = imagePreviewUrl;
-  }, [imagePreviewUrl, points]); // Added setFileError, setImagePreviewUrl, setImageFile to dependencies if they are stable, otherwise wrap img.onerror content in useCallback or ensure it doesn't cause re-renders excessively. Since they are setters, they are stable.
+  }, [imagePreviewUrl, points]);
 
 
   const handleImageUpload = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
-    setFileError(null); // Clear previous error on new selection attempt
+    setFileError(null); 
     const file = event.target.files?.[0];
 
     if (file) {
       if (file.size > MAX_FILE_SIZE_MB * 1024 * 1024) {
         setFileError(`File is too large. Maximum size is ${MAX_FILE_SIZE_MB}MB.`);
-        if (fileInputRef.current) {
-          fileInputRef.current.value = "";
-        }
-        // Clear image-related states if a bad file was selected to avoid showing stale preview
+        if (fileInputRef.current) fileInputRef.current.value = "";
         setImageFile(null);
         setImagePreviewUrl('');
         setPoints([]);
-        setVideoUrl(''); // Also clear any existing video
+        setVideoUrl(''); 
         setProgress(0);
         return;
       }
-
-      // If file is valid
       setImageFile(file);
       setImagePreviewUrl(URL.createObjectURL(file));
-      setPoints([]); // Reset points for new image
+      setPoints([]); 
       setVideoUrl('');
       setProgress(0);
-    } else {
-      // User cancelled file dialog or no file selected
-      // If no new file is chosen, and an old one exists, do nothing to fileError
-      // If no file was chosen AND no file is currently set (imageFile is null),
-      // we can clear any potential "stuck" error. But clearing at the top is generally sufficient.
     }
-  }, []); // fileInputRef is stable. Setters are stable. MAX_FILE_SIZE_MB is const.
+  }, []);
 
   const handleCanvasClick = useCallback((event: React.MouseEvent<HTMLCanvasElement>) => {
     if (points.length >= 2 || !imageRef.current || !canvasRef.current) return;
@@ -204,7 +147,7 @@ function ImageAnimatorPage() {
     setPoints(prevPoints => [...prevPoints, { x: originalX, y: originalY }]);
   }, [points.length]);
 
-    const handleAnimate = useCallback(async () => {
+  const handleAnimate = useCallback(async () => {
     if (!imageFile || points.length < 2 || !ffmpegLoaded || !imageRef.current) {
       alert('Please upload an image, select two points, ensure FFmpeg is loaded, and image dimensions are available.');
       return;
@@ -217,27 +160,27 @@ function ImageAnimatorPage() {
         setFfmpegLog(prev => prev + `\nWarning: Initial/Final zoom (${relativeZoomInFactor}x) is not greater than Mid-Pan zoom (${zoomLevelOutEffective}x). This will result in zooming *in* or staying same during the 'zoom-out' phase.`);
     }
 
-    setIsLoading(true);
+    setIsAnimating(true);
     setVideoUrl('');
-    setFfmpegLog(prev => prev.split('\n').slice(0,2).join('\n') + '\nStarting animation process...');
+    
+    // Preserve only the FFmpeg loading status part of the log
+    const logLines = ffmpegLog.split('\n');
+    const ffmpegLoadSuccessLine = logLines.find(line => line.includes("FFmpeg loaded successfully!"));
+    let initialLog = ffmpegLoadSuccessLine ? ffmpegLoadSuccessLine : "FFmpeg core status unknown";
+    initialLog += '\nStarting animation process...';
+    setFfmpegLog(initialLog);
+    
     setFfmpegLog(prev => prev + `\nUser Zoom Settings: Initial/Final=${relativeZoomInFactor}x, Mid-Pan=${zoomLevelOutEffective}x`);
     setProgress(0);
 
-    const ffmpeg = ffmpegRef.current;
     const orig_iw = imageRef.current.naturalWidth;
     const orig_ih = imageRef.current.naturalHeight;
 
     if (orig_iw === 0 || orig_ih === 0) {
         alert("Image dimensions are not available or are zero. Cannot proceed.");
-        setIsLoading(false);
+        setIsAnimating(false);
         return;
     }
-
-    const getFileExtension = (filename: string): string => {
-      const lastDot = filename.lastIndexOf(".");
-      if (lastDot === -1 || lastDot === 0 || lastDot === filename.length - 1) { return ''; }
-      return filename.slice(lastDot + 1).toLowerCase();
-    };
 
     let extension = getFileExtension(imageFile.name);
     if (!extension) {
@@ -245,7 +188,7 @@ function ImageAnimatorPage() {
             extension = imageFile.type.substring('image/'.length);
             if (extension === 'jpeg') extension = 'jpg';
         } else {
-            extension = 'png'; // Default fallback
+            extension = 'png'; 
             setFfmpegLog(prev => prev + `\nWarning: Could not determine image extension, defaulting to .png for input.`);
         }
     }
@@ -256,108 +199,22 @@ function ImageAnimatorPage() {
       setFfmpegLog(prev => prev + `\nInput image dimensions: ${orig_iw}x${orig_ih}`);
       await ffmpeg.writeFile(inputFileName, await fetchFile(imageFile));
 
-      const p1_orig = points[0];
-      const p2_orig = points[1];
-      const totalFrames = Math.round(TOTAL_DURATION_SEC * FPS);
-
-      // --- Stage 1: Fit image to output aspect ratio (INTERMEDIATE_CANVAS) ---
-      const IC_WIDTH = OUTPUT_WIDTH * PRE_ZOOMPAN_UPSCALE_FACTOR; // IC = Intermediate Canvas
-      const IC_HEIGHT = OUTPUT_HEIGHT * PRE_ZOOMPAN_UPSCALE_FACTOR;
-      setFfmpegLog(prev => prev + `\nUsing pre-zoompan upscale factor: ${PRE_ZOOMPAN_UPSCALE_FACTOR}`);
-      setFfmpegLog(prev => prev + `\nIntermediate Canvas (IC) size (content area for zoompan): ${IC_WIDTH}x${IC_HEIGHT}`);
-
-      // Calculate scaling and padding for original image onto IC
-      const ic_scale_factor = Math.min(IC_WIDTH / orig_iw, IC_HEIGHT / orig_ih);
-      const ic_scaled_iw = orig_iw * ic_scale_factor;
-      const ic_scaled_ih = orig_ih * ic_scale_factor;
-      const ic_pad_x = (IC_WIDTH - ic_scaled_iw) / 2;
-      const ic_pad_y = (IC_HEIGHT - ic_scaled_ih) / 2;
-
-      // Transform points from original image coords to IC coords
-      const p1_ic_transformed = {
-        x: p1_orig.x * ic_scale_factor + ic_pad_x,
-        y: p1_orig.y * ic_scale_factor + ic_pad_y,
+      const itemData: AnimationItemData = {
+        points,
+        naturalWidth: orig_iw,
+        naturalHeight: orig_ih,
       };
-      const p2_ic_transformed = {
-        x: p2_orig.x * ic_scale_factor + ic_pad_x,
-        y: p2_orig.y * ic_scale_factor + ic_pad_y,
-      };
+      const zoomSettings: ZoomSettings = { relativeZoomInFactor, zoomLevelOutEffective };
 
-      // --- Stage 2: Create larger Zoompan Input (ZPI) canvas with borders ---
-      const min_zoom_for_border_calc = Math.max(1, zoomLevelOutEffective); // Ensure zoom_min is at least 1
-      const PAD_X_BORDER = Math.ceil((IC_WIDTH / min_zoom_for_border_calc) / 2);
-      const PAD_Y_BORDER = Math.ceil((IC_HEIGHT / min_zoom_for_border_calc) / 2);
-
-      const ZPI_WIDTH = IC_WIDTH + 2 * PAD_X_BORDER;
-      const ZPI_HEIGHT = IC_HEIGHT + 2 * PAD_Y_BORDER;
-      setFfmpegLog(prev => prev + `\nZoompan Input (ZPI) border padding (each side): X=${PAD_X_BORDER}, Y=${PAD_Y_BORDER}`);
-      setFfmpegLog(prev => prev + `\nZoompan Input (ZPI) canvas size (IC + borders): ${ZPI_WIDTH}x${ZPI_HEIGHT}`);
-
-      // Transform points from IC coords to ZPI coords
-      const p1_zpi_transformed_x = parseFloat((p1_ic_transformed.x + PAD_X_BORDER).toFixed(4));
-      const p1_zpi_transformed_y = parseFloat((p1_ic_transformed.y + PAD_Y_BORDER).toFixed(4));
-      const p2_zpi_transformed_x = parseFloat((p2_ic_transformed.x + PAD_X_BORDER).toFixed(4));
-      const p2_zpi_transformed_y = parseFloat((p2_ic_transformed.y + PAD_Y_BORDER).toFixed(4));
-
-      setFfmpegLog(prev => prev + `\nImage scaled by ${ic_scale_factor.toFixed(4)} to ${ic_scaled_iw.toFixed(1)}x${ic_scaled_ih.toFixed(1)} on IC.`);
-      setFfmpegLog(prev => prev + `\nPadding on IC (x,y): ${ic_pad_x.toFixed(2)}, ${ic_pad_y.toFixed(2)}`);
-      setFfmpegLog(prev => prev + `\nP1 on IC: (${p1_ic_transformed.x.toFixed(2)}, ${p1_ic_transformed.y.toFixed(2)}), on ZPI: (${p1_zpi_transformed_x}, ${p1_zpi_transformed_y})`);
-      setFfmpegLog(prev => prev + `\nP2 on IC: (${p2_ic_transformed.x.toFixed(2)}, ${p2_ic_transformed.y.toFixed(2)}), on ZPI: (${p2_zpi_transformed_x}, ${p2_zpi_transformed_y})`);
-
-
-      const f_hold_start_end = Math.round(DURATION_HOLD_START * FPS);
-      const f_zoom_out_end = f_hold_start_end + Math.round(DURATION_ZOOM_OUT * FPS);
-      const f_pan_end = f_zoom_out_end + Math.round(DURATION_PAN * FPS);
-      const f_zoom_in_end = f_pan_end + Math.round(DURATION_ZOOM_IN * FPS);
+      const { filterGraph, logData } = generateSingleClipFilterGraph(itemData, zoomSettings);
       
-      const currentRelativeZoomIn = parseFloat(relativeZoomInFactor.toFixed(4));
-      const currentZoomOutEffective = parseFloat((zoomLevelOutEffective * OVERSCAN_BORDER_FACTOR).toFixed(4));
+      setFfmpegLog(prev => prev + `\nFilter graph params: ${JSON.stringify(logData, null, 2)}`);
+      // setFfmpegLog(prev => prev + `\nFull filter graph: ${filterGraph}`); // Can be very long
 
-      const zoomExpr =
-        `if(lt(on,${f_hold_start_end}),${currentRelativeZoomIn},` +
-        `if(lt(on,${f_zoom_out_end}),${currentRelativeZoomIn} - (${currentRelativeZoomIn}-${currentZoomOutEffective})*(on-${f_hold_start_end})/(${DURATION_ZOOM_OUT*FPS}),` +
-        `if(lt(on,${f_pan_end}),${currentZoomOutEffective},` +
-        `if(lt(on,${f_zoom_in_end}),${currentZoomOutEffective} + (${currentRelativeZoomIn}-${currentZoomOutEffective})*(on-${f_pan_end})/(${DURATION_ZOOM_IN*FPS}),` +
-        `${currentRelativeZoomIn}))))`;
-
-      const targetXTimelineExpr_zpi = // Now uses ZPI-coordinates for points
-        `if(lt(on,${f_zoom_out_end}),${p1_zpi_transformed_x},` +
-        `if(lt(on,${f_pan_end}),${p1_zpi_transformed_x} + (${p2_zpi_transformed_x}-${p1_zpi_transformed_x})*(on-${f_zoom_out_end})/(${DURATION_PAN*FPS}),` +
-        `${p2_zpi_transformed_x}))`;
-
-      const targetYTimelineExpr_zpi = // Now uses ZPI-coordinates for points
-        `if(lt(on,${f_zoom_out_end}),${p1_zpi_transformed_y},` +
-        `if(lt(on,${f_pan_end}),${p1_zpi_transformed_y} + (${p2_zpi_transformed_y}-${p1_zpi_transformed_y})*(on-${f_zoom_out_end})/(${DURATION_PAN*FPS}),` +
-        `${p2_zpi_transformed_y}))`;
-
-      // Viewport dimensions on ZPI are calculated based on IC dimensions and zoom
-      // This is because zoom factor is relative to the content size (IC), not ZPI.
-      const zoompanXExpr = `round((${targetXTimelineExpr_zpi}) - ((${IC_WIDTH})/(${zoomExpr}))/2)`;
-      const zoompanYExpr = `round((${targetYTimelineExpr_zpi}) - ((${IC_HEIGHT})/(${zoomExpr}))/2)`;
+      const commandArgs = getDefaultFfmpegCommandArgs(inputFileName, filterGraph, outputFileName);
       
-      const filterGraph =
-        // Stage 1: Scale original image to fit IC_WIDTHxIC_HEIGHT, then pad to fill it (letterbox/pillarbox)
-        `scale=w=${IC_WIDTH}:h=${IC_HEIGHT}:force_original_aspect_ratio=decrease,` +
-        `pad=width=${IC_WIDTH}:height=${IC_HEIGHT}:x='(ow-iw)/2':y='(oh-ih)/2':color=black,` +
-        // Stage 2: Pad the IC to ZPI_WIDTHxZPI_HEIGHT, creating borders for overscan
-        `pad=width=${ZPI_WIDTH}:height=${ZPI_HEIGHT}:x=${PAD_X_BORDER}:y=${PAD_Y_BORDER}:color=black,` +
-        // Stage 3: Zoompan on the ZPI canvas
-        `zoompan=z='${zoomExpr}':x='${zoompanXExpr}':y='${zoompanYExpr}':d=${totalFrames}:s=${OUTPUT_WIDTH}x${OUTPUT_HEIGHT}:fps=${FPS},` +
-        `format=yuv420p`;
-
-      const command = [
-        '-i', inputFileName,
-        '-vf', filterGraph,
-        '-c:v', 'libx264',
-        '-preset', 'ultrafast', 
-        '-crf', '28',
-        '-t', TOTAL_DURATION_SEC.toString(),
-        outputFileName
-      ];
-
-      setFfmpegLog(prev => prev + `\nFull filter graph: ${filterGraph}`);
-      setFfmpegLog(prev => prev + `\nExecuting: ffmpeg ${command.join(' ')}`);
-      await ffmpeg.exec(command);
+      setFfmpegLog(prev => prev + `\nExecuting: ffmpeg ${commandArgs.join(' ')}`);
+      await ffmpeg.exec(commandArgs);
 
       setFfmpegLog(prev => prev + '\nProcessing complete. Reading output file...');
       const data = await ffmpeg.readFile(outputFileName);
@@ -376,64 +233,55 @@ function ImageAnimatorPage() {
       }
       alert(`An error occurred: ${errorMessage}`);
     } finally {
-      setIsLoading(false);
+      setIsAnimating(false);
+      // Clean up files from FFmpeg's virtual file system
+      try { await ffmpeg.deleteFile(inputFileName); } catch (e) { /* ignore */ }
+      try { await ffmpeg.deleteFile(outputFileName); } catch (e) { /* ignore if it was the source of error */ }
     }
-  }, [imageFile, points, ffmpegLoaded, relativeZoomInFactor, zoomLevelOutEffective]);
+  }, [imageFile, points, ffmpegLoaded, relativeZoomInFactor, zoomLevelOutEffective, ffmpeg, ffmpegLog]);
 
   const handleReset = useCallback(() => {
+    if (imagePreviewUrl) URL.revokeObjectURL(imagePreviewUrl);
     setImageFile(null);
     setImagePreviewUrl('');
     setPoints([]);
     setVideoUrl('');
     setProgress(0);
-    setFileError(null); // Clear file error on reset
+    setFileError(null); 
     imageRef.current = null;
 
     setRelativeZoomInFactor(DEFAULT_RELATIVE_ZOOM_IN_FACTOR);
     setZoomLevelOutEffective(DEFAULT_ZOOM_LEVEL_OUT_EFFECTIVE);
 
-    let resetLogMessage = "Loading ffmpeg-core.js...";
-    const successMsg = "FFmpeg loaded successfully!";
-    const loadingMsg = "Loading ffmpeg-core.js...";
-    const currentLog = ffmpegLog;
-
+    let resetLogMessage = "Loading ffmpeg-core.js..."; // Default if log is empty or doesn't have success
     if (ffmpegLoaded) {
-        if (currentLog.includes(loadingMsg) && currentLog.includes(successMsg)) {
-            const loadingIndex = currentLog.indexOf(loadingMsg);
-            const successIndex = currentLog.indexOf(successMsg, loadingIndex);
-            if (loadingIndex !== -1 && successIndex !== -1 && successIndex > loadingIndex) {
-                resetLogMessage = currentLog.substring(loadingIndex, successIndex + successMsg.length);
-            } else {
-                 resetLogMessage = `${loadingMsg}\n${successMsg}`;
-            }
-        } else {
-             resetLogMessage = successMsg;
+        const logLines = ffmpegLog.split('\n');
+        const loadSuccessLine = logLines.find(line => line.includes("FFmpeg loaded successfully!"));
+        if (loadSuccessLine) {
+            resetLogMessage = loadSuccessLine;
+        } else { // Should not happen if ffmpegLoaded is true, but as a fallback
+            resetLogMessage = "FFmpeg loaded successfully!"; 
         }
-    } else {
-        if (currentLog.startsWith(loadingMsg)) {
-            const firstLineEnd = currentLog.indexOf('\n');
-            resetLogMessage = firstLineEnd > -1 ? currentLog.substring(0, firstLineEnd) : currentLog;
-            if (!resetLogMessage.trim().endsWith("...")) {
-                resetLogMessage = loadingMsg;
-            }
-        } else {
-            resetLogMessage = loadingMsg;
-        }
+    } else if (ffmpegLog.startsWith("Loading ffmpeg-core.js...")) {
+        // If still loading or failed, keep the initial loading message or relevant part
+        const firstLineEnd = ffmpegLog.indexOf('\n');
+        resetLogMessage = firstLineEnd > -1 ? ffmpegLog.substring(0, firstLineEnd) : ffmpegLog;
     }
     setFfmpegLog(resetLogMessage);
+
 
     if (canvasRef.current) {
         const ctx = canvasRef.current.getContext('2d');
         ctx?.clearRect(0,0,canvasRef.current.width, canvasRef.current.height);
     }
     if (fileInputRef.current) fileInputRef.current.value = "";
-  }, [ffmpegLoaded, ffmpegLog]);
+  }, [ffmpegLoaded, imagePreviewUrl, ffmpegLog]);
 
   const handleInitialZoomChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const newInitialZoom = parseInt(e.target.value, 10);
     setRelativeZoomInFactor(newInitialZoom);
     if (zoomLevelOutEffective > newInitialZoom) {
-      setZoomLevelOutEffective(1);
+      setZoomLevelOutEffective(1); 
     }
   };
 
@@ -441,87 +289,52 @@ function ImageAnimatorPage() {
     setZoomLevelOutEffective(parseInt(e.target.value, 10));
   };
 
-  // --- JSX ---
   return (
     <div className="max-w-4xl mx-auto p-6 bg-gray-700 shadow-lg rounded-lg text-gray-200">
       <h2 className="text-2xl font-bold text-orange-400 mb-2">Image Animator (Ken Burns Style)</h2>
       <p className="text-gray-300 mb-6">
         Upload an image, select two points (start and end), adjust zoom levels, and click "Animate!"
-        to generate a 9:16 MP4 video. The image will be fit within the frame,
-        then zoom based on your settings, pan between points, and zoom again.
-        Uses an internal upscale factor of {PRE_ZOOMPAN_UPSCALE_FACTOR}x before zoom/pan to potentially reduce jitter.
+        to generate a {OUTPUT_WIDTH}x{OUTPUT_HEIGHT} @ {FPS}fps MP4 video. Total duration: {TOTAL_DURATION_SEC.toFixed(2)}s.
+        Uses an internal upscale factor of {PRE_ZOOMPAN_UPSCALE_FACTOR}x.
       </p>
 
       <div className="mb-4">
-        <label htmlFor="imageUploadAnimator" className="sr-only">Choose image</label>
+        <label htmlFor="imageUploadAnimatorSingle" className="sr-only">Choose image</label>
         <input
           type="file"
-          id="imageUploadAnimator"
+          id="imageUploadAnimatorSingle"
           ref={fileInputRef}
           accept="image/*"
           onChange={handleImageUpload}
           disabled={isLoading}
-          className="block w-full text-sm text-gray-300
-                     file:mr-4 file:py-2 file:px-4
-                     file:rounded-md file:border-0
-                     file:text-sm file:font-semibold
-                     file:bg-orange-500 file:text-gray-100
-                     hover:file:bg-orange-600 disabled:opacity-50"
+          className="block w-full text-sm text-gray-300 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-orange-500 file:text-gray-100 hover:file:bg-orange-600 disabled:opacity-50"
         />
-        {fileError && (
-          <p className="mt-2 text-sm text-red-400" role="alert">
-            {fileError}
-          </p>
-        )}
+        {fileError && (<p className="mt-2 text-sm text-red-400" role="alert">{fileError}</p>)}
       </div>
 
-      {!ffmpegLoaded && isLoading && (
+      {isFFmpegCoreLoading && !ffmpegLoaded && (
          <div className="my-4 p-3 bg-blue-900 text-blue-100 rounded-md">
-            Loading FFmpeg core, please wait... (this might take a moment on first visit)
-            <div className="w-full bg-gray-600 rounded-full h-2.5 mt-2">
-                <div className="bg-orange-500 h-2.5 rounded-full animate-pulse" style={{ width: `100%`}}></div>
-            </div>
+            Loading FFmpeg core, please wait...
+            <div className="w-full bg-gray-600 rounded-full h-2.5 mt-2"><div className="bg-orange-500 h-2.5 rounded-full animate-pulse" style={{ width: `100%`}}></div></div>
         </div>
       )}
 
-      {/* Zoom Configuration Dropdowns */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6 p-4 border border-gray-600 rounded-md">
         <div>
-          <label htmlFor="initialZoomFactor" className="block text-sm font-medium text-gray-300 mb-1">
-            Initial/Final Zoom:
-          </label>
-          <select
-            id="initialZoomFactor"
-            value={relativeZoomInFactor}
-            onChange={handleInitialZoomChange}
-            disabled={isLoading}
-            className="w-full p-2.5 rounded bg-gray-600 border border-gray-500 focus:ring-orange-500 focus:border-orange-500 text-gray-100"
-          >
-            {INITIAL_ZOOM_OPTIONS.map(zoom => (
-              <option key={zoom} value={zoom}>{zoom}x Zoom</option>
-            ))}
+          <label htmlFor="initialZoomFactorSingle" className="block text-sm font-medium text-gray-300 mb-1">Initial/Final Zoom:</label>
+          <select id="initialZoomFactorSingle" value={relativeZoomInFactor} onChange={handleInitialZoomChange} disabled={isLoading} className="w-full p-2.5 rounded bg-gray-600 border border-gray-500 focus:ring-orange-500 focus:border-orange-500 text-gray-100">
+            {INITIAL_ZOOM_OPTIONS.map(zoom => (<option key={zoom} value={zoom}>{zoom}x Zoom</option>))}
           </select>
           <p className="text-xs text-gray-400 mt-1">Zoom level at start and end points.</p>
         </div>
         <div>
-          <label htmlFor="midPanZoomFactor" className="block text-sm font-medium text-gray-300 mb-1">
-            Mid-Pan Zoom:
-          </label>
-          <select
-            id="midPanZoomFactor"
-            value={zoomLevelOutEffective}
-            onChange={handleMidPanZoomChange}
-            disabled={isLoading}
-            className="w-full p-2.5 rounded bg-gray-600 border border-gray-500 focus:ring-orange-500 focus:border-orange-500 text-gray-100"
-          >
-            {midPanZoomOptions.map(zoom => (
-              <option key={zoom} value={zoom}>{zoom}x Zoom</option>
-            ))}
+          <label htmlFor="midPanZoomFactorSingle" className="block text-sm font-medium text-gray-300 mb-1">Mid-Pan Zoom:</label>
+          <select id="midPanZoomFactorSingle" value={zoomLevelOutEffective} onChange={handleMidPanZoomChange} disabled={isLoading} className="w-full p-2.5 rounded bg-gray-600 border border-gray-500 focus:ring-orange-500 focus:border-orange-500 text-gray-100">
+            {midPanZoomOptions.map(zoom => (<option key={zoom} value={zoom}>{zoom}x Zoom</option>))}
           </select>
           <p className="text-xs text-gray-400 mt-1">Zoom level during pan. Cannot exceed Initial/Final Zoom.</p>
         </div>
       </div>
-
 
       {imagePreviewUrl && (
         <div className="my-4">
@@ -529,7 +342,8 @@ function ImageAnimatorPage() {
           <canvas
             ref={canvasRef}
             onClick={handleCanvasClick}
-            className={`border border-gray-500 max-w-full rounded ${points.length < 2 ? 'cursor-crosshair' : 'cursor-default'}`}
+            className={`border border-gray-500 max-w-full rounded ${points.length < 2 ? 'cursor-crosshair' : 'cursor-default'} bg-black`}
+             style={{ maxHeight: '70vh', aspectRatio: imageRef.current ? `${imageRef.current.naturalWidth}/${imageRef.current.naturalHeight}` : '16/9' }}
           />
           {points.length > 0 && (
             <div className="mt-2 text-sm text-gray-300">
@@ -541,49 +355,28 @@ function ImageAnimatorPage() {
       )}
 
       <div className="my-4 space-x-3">
-        <button
-          onClick={handleAnimate}
-          disabled={isLoading || !ffmpegLoaded || points.length < 2 || !imageFile || !imageRef.current}
-          className="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded
-                     disabled:bg-gray-500 disabled:cursor-not-allowed transition-colors"
-        >
-          {isLoading && ffmpegLoaded ? 'Animating...' : 'Animate!'}
+        <button onClick={handleAnimate} disabled={isLoading || !ffmpegLoaded || points.length < 2 || !imageFile || !imageRef.current} className="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded disabled:bg-gray-500 disabled:cursor-not-allowed transition-colors">
+          {isAnimating ? 'Animating...' : 'Animate!'}
         </button>
-        <button
-          onClick={handleReset}
-          disabled={isLoading && ffmpegLoaded}
-          className="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded
-                     disabled:bg-gray-500 disabled:opacity-70 transition-colors"
-        >
+        <button onClick={handleReset} disabled={isAnimating /* Allow reset even if FFmpeg core is loading, but not during animation */} className="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded disabled:bg-gray-500 disabled:opacity-70 transition-colors">
           Reset
         </button>
       </div>
 
-      {isLoading && ffmpegLoaded && progress > 0 && (
+      {isAnimating && progress > 0 && (
          <div className="my-4">
-            <p className="text-sm text-orange-400 mb-1">Processing: {(progress * 100 / 150).toFixed(0)}%</p> {/* Note: progress is 0-1, so *100 for percent. Division by 150 seems custom */}
+            <p className="text-sm text-orange-400 mb-1">Processing: {(progress * 100).toFixed(0)}%</p>
             <div className="w-full bg-gray-600 rounded-full h-2.5">
-                <div className="bg-orange-500 h-2.5 rounded-full" style={{ width: `${(progress * 100 / 150).toFixed(0)}%` }}></div> {/* Adjusted width calc if progress is 0-1 */}
+                <div className="bg-orange-500 h-2.5 rounded-full" style={{ width: `${(progress * 100).toFixed(0)}%` }}></div>
             </div>
         </div>
       )}
 
-
       {videoUrl && (
         <div className="my-6">
           <h3 className="text-xl font-semibold text-orange-400 mb-3">Generated Video:</h3>
-          <video
-            src={videoUrl}
-            controls
-            width={OUTPUT_WIDTH / 2.5}
-            height={OUTPUT_HEIGHT / 2.5}
-            className="rounded border border-gray-500"
-          />
-          <a
-            href={videoUrl}
-            download="animated_image.mp4"
-            className="mt-3 inline-block bg-orange-500 hover:bg-orange-600 text-gray-100 py-2 px-4 rounded transition-colors"
-          >
+          <video src={videoUrl} controls width={OUTPUT_WIDTH / 2.5} height={OUTPUT_HEIGHT / 2.5} className="rounded border border-gray-500"/>
+          <a href={videoUrl} download="animated_image.mp4" className="mt-3 inline-block bg-orange-500 hover:bg-orange-600 text-gray-100 py-2 px-4 rounded transition-colors">
             Download Video
           </a>
         </div>
@@ -592,10 +385,7 @@ function ImageAnimatorPage() {
       {ffmpegLog && (
         <div className="mt-6">
           <h4 className="text-md font-semibold text-orange-400 mb-1">FFmpeg Log:</h4>
-          <pre
-           className="bg-gray-800 text-xs text-gray-300 p-3 rounded-md max-h-48 overflow-y-auto
-                      whitespace-pre-wrap break-all border border-gray-600"
-          >
+          <pre className="bg-gray-900 text-xs text-gray-300 p-3 rounded-md max-h-60 overflow-y-auto whitespace-pre-wrap break-all border border-gray-600">
             {ffmpegLog}
           </pre>
         </div>
