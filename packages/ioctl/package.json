@@ -17,6 +17,8 @@
     "@ffmpeg/core": "^0.12.10",
     "@ffmpeg/ffmpeg": "^0.12.15",
     "@ffmpeg/util": "^0.12.2",
+    "epubjs": "^0.3.93",
+    "idb": "^8.0.3",
     "jszip": "^3.10.1",
     "pdf-lib": "^1.17.1",
     "react": "^19.1.0",

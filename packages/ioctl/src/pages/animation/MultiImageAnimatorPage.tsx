@@ -1,4 +1,4 @@
-// src/pages/MultiImageAnimatorPage.tsx
+// src/pages/animation/MultiImageAnimatorPage.tsx
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { fetchFile } from '@ffmpeg/util';
 import { v4 as uuidv4 } from 'uuid';
@@ -8,14 +8,14 @@ import {
   DEFAULT_RELATIVE_ZOOM_IN_FACTOR, DEFAULT_ZOOM_LEVEL_OUT_EFFECTIVE,
   INITIAL_ZOOM_OPTIONS, TOTAL_DURATION_SEC, TRANSITION_DURATION_SEC, TRANSITION_OVERLAP_SEC, DURATION_ZOOM_OUT,
   PRE_ZOOMPAN_UPSCALE_FACTOR, // Added for description
-} from '../features/animation/ffmpegConstants';
-import type { Point, AnimationItemData, ZoomSettings } from '../features/animation/ffmpegTypes';
-import { useFFmpeg } from '../features/animation/useFFmpeg';
+} from './shared/ffmpegConstants';
+import type { Point, AnimationItemData, ZoomSettings } from './shared/ffmpegTypes';
+import { useFFmpeg } from './shared/useFFmpeg';
 import {
   generateSingleClipFilterGraph,
   getDefaultFfmpegCommandArgs,
   getFileExtension,
-} from '../features/animation/ffmpegAnimationCore';
+} from './shared/ffmpegAnimationCore';
 
 interface ImageItem {
   id: string;

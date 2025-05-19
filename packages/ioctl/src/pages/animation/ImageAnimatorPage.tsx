@@ -1,4 +1,4 @@
-// src/pages/ImageAnimatorPage.tsx
+// src/pages/animation/ImageAnimatorPage.tsx
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { fetchFile } from '@ffmpeg/util';
 
@@ -6,14 +6,14 @@ import {
   OUTPUT_WIDTH, OUTPUT_HEIGHT, FPS, MAX_FILE_SIZE_MB, PRE_ZOOMPAN_UPSCALE_FACTOR,
   DEFAULT_RELATIVE_ZOOM_IN_FACTOR, DEFAULT_ZOOM_LEVEL_OUT_EFFECTIVE,
   INITIAL_ZOOM_OPTIONS, TOTAL_DURATION_SEC, DURATION_ZOOM_OUT
-} from '../features/animation/ffmpegConstants';
-import type { Point, AnimationItemData, ZoomSettings } from '../../../features/animation/ffmpegTypes';
-import { useFFmpeg } from '../features/animation/useFFmpeg';
+} from './shared/ffmpegConstants';
+import type { Point, AnimationItemData, ZoomSettings } from './shared/ffmpegTypes';
+import { useFFmpeg } from './shared/useFFmpeg';
 import {
   generateSingleClipFilterGraph,
   getDefaultFfmpegCommandArgs,
   getFileExtension,
-} from '../features/animation/ffmpegAnimationCore';
+} from './shared/ffmpegAnimationCore';
 
 function ImageAnimatorPage() {
   const [imageFile, setImageFile] = useState<File | null>(null);

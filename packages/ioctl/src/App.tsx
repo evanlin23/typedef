@@ -4,8 +4,9 @@ import Layout from './components/Layout'
 import Home from './pages/Home'
 import FolderFlattener from './pages/FolderFlattener'
 import PdfCombiner from './pages/PDFCombiner'
-import ImageAnimatorPage from './pages/ImageAnimatorPage'
-import MultiImageAnimatorPage from './pages/MultiImageAnimatorPage'
+import ImageAnimatorPage from './pages/animation/ImageAnimatorPage'
+import MultiImageAnimatorPage from './pages/animation/MultiImageAnimatorPage'
+
 import NotFound from './pages/NotFound'
 
 function App() {
