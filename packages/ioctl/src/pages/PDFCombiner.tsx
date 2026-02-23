@@ -7,7 +7,7 @@ import {
   PointerSensor,
   useSensor,
   useSensors,
-  type DragEndEvent, // Type from @dnd-kit/core
+  type DragEndEvent,
 } from '@dnd-kit/core';
 import {
   arrayMove,
