@@ -97,6 +97,7 @@ function PdfCombiner() {
   const [isDraggingOverZone, setIsDraggingOverZone] = useState(false); // For drop zone
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [outputFileName, setOutputFileName] = useState('combined_document');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const generateUniqueId = () => `pdf-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
@@ -209,7 +210,7 @@ function PdfCombiner() {
       const blob = new Blob([mergedPdfBytes], { type: 'application/pdf' });
       const link = document.createElement('a');
       link.href = URL.createObjectURL(blob);
-      link.download = 'combined_document.pdf';
+      link.download = `${outputFileName || 'combined_document'}.pdf`;
       document.body.appendChild(link); link.click(); document.body.removeChild(link);
       URL.revokeObjectURL(link.href);
     } catch (err) {
@@ -218,7 +219,7 @@ function PdfCombiner() {
     } finally {
       setIsProcessing(false);
     }
-  }, [uploadedFiles]);
+  }, [uploadedFiles, outputFileName]);
 
   return (
     <div className="max-w-4xl mx-auto p-6 bg-gray-700 shadow-lg rounded-lg text-gray-200">
@@ -271,7 +272,20 @@ function PdfCombiner() {
             </SortableContext>
           </DndContext>
 
-          <div className="mt-6 text-center">
+          <div className="mt-4 flex items-center justify-center gap-2">
+            <label htmlFor="output-filename" className="text-sm text-gray-300">Output filename:</label>
+            <input
+              id="output-filename"
+              type="text"
+              value={outputFileName}
+              onChange={(e) => setOutputFileName(e.target.value)}
+              placeholder="combined_document"
+              className="px-3 py-1.5 bg-gray-700 border border-gray-600 rounded-md text-gray-200 focus:outline-none focus:border-orange-500"
+            />
+            <span className="text-gray-400">.pdf</span>
+          </div>
+
+          <div className="mt-4 text-center">
             <button
               onClick={handleCombinePdfs} disabled={isProcessing || uploadedFiles.length < 2}
               className="bg-orange-500 hover:bg-orange-600 text-gray-100 py-2 px-6 rounded-md transition-colors duration-200 disabled:bg-gray-600 disabled:text-gray-400 disabled:cursor-not-allowed"
