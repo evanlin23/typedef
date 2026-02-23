@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>Redirecting...</title>
+    <script>
+      // Single Page App redirect for GitHub Pages
+      // Stores the path and redirects to root, where index.html will restore it
+      var pathSegmentsToKeep = 1; // Keep /struct/ prefix
+      var l = window.location;
+      var repo = l.pathname.split('/').slice(0, pathSegmentsToKeep + 1).join('/');
+      var path = l.pathname.slice(repo.length);
+      l.replace(
+        l.protocol + '//' + l.hostname + (l.port ? ':' + l.port : '') +
+        repo + '/?p=' +
+        encodeURIComponent(path + l.search) +
+        l.hash
+      );
+    </script>
+  </head>
+  <body>
+    Redirecting...
+  </body>
+</html>
