@@ -44,10 +44,10 @@ export const LibraryPanel: React.FC<LibraryPanelProps> = ({
         </p>
       ) : (
         <ul className="space-y-2">
-          {songs.map(song => (
+          {songs.map((song) => (
             <li
               key={song.id}
-              className={`p-3 rounded-md cursor-pointer hover:bg-gray-700 transition-colors ${
+              className={`p-3 rounded-md cursor-pointer transition-colors hover:bg-gray-700 ${
                 currentSong?.id === song.id ? 'bg-gray-700' : ''
               }`}
               onClick={() => playSong(song)}

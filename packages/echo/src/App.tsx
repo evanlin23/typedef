@@ -34,6 +34,7 @@ export default function App() {
   // New feature states
   const [isShuffled, setIsShuffled] = useState<boolean>(initialSettings.isShuffled);
   const [normalizeAudio, setNormalizeAudio] = useState<boolean>(initialSettings.normalizeAudio);
+  const [isLooping, setIsLooping] = useState<boolean>(initialSettings.isLooping);
   const [playlists, setPlaylists] = useState<Playlist[]>([]);
   const [currentPlaylistId, setCurrentPlaylistId] = useState<string | null>(
     initialSettings.currentPlaylistId || DEFAULT_PLAYLIST_ID
@@ -179,31 +180,31 @@ export default function App() {
   const handleFileUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
-    
+
     setIsLoading(true);
-    
+
     try {
       const newSongs: Song[] = [];
-      
+
       // Process all files in parallel for better performance
       await Promise.all(Array.from(files).map(async (file) => {
         try {
           // Create a blob URL for playback
           const blobUrl = URL.createObjectURL(file);
-          
+
           // Create audio element to get duration
           const audio = new Audio(blobUrl);
-          
+
           // Wait for metadata to load with a timeout fallback
           const duration = await new Promise<number>((resolve) => {
             const timeoutId = setTimeout(() => resolve(0), 3000);
-            
+
             audio.onloadedmetadata = () => {
               clearTimeout(timeoutId);
               resolve(audio.duration || 0);
             };
           });
-          
+
           const newSong: Song = {
             id: crypto.randomUUID(),
             title: file.name.replace(/\.[^/.]+$/, ""), // Remove file extension
@@ -213,10 +214,10 @@ export default function App() {
             url: blobUrl, // Store the playable URL
             playlistId: currentPlaylistId || DEFAULT_PLAYLIST_ID,
           };
-          
+
           // Store in IndexedDB
           await addSongToDB(newSong, file);
-          
+
           // Add to our new songs array
           newSongs.push(newSong);
         } catch (error) {
@@ -240,7 +241,7 @@ export default function App() {
       // Reset the input
       e.target.value = '';
     }
-  }, [songs.length, currentSong]);
+  }, [currentSong, currentPlaylistId]);
 
   // Delete a song
   const deleteSong = useCallback(async (id: string) => {
@@ -311,18 +312,25 @@ export default function App() {
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
-    
+
     const updateTime = () => setCurrentTime(audio.currentTime);
-    const handleEnded = () => playNextSong();
-    
+    const handleEnded = () => {
+      if (isLooping) {
+        audio.currentTime = 0;
+        audio.play();
+      } else {
+        playNextSong();
+      }
+    };
+
     audio.addEventListener('timeupdate', updateTime);
     audio.addEventListener('ended', handleEnded);
-    
+
     return () => {
       audio.removeEventListener('timeupdate', updateTime);
       audio.removeEventListener('ended', handleEnded);
     };
-  }, [playNextSong]); 
+  }, [playNextSong, isLooping]); 
 
   // Play the previous song
   const playPrevSong = useCallback(() => {
@@ -362,6 +370,13 @@ export default function App() {
     setIsShuffled(newValue);
     saveSettings({ isShuffled: newValue });
   }, [isShuffled]);
+
+  // Toggle loop mode
+  const toggleLoop = useCallback(() => {
+    const newValue = !isLooping;
+    setIsLooping(newValue);
+    saveSettings({ isLooping: newValue });
+  }, [isLooping]);
 
   // Toggle audio normalization
   const toggleNormalize = useCallback(() => {
@@ -550,7 +565,7 @@ export default function App() {
         {/* Player card (centered when library is hidden) */}
         <div className={`flex-1 flex items-center justify-center ${showLibrary ? 'md:w-2/3 lg:w-3/4' : 'w-full'}`}>
           <div className="w-full max-w-md bg-gray-800 rounded-lg p-6 shadow-lg">
-            <MusicPlayer 
+            <MusicPlayer
               currentSong={currentSong}
               isPlaying={isPlaying}
               setIsPlaying={setIsPlaying}
@@ -560,6 +575,8 @@ export default function App() {
               playPrevSong={playPrevSong}
               playNextSong={playNextSong}
               isLoading={isLoading}
+              isLooping={isLooping}
+              toggleLoop={toggleLoop}
             />
           </div>
         </div>

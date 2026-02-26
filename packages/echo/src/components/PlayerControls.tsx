@@ -7,6 +7,8 @@ interface PlayerControlsProps {
   playPrevSong: () => void;
   playNextSong: () => void;
   isLoading: boolean;
+  isLooping: boolean;
+  toggleLoop: () => void;
 }
 
 export const PlayerControls: React.FC<PlayerControlsProps> = ({
@@ -14,7 +16,9 @@ export const PlayerControls: React.FC<PlayerControlsProps> = ({
   setIsPlaying,
   playPrevSong,
   playNextSong,
-  isLoading
+  isLoading,
+  isLooping,
+  toggleLoop,
 }) => {
   return (
     <div className="flex justify-center items-center gap-4 mb-6">
@@ -47,13 +51,27 @@ export const PlayerControls: React.FC<PlayerControlsProps> = ({
       </button>
       
       {/* Next button */}
-      <button 
+      <button
         onClick={playNextSong}
         className="p-2 rounded-full hover:bg-gray-700 transition-colors"
         disabled={isLoading}
       >
         <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" viewBox="0 0 20 20" fill="currentColor">
           <path d="M4.555 5.168A1 1 0 003 6v8a1 1 0 001.555.832L10 11.202V14a1 1 0 001.555.832l6-4a1 1 0 000-1.664l-6-4A1 1 0 0010 6v2.798L4.555 5.168z" />
+        </svg>
+      </button>
+
+      {/* Loop button */}
+      <button
+        onClick={toggleLoop}
+        className={`p-2 rounded-full transition-colors ${
+          isLooping ? 'bg-purple-600 hover:bg-purple-700' : 'hover:bg-gray-700'
+        }`}
+        disabled={isLoading}
+        title={isLooping ? 'Loop: On' : 'Loop: Off'}
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+          <path d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" />
         </svg>
       </button>
     </div>

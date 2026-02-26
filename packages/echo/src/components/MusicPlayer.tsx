@@ -13,6 +13,8 @@ interface MusicPlayerProps {
   playPrevSong: () => void;
   playNextSong: () => void;
   isLoading: boolean;
+  isLooping: boolean;
+  toggleLoop: () => void;
 }
 
 export const MusicPlayer: React.FC<MusicPlayerProps> = ({
@@ -24,7 +26,9 @@ export const MusicPlayer: React.FC<MusicPlayerProps> = ({
   progressBarRef,
   playPrevSong,
   playNextSong,
-  isLoading
+  isLoading,
+  isLooping,
+  toggleLoop,
 }) => {
   if (isLoading) {
     return (
@@ -75,12 +79,14 @@ export const MusicPlayer: React.FC<MusicPlayerProps> = ({
       />
       
       {/* Controls */}
-      <PlayerControls 
+      <PlayerControls
         isPlaying={isPlaying}
         setIsPlaying={setIsPlaying}
         playPrevSong={playPrevSong}
         playNextSong={playNextSong}
         isLoading={isLoading}
+        isLooping={isLooping}
+        toggleLoop={toggleLoop}
       />
     </>
   );

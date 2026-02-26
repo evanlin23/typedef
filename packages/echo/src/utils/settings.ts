@@ -6,12 +6,14 @@ export interface Settings {
   isShuffled: boolean;
   normalizeAudio: boolean;
   currentPlaylistId: string | null;
+  isLooping: boolean;
 }
 
 const defaultSettings: Settings = {
   isShuffled: false,
   normalizeAudio: false,
   currentPlaylistId: null,
+  isLooping: false,
 };
 
 export const getSettings = (): Settings => {
