@@ -11,6 +11,7 @@ import {
   appendBezierCurve,
   beginText,
   clip,
+  clipEvenOdd,
   closePath,
   concatTransformationMatrix,
   drawObject,
@@ -36,6 +37,7 @@ import {
   showText,
   stroke,
   type PDFDocument,
+  type PDFEmbeddedPage,
   type PDFFont,
   type PDFHexString,
   type PDFImage,
@@ -213,9 +215,9 @@ export class Painter {
   }
 
   // Restricts later drawing (until the matching restore) to the inside of a path
-  clipTo(path: string | Segment[]) {
+  clipTo(path: string | Segment[], evenOdd = false) {
     this.appendPath(path);
-    this.ops.push(clip(), endPath());
+    this.ops.push(evenOdd ? clipEvenOdd() : clip(), endPath());
   }
 
   // Fills a path with a linear (angle in degrees, clockwise from +x) or radial
@@ -278,6 +280,15 @@ export class Painter {
     this.save();
     this.setAlpha(alpha, 1);
     this.transform(width, 0, 0, -height, x, y + height);
+    this.ops.push(drawObject(name));
+    this.restore();
+  }
+
+  // Draws an embedded PDF page stretched over a box
+  drawForm(form: PDFEmbeddedPage, x: number, y: number, width: number, height: number) {
+    const name = this.page.node.newXObject('Form', form.ref);
+    this.save();
+    this.transform(width / form.width, 0, 0, -height / form.height, x, y + height);
     this.ops.push(drawObject(name));
     this.restore();
   }
