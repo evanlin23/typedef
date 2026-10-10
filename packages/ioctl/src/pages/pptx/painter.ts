@@ -82,6 +82,8 @@ export interface StrokeStyle {
 
 type Matrix = [number, number, number, number, number, number];
 
+const OPERATOR_CHUNK = 10000;
+
 // A clickable area on the page, in PDF coordinates (y up)
 export interface PageLink {
   rect: [number, number, number, number];
@@ -332,7 +334,8 @@ export class Painter {
 
   finish() {
     this.ops.push(popGraphicsState());
-    this.page.pushOperators(...this.ops);
+    // In chunks: a busy slide has more operators than a call can take as arguments
+    for (let i = 0; i < this.ops.length; i += OPERATOR_CHUNK) this.page.pushOperators(...this.ops.slice(i, i + OPERATOR_CHUNK));
     this.ops = [];
   }
 }

@@ -13,6 +13,8 @@ import { builtInTableStyle } from './tableStyles';
 // - text boxes take their defaults from the presentation's default text style
 // - line breaks and tabs become marker characters (pptxtojson turns them into spaces)
 // - empty paragraphs get a space, so they take the size of their paragraph mark
+// - placeholders inherit from the master's placeholder of their type, and text
+//   with only an East Asian font inherits its Latin font
 // - markup-compatibility alternatives are resolved to their fallback content
 // - embedded objects, like MathType equations, are replaced by their preview picture
 // - fills, outlines and shadows that shapes take from the theme are written out
@@ -253,6 +255,23 @@ function findPlaceholder(doc: Document | null, ph: { type: string; idx: string |
     }) ||
     null
   );
+}
+
+// PowerPoint matches a slide's placeholders to the master's by type, but
+// pptxtojson tries the index first, so a body placeholder with index 3 got the
+// master's footer (index 3), and a second content placeholder (index 2, no
+// type) the master's date. Master placeholders other than the body lose their
+// index, and content placeholders on slides are marked as body text.
+function matchPlaceholdersByType(slide: Document, layout: Document | null, master: Document | null) {
+  for (const sp of Array.from(slide.getElementsByTagNameNS(P, 'sp'))) {
+    const ph = path(sp, [P, 'nvSpPr'], [P, 'nvPr'], [P, 'ph']);
+    if (!ph || ph.hasAttribute('type')) continue;
+    const layoutType = placeholderOf(findPlaceholder(layout, placeholderOf(sp)!, true) ?? sp)?.type ?? 'obj';
+    if (layoutType === 'obj' || layoutType === 'body') ph.setAttribute('type', 'body');
+  }
+  for (const ph of Array.from(master?.getElementsByTagNameNS(P, 'ph') ?? [])) {
+    if (!['body', 'obj'].includes(ph.getAttribute('type') ?? 'obj')) ph.removeAttribute('idx');
+  }
 }
 
 function masterStyleName(sp: Element) {
@@ -503,6 +522,16 @@ function addBullets(slide: Document, layout: Document | null, master: Document |
       if (pPr) pPr.after(run);
       else para.prepend(run);
     }
+  }
+}
+
+// pptxtojson takes a run's font from its Latin font or else its East Asian
+// one, so text whose properties name only an East Asian font (common in decks
+// made on Japanese systems) got that font instead of inheriting the Latin one
+function dropEastAsianOnlyFonts(doc: Document) {
+  for (const props of Array.from(doc.getElementsByTagNameNS(A, '*')).filter((el) => ['rPr', 'defRPr', 'endParaRPr'].includes(el.localName))) {
+    const eastAsian = child(props, A, 'ea');
+    if (eastAsian && !child(props, A, 'latin')) eastAsian.remove();
   }
 }
 
@@ -792,6 +821,7 @@ export async function preparePptx(zip: JSZip): Promise<{ slideNumbers: number[] 
     }
     if (slide) addBullets(slide, layout, master, defaultTextStyle);
     if (slide) markVerticalText(slide, layout, master);
+    if (slide) matchPlaceholdersByType(slide, layout, master);
     const diagrams = await relatedFiles(zip, slideFile, '/diagramDrawing');
     for (const file of [slideFile, layoutFile, masterFile, ...diagrams]) {
       if (file && !parts.has(file)) parts.set(file, { theme, themeFile, master });
@@ -813,6 +843,7 @@ export async function preparePptx(zip: JSZip): Promise<{ slideNumbers: number[] 
     markLineBreaks(doc);
     markTabs(doc);
     fillEmptyParagraphs(doc);
+    dropEastAsianOnlyFonts(doc);
     replaceEmbeddedObjects(doc);
     applyShapeStyles(doc, theme);
     await resolveBackgroundRef(zip, file, doc, themeFile, theme);
