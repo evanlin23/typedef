@@ -145,6 +145,39 @@ describe('preparePptx', () => {
     expect(xml).toContain('<a:r><a:rPr sz="1000"/><a:t> </a:t></a:r><a:endParaRPr sz="1000"/>');
   });
 
+  it('matches master placeholders by type, and lets text inherit its Latin font', async () => {
+    const zip = await makePresentation();
+    const placeholder = (id: number, ph: string, run: string) =>
+      `<p:sp><p:nvSpPr><p:cNvPr id="${id}" name="P${id}"/><p:cNvSpPr/><p:nvPr>${ph}</p:nvPr></p:nvSpPr><p:spPr/>` +
+      `<p:txBody><a:bodyPr/><a:p><a:r>${run}<a:t>text</a:t></a:r></a:p></p:txBody></p:sp>`;
+    zip.file(
+      'ppt/slides/slide3.xml',
+      slide(
+        titleShape('first') +
+          placeholder(6, '<p:ph type="body" sz="half" idx="3"/>', '<a:rPr><a:ea typeface="MS PGothic"/></a:rPr>') +
+          placeholder(7, '<p:ph sz="half" idx="2"/>', '<a:rPr><a:latin typeface="Georgia"/><a:ea typeface="MS PGothic"/></a:rPr>')
+      )
+    );
+    const master = (await text(zip, 'ppt/slideMasters/slideMaster1.xml')).replace(
+      '<p:spTree/>',
+      `<p:spTree>${placeholder(2, '<p:ph type="body" idx="1"/>', '')}${placeholder(3, '<p:ph type="dt" idx="2"/>', '')}${placeholder(4, '<p:ph type="ftr" idx="3"/>', '')}</p:spTree>`
+    );
+    zip.file('ppt/slideMasters/slideMaster1.xml', master);
+    await preparePptx(zip);
+
+    // The master's date and footer can only be found by type now; its body keeps its index
+    const masterXml = await text(zip, 'ppt/slideMasters/slideMaster1.xml');
+    expect(masterXml).toContain('<p:ph type="dt"/>');
+    expect(masterXml).toContain('<p:ph type="ftr"/>');
+    expect(masterXml).toContain('<p:ph type="body" idx="1"/>');
+    // A content placeholder (no type) is body text
+    const xml = await text(zip, 'ppt/slides/slide1.xml');
+    expect(xml).toContain('<p:ph sz="half" idx="2" type="body"/>');
+    // A run naming only an East Asian font inherits its Latin font; one naming both keeps them
+    expect(xml).not.toMatch(/<a:rPr><a:ea /);
+    expect(xml).toContain('<a:latin typeface="Georgia"/><a:ea typeface="MS PGothic"/>');
+  });
+
   it('defines built-in table styles the presentation uses', async () => {
     const zip = await makePresentation();
     await preparePptx(zip);
