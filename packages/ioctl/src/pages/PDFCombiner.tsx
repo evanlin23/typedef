@@ -17,6 +17,7 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { PPTX_MIME, isPptx } from './pptx/fileTypes';
 
 // Every box that defines a page's geometry. They're all scaled together so the
 // visible region stays aligned with the scaled content.
@@ -50,6 +51,8 @@ function normalizePageWidths(pages: PDFPage[]) {
     if (Math.abs(factor - 1) > 1e-3) scalePage(page, factor);
   }
 }
+
+const isPdf = (file: File) => file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
 
 // Interface for tracking uploaded files with a stable ID for dnd
 interface UploadedPdf {
@@ -130,6 +133,7 @@ function PdfCombiner() {
   const [isDraggingOverZone, setIsDraggingOverZone] = useState(false); // For drop zone
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [progress, setProgress] = useState<string | null>(null);
   const [outputFileName, setOutputFileName] = useState('combined_document');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -137,12 +141,13 @@ function PdfCombiner() {
 
   const addFilesToList = useCallback((newFiles: FileList | File[]) => {
     setError(null);
-    const pdfFiles = Array.from(newFiles).filter(
-      (file) => file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')
-    );
+    const pdfFiles = Array.from(newFiles).filter((file) => isPdf(file) || isPptx(file));
 
     if (pdfFiles.length === 0 && newFiles.length > 0) {
-      setError("No valid PDF files found. Please select or drop files ending with .pdf.");
+      const hasPpt = Array.from(newFiles).some((file) => file.name.toLowerCase().endsWith('.ppt'));
+      setError(hasPpt
+        ? "Old .ppt files aren't supported. Open them in PowerPoint and save them as .pptx first."
+        : "No valid files found. Please select or drop files ending with .pdf or .pptx.");
       return;
     }
     if (pdfFiles.length === 0) return;
@@ -209,10 +214,10 @@ function PdfCombiner() {
     }
   }, []);
 
-  // --- PDF Combination Logic (remains the same) ---
+  // --- PDF Combination Logic ---
   const handleCombinePdfs = useCallback(async () => {
     if (uploadedFiles.length < 2) {
-      setError("Please upload at least two PDF files to combine.");
+      setError("Please upload at least two files to combine.");
       return;
     }
     setIsProcessing(true); setError(null);
@@ -220,10 +225,20 @@ function PdfCombiner() {
       const mergedPdf = await PDFDocument.create();
       for (const uploadedPdf of uploadedFiles) {
         try {
-          const arrayBuffer = await uploadedPdf.file.arrayBuffer();
-          const pdfDoc = await PDFDocument.load(arrayBuffer, { ignoreEncryption: true });
-          if (pdfDoc.isEncrypted) {
-             throw new Error(`File "${uploadedPdf.file.name}" is encrypted and cannot be processed.`);
+          let pdfDoc: PDFDocument;
+          if (isPptx(uploadedPdf.file)) {
+            // Loaded on demand so PDF-only use doesn't download the PowerPoint renderer
+            const { pptxToPdf } = await import('./pptx/pptxToPdf');
+            pdfDoc = await pptxToPdf(uploadedPdf.file, (slide, total) =>
+              setProgress(`Converting "${uploadedPdf.file.name}" (slide ${slide} of ${total})...`)
+            );
+          } else {
+            setProgress(`Adding "${uploadedPdf.file.name}"...`);
+            const arrayBuffer = await uploadedPdf.file.arrayBuffer();
+            pdfDoc = await PDFDocument.load(arrayBuffer, { ignoreEncryption: true });
+            if (pdfDoc.isEncrypted) {
+               throw new Error(`File "${uploadedPdf.file.name}" is encrypted and cannot be processed.`);
+            }
           }
           const copiedPages = await mergedPdf.copyPages(pdfDoc, pdfDoc.getPageIndices());
           copiedPages.forEach((page) => mergedPdf.addPage(page));
@@ -252,6 +267,7 @@ function PdfCombiner() {
       setError(`Failed to combine PDFs: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
       setIsProcessing(false);
+      setProgress(null);
     }
   }, [uploadedFiles, outputFileName]);
 
@@ -259,12 +275,13 @@ function PdfCombiner() {
     <div className="max-w-4xl mx-auto p-6 bg-gray-700 shadow-lg rounded-lg text-gray-200">
       <h2 className="text-2xl font-bold text-orange-400 mb-2">PDF Combiner</h2>
       <p className="text-gray-300 mb-4">
-        Upload multiple PDF files, reorder them as needed, and combine them into a single downloadable PDF.
+        Upload PDF or PowerPoint (.pptx) files, reorder them as needed, and combine them into a single downloadable PDF.
         Pages are scaled to the same width so slides from different decks line up.
+        PowerPoint slides are converted in your browser, so charts, videos, and fonts you don't have installed may look different.
       </p>
       <input
           type="file" className="hidden" ref={fileInputRef} onChange={handleFileSelect}
-          multiple accept="application/pdf,.pdf"
+          multiple accept={`application/pdf,.pdf,${PPTX_MIME},.pptx`}
       />
 
       <div
@@ -274,10 +291,10 @@ function PdfCombiner() {
         onDragEnter={handleZoneDragEnter} onDragLeave={handleZoneDragLeave}
         onDragOver={handleZoneDragOver} onDrop={handleZoneDrop}
         onClick={handleBrowseClick} role="button" tabIndex={0}
-        title="Drag and drop PDF files here, or click to select files"
+        title="Drag and drop PDF or PPTX files here, or click to select files"
         onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleBrowseClick(); }}
       >
-        {isProcessing ? (<p>Combining PDFs...</p>) : (<p>Drag & drop PDF files here, or click to select</p>)}
+        {isProcessing ? (<p>{progress ?? 'Combining files...'}</p>) : (<p>Drag & drop PDF or PPTX files here, or click to select</p>)}
       </div>
 
       {error && <p className="mt-4 p-3 bg-red-900 text-red-100 rounded-md">Error: {error}</p>}
@@ -325,7 +342,7 @@ function PdfCombiner() {
               onClick={handleCombinePdfs} disabled={isProcessing || uploadedFiles.length < 2}
               className="bg-orange-500 hover:bg-orange-600 text-gray-100 py-2 px-6 rounded-md transition-colors duration-200 disabled:bg-gray-600 disabled:text-gray-400 disabled:cursor-not-allowed"
             >
-              {isProcessing ? 'Processing...' : `Combine ${uploadedFiles.length} PDFs`}
+              {isProcessing ? 'Processing...' : `Combine ${uploadedFiles.length} files`}
             </button>
             {uploadedFiles.length > 0 && uploadedFiles.length < 2 && !isProcessing && (
                  <p className="text-sm text-yellow-400 mt-2">Need at least 2 files to combine.</p>
