@@ -6,7 +6,8 @@ import type { Segment } from './svgPath';
 // formats old equation editors, MathType and many embedded objects use for
 // their previews. Browsers can't display them, so they're turned into simple
 // drawing commands (paths, text, bitmaps) that are drawn straight into the PDF.
-// Only the records those files commonly use are supported.
+// Only the records those files commonly use are supported. EMFs saved by Mac
+// Office also carry the picture's original PDF, which is used instead.
 
 export interface MetafileFont {
   face: string;
@@ -17,10 +18,19 @@ export interface MetafileFont {
   symbol: boolean; // Symbol-encoded font, already mapped to Unicode
 }
 
-export type MetafileItem =
+// The area drawing is limited to: inside all of the paths (null: no limit)
+export interface ClipPath {
+  segments: Segment[];
+  evenOdd: boolean;
+}
+export type Clip = readonly ClipPath[] | null;
+
+export type MetafileItem = (
   | { kind: 'path'; segments: Segment[]; fill: Rgba | null; stroke: Rgba | null; strokeWidth: number; evenOdd: boolean }
   | { kind: 'text'; text: string; xs: number[]; y: number; valign: 'baseline' | 'top' | 'bottom'; font: MetafileFont; color: Rgba }
-  | { kind: 'bitmap'; dib: Uint8Array; x: number; y: number; width: number; height: number };
+  // `alpha`: the bitmap has per-pixel (premultiplied) alpha, as AlphaBlend draws it
+  | { kind: 'bitmap'; dib: Uint8Array; x: number; y: number; width: number; height: number; alpha?: boolean }
+) & { clip: Clip };
 
 export interface MetafileDrawing {
   bounds: { x: number; y: number; width: number; height: number };
@@ -49,6 +59,10 @@ const TA_BOTTOM = 8;
 const TA_BASELINE = 24;
 const PS_NULL = 5;
 const BS_NULL = 1;
+// How a new clip combines with the current one
+const RGN_AND = 1;
+const RGN_DIFF = 4;
+const RGN_COPY = 5;
 const MM_ISOTROPIC = 7;
 const MM_ANISOTROPIC = 8;
 
@@ -81,6 +95,7 @@ interface DcState {
   viewportExt: { x: number; y: number } | null;
   mapMode: number;
   world: Matrix;
+  clip: Clip;
 }
 
 const BLACK: Rgba = { r: 0, g: 0, b: 0, a: 1 };
@@ -100,6 +115,7 @@ const initialState = (): DcState => ({
   viewportExt: null,
   mapMode: 1,
   world: [1, 0, 0, 1, 0, 0],
+  clip: null,
 });
 
 const STOCK_OBJECTS: Record<number, GdiObject> = {
@@ -123,6 +139,17 @@ const colorRef = (view: DataView, offset: number): Rgba => ({
 
 // Font names end up in the PDF, so keep only characters font names use
 const cleanFaceName = (name: string) => name.split('\0')[0].replace(/[^\w .-]/g, '');
+
+type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never;
+
+// A rectangle around everything, for clipping to what's outside a path (even-odd)
+const OUTSIDE: Segment[] = [
+  { type: 'M', to: { x: -1e7, y: -1e7 } },
+  { type: 'L', to: { x: 1e7, y: -1e7 } },
+  { type: 'L', to: { x: 1e7, y: 1e7 } },
+  { type: 'L', to: { x: -1e7, y: 1e7 } },
+  { type: 'Z' },
+];
 
 const multiply = (x: Matrix, y: Matrix): Matrix => [
   x[0] * y[0] + x[1] * y[2],
@@ -204,6 +231,32 @@ class Interpreter {
     if (state) this.state = state;
   }
 
+  // Adds a drawing item, limited to the current clip
+  add(item: DistributiveOmit<MetafileItem, 'clip'>) {
+    this.items.push({ ...item, clip: this.state.clip } as MetafileItem);
+  }
+
+  // Combines a path (in output coordinates) with the clip
+  clipTo(segments: Segment[], evenOdd: boolean, mode: number) {
+    const s = this.state;
+    if (mode === RGN_COPY) s.clip = [{ segments, evenOdd }];
+    else if (mode === RGN_AND) s.clip = [...(s.clip ?? []), { segments, evenOdd }];
+    else if (mode === RGN_DIFF) s.clip = [...(s.clip ?? []), { segments: [...OUTSIDE, ...segments], evenOdd: true }];
+    // Unions (RGN_OR, RGN_XOR) are rare; the clip is left as it is
+  }
+
+  rectPath(left: number, top: number, right: number, bottom: number): Segment[] {
+    const corners = [this.point(left, top), this.point(right, top), this.point(right, bottom), this.point(left, bottom)];
+    return [...corners.map((to, i) => ({ type: i ? 'L' : 'M', to }) as Segment), { type: 'Z' }];
+  }
+
+  // Uses the recorded path (BeginPath..EndPath) as a clip
+  clipToRecordedPath(mode: number) {
+    const segments = this.recordedPath;
+    this.recordedPath = null;
+    if (segments) this.clipTo(segments, this.state.polyFillEvenOdd, mode);
+  }
+
   decodeText(bytes: Uint8Array) {
     const font = this.state.font;
     if (font.symbol) return symbolFontToUnicode(String.fromCharCode(...bytes), font.face);
@@ -220,7 +273,7 @@ class Interpreter {
     const strokeColor = stroke && s.pen.style !== PS_NULL ? s.pen.color : null;
     if (!fillColor && !strokeColor) return;
     const { sx, sy } = this.scale();
-    this.items.push({ kind: 'path', segments, fill: fillColor, stroke: strokeColor, strokeWidth: s.pen.width * ((sx + sy) / 2), evenOdd: s.polyFillEvenOdd });
+    this.add({ kind: 'path', segments, fill: fillColor, stroke: strokeColor, strokeWidth: s.pen.width * ((sx + sy) / 2), evenOdd: s.polyFillEvenOdd });
   }
 
   polyline(points: [number, number][], closed: boolean) {
@@ -305,7 +358,7 @@ class Interpreter {
     for (const advance of advances?.slice(0, -1) ?? []) xs.push(xs[xs.length - 1] + advance);
     const vertical = s.textAlign & TA_VERTICAL;
     const valign = vertical === TA_BASELINE ? 'baseline' : vertical === TA_BOTTOM ? 'bottom' : 'top';
-    this.items.push({ kind: 'text', text, xs, y: origin.y, valign, font, color: s.textColor });
+    this.add({ kind: 'text', text, xs, y: origin.y, valign, font, color: s.textColor });
     if (s.textAlign & TA_UPDATECP) s.position = { x: x + width / (sx || 1), y };
   }
 
@@ -448,6 +501,56 @@ function readWmf(view: DataView, interpreter: Interpreter) {
   return windowExt ? { x: windowOrg.x, y: windowOrg.y, width: windowExt.x, height: windowExt.y } : bounds;
 }
 
+// An EMF's picture frame (in 0.01 mm) converted to device units, or else its drawing's bounds
+function emfBounds(view: DataView) {
+  const int32 = (o: number) => view.getInt32(o, true);
+  const devicePx = { x: int32(72), y: int32(76) };
+  const deviceMm = { x: int32(80), y: int32(84) };
+  const frame = { left: int32(24), top: int32(28), right: int32(32), bottom: int32(36) };
+  if (deviceMm.x > 0 && deviceMm.y > 0 && frame.right > frame.left && frame.bottom > frame.top) {
+    const kx = devicePx.x / (deviceMm.x * 100);
+    const ky = devicePx.y / (deviceMm.y * 100);
+    return { x: frame.left * kx, y: frame.top * ky, width: (frame.right - frame.left) * kx, height: (frame.bottom - frame.top) * ky };
+  }
+  return { x: int32(8), y: int32(12), width: int32(16) - int32(8), height: int32(20) - int32(12) };
+}
+
+const GDI_COMMENT = 0x43494447; // "GDIC"
+const MULTIFORMATS_COMMENT = 0x40000004;
+const PDF_FORMAT = 0x50444620; // "PDF "
+
+// Mac Office keeps a picture's original PDF inside the EMF it saves (in a
+// multiformat comment), with the GDI drawing as a fallback for other programs;
+// Mac PowerPoint shows the PDF. Returns the PDF and where it goes, in the same
+// units as the drawing's bounds.
+export function embeddedPdf(bytes: Uint8Array): { pdf: Uint8Array; rect: { x: number; y: number; width: number; height: number }; bounds: MetafileDrawing['bounds'] } | null {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  if (!isEmf(view)) return null;
+  const int32 = (o: number) => view.getInt32(o, true);
+  const uint32 = (o: number) => view.getUint32(o, true);
+  for (let offset = 0; offset + 8 <= view.byteLength; ) {
+    const type = uint32(offset);
+    const size = uint32(offset + 4);
+    if (size < 8 || offset + size > view.byteLength || type === 14) break;
+    // The comment's data starts with its identifier, which offsets count from
+    const id = offset + 12;
+    if (type === 70 && size >= 56 && uint32(id) === GDI_COMMENT && uint32(id + 4) === MULTIFORMATS_COMMENT) {
+      const [left, top, right, bottom] = [int32(id + 8), int32(id + 12), int32(id + 16), int32(id + 20)];
+      const count = uint32(id + 24);
+      for (let i = 0; i < count && id + 44 + i * 16 <= offset + size; i++) {
+        const format = id + 28 + i * 16;
+        const length = uint32(format + 8);
+        const start = id + uint32(format + 12);
+        if (uint32(format) === PDF_FORMAT && start + length <= offset + size && right > left && bottom > top) {
+          return { pdf: bytes.subarray(start, start + length), rect: { x: left, y: top, width: right - left, height: bottom - top }, bounds: emfBounds(view) };
+        }
+      }
+    }
+    offset += size;
+  }
+  return null;
+}
+
 function readEmf(view: DataView, interpreter: Interpreter) {
   const bytes = new Uint8Array(view.buffer, view.byteOffset, view.byteLength);
   const int32 = (o: number) => view.getInt32(o, true);
@@ -458,17 +561,7 @@ function readEmf(view: DataView, interpreter: Interpreter) {
   const points16 = (start: number, count: number) =>
     Array.from({ length: count }, (_, i) => [view.getInt16(start + i * 4, true), view.getInt16(start + i * 4 + 2, true)] as [number, number]);
   const state = () => interpreter.state;
-
-  // The picture frame (in 0.01 mm) converted to device units, or else the drawing's bounds
-  const devicePx = { x: int32(72), y: int32(76) };
-  const deviceMm = { x: int32(80), y: int32(84) };
-  const frame = { left: int32(24), top: int32(28), right: int32(32), bottom: int32(36) };
-  let bounds = { x: int32(8), y: int32(12), width: int32(16) - int32(8), height: int32(20) - int32(12) };
-  if (deviceMm.x > 0 && deviceMm.y > 0 && frame.right > frame.left && frame.bottom > frame.top) {
-    const kx = devicePx.x / (deviceMm.x * 100);
-    const ky = devicePx.y / (deviceMm.y * 100);
-    bounds = { x: frame.left * kx, y: frame.top * ky, width: (frame.right - frame.left) * kx, height: (frame.bottom - frame.top) * ky };
-  }
+  const bounds = emfBounds(view);
 
   let offset = 0;
   while (offset + 8 <= view.byteLength) {
@@ -543,6 +636,10 @@ function readEmf(view: DataView, interpreter: Interpreter) {
       case 27: // MoveToEx
         interpreter.moveTo(int32(p), int32(p + 4));
         break;
+      case 29: // ExcludeClipRect
+      case 30: // IntersectClipRect
+        interpreter.clipTo(interpreter.rectPath(int32(p), int32(p + 4), int32(p + 8), int32(p + 12)), false, type === 29 ? RGN_DIFF : RGN_AND);
+        break;
       case 33: // SaveDC
         interpreter.save();
         break;
@@ -593,23 +690,50 @@ function readEmf(view: DataView, interpreter: Interpreter) {
       case 61: // CloseFigure
         interpreter.closeFigure();
         break;
+      case 67: // SelectClipPath
+        interpreter.clipToRecordedPath(uint32(p));
+        break;
+      case 75: { // ExtSelectClipRgn
+        const regionSize = uint32(p);
+        const mode = uint32(p + 4);
+        if (!regionSize) {
+          // Without a region, RGN_COPY removes the clip
+          if (mode === RGN_COPY) state().clip = null;
+          break;
+        }
+        // The region's rectangles, in device units (like the output)
+        const count = uint32(p + 8 + 8);
+        const rects: Segment[] = [];
+        for (let i = 0; i < count; i++) {
+          const r = p + 8 + 32 + i * 16;
+          const [left, top, right, bottom] = [int32(r), int32(r + 4), int32(r + 8), int32(r + 12)];
+          rects.push({ type: 'M', to: { x: left, y: top } }, { type: 'L', to: { x: right, y: top } }, { type: 'L', to: { x: right, y: bottom } }, { type: 'L', to: { x: left, y: bottom } }, { type: 'Z' });
+        }
+        interpreter.clipTo(rects, false, mode);
+        break;
+      }
       case 62: // FillPath
       case 63: // StrokeAndFillPath
       case 64: // StrokePath
         interpreter.drawRecordedPath(type !== 64, type !== 62);
         break;
-      case 81: { // StretchDIBits
-        const offBmi = uint32(p + 40);
-        const cbBmi = uint32(p + 44);
-        const offBits = uint32(p + 48);
-        const cbBits = uint32(p + 52);
+      case 81: // StretchDIBits
+      case 114: { // AlphaBlend
+        // Where each record keeps its bitmap and destination size
+        const [bmi, dest] = type === 81 ? [p + 40, p + 64] : [p + 76, p + 24];
+        const offBmi = uint32(bmi);
+        const cbBmi = uint32(bmi + 4);
+        const offBits = uint32(bmi + 8);
+        const cbBits = uint32(bmi + 12);
         if (!cbBmi || !cbBits) break;
         const dib = new Uint8Array(cbBmi + cbBits);
         dib.set(bytes.subarray(offset + offBmi, offset + offBmi + cbBmi));
         dib.set(bytes.subarray(offset + offBits, offset + offBits + cbBits), cbBmi);
         const a = interpreter.point(int32(p + 16), int32(p + 20));
-        const b = interpreter.point(int32(p + 16) + int32(p + 64), int32(p + 20) + int32(p + 68));
-        interpreter.items.push({ kind: 'bitmap', dib, x: Math.min(a.x, b.x), y: Math.min(a.y, b.y), width: Math.abs(b.x - a.x), height: Math.abs(b.y - a.y) });
+        const b = interpreter.point(int32(p + 16) + int32(dest), int32(p + 20) + int32(dest + 4));
+        // AlphaBlend's AC_SRC_ALPHA: the bitmap's own alpha channel applies
+        const alpha = type === 114 && view.getUint8(p + 35) === 1;
+        interpreter.add({ kind: 'bitmap', dib, x: Math.min(a.x, b.x), y: Math.min(a.y, b.y), width: Math.abs(b.x - a.x), height: Math.abs(b.y - a.y), alpha });
         break;
       }
       case 82: { // ExtCreateFontIndirectW
@@ -676,7 +800,8 @@ export function metafileFonts(bytes: Uint8Array): MetafileFont[] {
 }
 
 // Decodes a device-independent bitmap (as embedded in EMF files) to pixels
-export function decodeDib(dib: Uint8Array): ImageData | null {
+// `alpha`: 32-bit pixels carry premultiplied alpha (as AlphaBlend uses)
+export function decodeDib(dib: Uint8Array, alpha = false): ImageData | null {
   const view = new DataView(dib.buffer, dib.byteOffset, dib.byteLength);
   const headerSize = view.getUint32(0, true);
   if (headerSize < 40) return null;
@@ -699,7 +824,13 @@ export function decodeDib(dib: Uint8Array): ImageData | null {
     const src = bitsStart + (rawHeight > 0 ? height - 1 - row : row) * stride;
     for (let x = 0; x < width; x++) {
       let rgb: number[];
-      if (bitCount === 24 || bitCount === 32) {
+      let a = 255;
+      if (bitCount === 32 && alpha) {
+        const i = src + x * 4;
+        a = dib[i + 3];
+        const k = a ? 255 / a : 0;
+        rgb = [dib[i + 2] * k, dib[i + 1] * k, dib[i] * k];
+      } else if (bitCount === 24 || bitCount === 32) {
         const i = src + x * (bitCount / 8);
         rgb = [dib[i + 2], dib[i + 1], dib[i]];
       } else if (bitCount === 16) {
@@ -712,7 +843,7 @@ export function decodeDib(dib: Uint8Array): ImageData | null {
       } else {
         return null;
       }
-      pixels.data.set([rgb[0], rgb[1], rgb[2], 255], (row * width + x) * 4);
+      pixels.data.set([rgb[0], rgb[1], rgb[2], a], (row * width + x) * 4);
     }
   }
   return pixels;

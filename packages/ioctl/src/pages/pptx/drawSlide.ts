@@ -5,7 +5,7 @@ import type { ChartFrame } from './chartXml';
 import { FontEmbedder, baselineRatio, faceStyle, familyFor, kernedText, loadFace, type Face } from './fonts';
 import { ImageCache } from './images';
 import { WORD_JOINER, textNodesIn, type SlideLayout } from './layoutSlide';
-import { decodeDib, metafileFonts, parseMetafile, type MetafileFont } from './metafile';
+import { decodeDib, embeddedPdf, metafileFonts, parseMetafile, type Clip, type MetafileFont } from './metafile';
 import { Painter, parseColor, type Rgba } from './painter';
 import { adjustValues, presetGeometry, type FillMode } from './presetGeometry';
 import { ellipsePath, parseSvgPath, pathEnds, rectPath, roundRectPath, scaleSegments, segmentsToSvg, type Point, type Segment } from './svgPath';
@@ -358,6 +358,16 @@ function drawLineEnd(painter: Painter, end: LineEnd | undefined, tip: Point, fro
 // Draws a WMF/EMF picture (usually an equation) scaled to fill `size`
 async function drawMetafile(ctx: DrawContext, bytes: Uint8Array, size: Size) {
   const { painter } = ctx;
+  // Pictures from Mac Office carry their original PDF, which Mac PowerPoint shows
+  const embedded = embeddedPdf(bytes);
+  const form = embedded && (await ctx.images.pdfPage(embedded.pdf, bytes));
+  if (embedded && form) {
+    const { rect, bounds } = embedded;
+    const sx = size.width / bounds.width;
+    const sy = size.height / bounds.height;
+    painter.drawForm(form, (rect.x - bounds.x) * sx, (rect.y - bounds.y) * sy, rect.width * sx, rect.height * sy);
+    return;
+  }
   const faceFor = (font: MetafileFont) => loadFace(font.symbol ? 'serif' : familyFor(font.face), font.bold, font.italic);
   const faces = new Map<string, Face>();
   const keyOf = (font: MetafileFont) => `${font.face}/${font.bold}/${font.italic}/${font.symbol}`;
@@ -386,7 +396,17 @@ async function drawMetafile(ctx: DrawContext, bytes: Uint8Array, size: Size) {
   painter.transform(sx, 0, 0, sy, -bounds.x * sx, -bounds.y * sy);
   // Hairline pens are drawn about half a point wide
   const hairline = 0.5 / Math.min(sx, sy);
+  // Items are drawn inside their clip, which consecutive items usually share
+  let clip: Clip = null;
   for (const item of drawing.items) {
+    if (item.clip !== clip) {
+      if (clip) painter.restore();
+      clip = item.clip;
+      if (clip) {
+        painter.save();
+        for (const path of clip) painter.clipTo(path.segments, path.evenOdd);
+      }
+    }
     if (item.kind === 'path') {
       painter.drawPath(item.segments, item.fill, item.stroke, { width: item.strokeWidth || hairline, cap: LineCapStyle.Round }, item.evenOdd);
     } else if (item.kind === 'text') {
@@ -423,10 +443,11 @@ async function drawMetafile(ctx: DrawContext, bytes: Uint8Array, size: Size) {
         x += advance;
       }
     } else {
-      const pixels = decodeDib(item.dib);
+      const pixels = decodeDib(item.dib, item.alpha);
       if (pixels) painter.drawImage(await ctx.images.embedPixels(pixels), item.x, item.y, item.width, item.height);
     }
   }
+  if (clip) painter.restore();
   painter.restore();
 }
 

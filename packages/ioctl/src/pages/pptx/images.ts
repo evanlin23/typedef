@@ -1,4 +1,4 @@
-import type { PDFDocument, PDFImage } from 'pdf-lib';
+import { PDFDocument, type PDFEmbeddedPage, type PDFImage } from 'pdf-lib';
 import { isMetafile } from './metafile';
 
 // Embeds slide pictures into the PDF. JPEG and PNG files are embedded as they
@@ -25,6 +25,7 @@ export async function canvasToPng(canvas: HTMLCanvasElement) {
 export class ImageCache {
   private doc: PDFDocument;
   private cache = new Map<string, Promise<ImageAsset>>();
+  private pdfPages = new WeakMap<Uint8Array, Promise<PDFEmbeddedPage | null>>();
 
   constructor(doc: PDFDocument) {
     this.doc = doc;
@@ -46,6 +47,23 @@ export class ImageCache {
     canvas.height = pixels.height;
     canvas.getContext('2d')!.putImageData(pixels, 0, 0);
     return this.doc.embedPng(await canvasToPng(canvas));
+  }
+
+  // The first page of a PDF (like one embedded in a metafile), cropped like a
+  // PDF viewer shows it, and embedded once per `key`; null if pdf-lib can't read it
+  pdfPage(pdf: Uint8Array, key = pdf): Promise<PDFEmbeddedPage | null> {
+    let page = this.pdfPages.get(key);
+    if (!page) {
+      page = PDFDocument.load(pdf)
+        .then((source) => {
+          const first = source.getPage(0);
+          const crop = first.getCropBox();
+          return this.doc.embedPage(first, { left: crop.x, bottom: crop.y, right: crop.x + crop.width, top: crop.y + crop.height });
+        })
+        .catch(() => null);
+      this.pdfPages.set(key, page);
+    }
+    return page;
   }
 
   async embedCanvas(canvas: HTMLCanvasElement) {

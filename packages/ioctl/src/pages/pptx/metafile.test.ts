@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isMetafile, metafileFonts, parseMetafile } from './metafile';
+import { embeddedPdf, isMetafile, metafileFonts, parseMetafile } from './metafile';
 
 // Builds metafiles record by record
 class Writer {
@@ -71,6 +71,60 @@ describe('EMF', () => {
     const text = drawing.items.find((item) => item.kind === 'text');
     expect(text).toMatchObject({ text: 'Hi', y: 80, valign: 'baseline', font: { face: 'Arial', bold: true, height: -20 } });
     expect(metafileFonts(file)).toHaveLength(1);
+  });
+});
+
+describe('EMF clipping, alpha bitmaps and embedded PDFs', () => {
+  const rectangle = (record: (type: number, body: Writer) => void) => record(43, new Writer().i32(10, 10, 90, 60));
+  // A 1x1 32-bit bitmap: header, then one pixel
+  const dib = new Writer().u32(40).i32(1, 1).u16(1, 32).u32(0, 4, 0, 0, 0, 0).u32(0x80000080).bytes;
+
+  it('keeps the clip each item is drawn with, through SaveDC and RestoreDC', () => {
+    const file = emf((record) => {
+      record(59, new Writer()); // BeginPath
+      record(27, new Writer().i32(0, 0)); // MoveToEx
+      record(54, new Writer().i32(100, 0)); // LineTo
+      record(54, new Writer().i32(100, 50));
+      record(60, new Writer()); // EndPath
+      record(67, new Writer().u32(5)); // SelectClipPath: RGN_COPY
+      rectangle(record);
+      record(33, new Writer()); // SaveDC
+      record(30, new Writer().i32(20, 20, 40, 40)); // IntersectClipRect
+      rectangle(record);
+      record(34, new Writer().i32(-1)); // RestoreDC
+      rectangle(record);
+      record(75, new Writer().u32(0, 5)); // ExtSelectClipRgn: no region, RGN_COPY
+      rectangle(record);
+    });
+    const clips = parseMetafile(file, measure)!.items.map((item) => item.clip?.length ?? 0);
+    expect(clips).toEqual([1, 2, 1, 0]);
+  });
+
+  it('draws AlphaBlend bitmaps with their alpha channel', () => {
+    const file = emf((record) => {
+      // Bounds, destination, blend function (AC_SRC_ALPHA), source origin, transform, color, usage
+      const body = new Writer().i32(0, 0, 0, 0, 10, 20, 30, 40).u32(0x01ff0000).i32(0, 0).u32(0x3f800000, 0, 0, 0x3f800000, 0, 0, 0, 0);
+      const headerOffset = 8 + body.bytes.length + 24;
+      body.u32(headerOffset, 40, headerOffset + 40, 4).i32(1, 1);
+      body.bytes.push(...dib);
+      record(114, body);
+    });
+    const [bitmap] = parseMetafile(file, measure)!.items;
+    expect(bitmap).toMatchObject({ kind: 'bitmap', x: 10, y: 20, width: 30, height: 40, alpha: true });
+  });
+
+  it('finds the original PDF Mac Office keeps in a picture', () => {
+    const pdf = Array.from(new TextEncoder().encode('%PDF-1.3 ... %%EOF'));
+    const withPdf = emf((record) => {
+      // Comment: data size, "GDIC", multiformats, output rectangle, one format ("PDF ") at offset 44
+      const body = new Writer().u32(44 + pdf.length).u32(0x43494447, 0x40000004).i32(0, 0, 200, 100).u32(1, 0x50444620, 1, pdf.length, 44);
+      body.bytes.push(...pdf);
+      record(70, body);
+    });
+    const found = embeddedPdf(withPdf)!;
+    expect(new TextDecoder().decode(found.pdf)).toBe('%PDF-1.3 ... %%EOF');
+    expect(found.rect).toEqual({ x: 0, y: 0, width: 200, height: 100 });
+    expect(embeddedPdf(emf(() => {}))).toBeNull();
   });
 });
 
