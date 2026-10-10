@@ -235,8 +235,8 @@ function ImageAnimatorPage() {
     } finally {
       setIsAnimating(false);
       // Clean up files from FFmpeg's virtual file system
-      try { await ffmpeg.deleteFile(inputFileName); } catch (e) { /* ignore */ }
-      try { await ffmpeg.deleteFile(outputFileName); } catch (e) { /* ignore if it was the source of error */ }
+      try { await ffmpeg.deleteFile(inputFileName); } catch { /* ignore */ }
+      try { await ffmpeg.deleteFile(outputFileName); } catch { /* ignore if it was the source of error */ }
     }
   }, [imageFile, points, ffmpegLoaded, relativeZoomInFactor, zoomLevelOutEffective, ffmpeg, ffmpegLog]);
 

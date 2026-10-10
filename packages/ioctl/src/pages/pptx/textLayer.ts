@@ -1,32 +1,7 @@
-import {
-  PDFDocument,
-  PDFHexString,
-  PDFPage,
-  PDFRef,
-  PDFString,
-  TextRenderingMode,
-  beginText,
-  endText,
-  popGraphicsState,
-  pushGraphicsState,
-  setCharacterSqueeze,
-  setFontAndSize,
-  setTextMatrix,
-  setTextRenderingMode,
-  showText,
-} from 'pdf-lib';
+import { PDFDocument, PDFHexString, PDFRef, PDFString } from 'pdf-lib';
 
-// Slides are embedded as images, so this adds their text as an invisible layer
-// (like OCR'd scans) to keep the PDF searchable and selectable.
-
-// A line of text, positioned in pt from the slide's top-left corner
-export interface TextLine {
-  text: string;
-  left: number;
-  top: number;
-  width: number;
-  height: number;
-}
+// Characters no bundled font has (like CJK or emoji) are drawn as pictures, so
+// this adds their text invisibly on top (like OCR'd scans) to keep them searchable.
 
 // A 600-byte TrueType font whose only glyph is empty. Every character is drawn
 // with it (as one UTF-16 code unit per glyph) and the ToUnicode map below
@@ -35,7 +10,7 @@ const GLYPHLESS_FONT =
   'AAEAAAAKAIAAAwAgT1MvMkTeRSAAAAEoAAAAYGNtYXAADABGAAABjAAAACxnbHlmAAAAAAAAAbwAAAABaGVhZCz0tqgAAACsAAAANmhoZWED6QH2AAAA5AAAACRobXR4AfQAAAAAAYgAAAAEbG9jYQAAAAAAAAG4AAAABG1heHAAAgACAAABCAAAACBuYW1lGZ8ZNAAAAcAAAABycG9zdAADAAAAAAI0AAAAJAABAAAAAQAAgthu1l8PPPUAAwPoAAAAAObvOuQAAAAA5u865AAAAAAAAAAAAAAAAwACAAAAAAAAAAEAAAPoAAAAAAH0AAAAAAAAAAEAAAAAAAAAAAAAAAAAAAABAAEAAAABAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAwH0AZAABQAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPz8/PwAAAAAAAAPoAAAAAAPoAAAAAAAAAAAAAAAAAAAAAAAgAAAB9AAAAAAAAgAAAAMAAAAUAAMAAQAAABQABAAYAAAAAgACAAAAAP//AAD//wABAAAAAAAAAAAAAAAAAAQANgABAAAAAAABAA0AAAABAAAAAAACAAcADQADAAEECQABABoAFAADAAEECQACAA4ALkdseXBoTGVzc0ZvbnRSZWd1bGFyAEcAbAB5AHAAaABMAGUAcwBzAEYAbwBuAHQAUgBlAGcAdQBsAGEAcgAAAAIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAA';
 
 // Advance width of every glyph, as a fraction of the font size
-const GLYPH_WIDTH = 0.5;
+export const GLYPH_WIDTH = 0.5;
 
 // Maps each 2-byte code to the same UTF-16 code unit. bfrange entries may only
 // vary in their last byte, so there's one per high byte, at most 100 per block.
@@ -101,54 +76,7 @@ export function embedInvisibleFont(doc: PDFDocument): PDFRef {
   );
 }
 
-// Groups the words in a rendered slide into lines, measured in pt
-export function measureTextLines(root: HTMLElement, ptPerPx: number): TextLine[] {
-  const origin = root.getBoundingClientRect();
-  const lines: TextLine[] = [];
-  const range = document.createRange();
-  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
-  while (walker.nextNode()) {
-    const node = walker.currentNode as Text;
-    if (node.parentElement?.closest('[data-decorative]')) continue;
-    for (const word of node.data.matchAll(/\S+/g)) {
-      range.setStart(node, word.index);
-      range.setEnd(node, word.index + word[0].length);
-      const rect = range.getBoundingClientRect();
-      if (!rect.width || !rect.height) continue;
-      const box = {
-        left: (rect.left - origin.left) * ptPerPx,
-        top: (rect.top - origin.top) * ptPerPx,
-        width: rect.width * ptPerPx,
-        height: rect.height * ptPerPx,
-      };
-      // Continue the previous line if this word sits right after it
-      const line = lines[lines.length - 1];
-      const gap = line ? box.left - (line.left + line.width) : 0;
-      if (line && Math.abs(box.top - line.top) < line.height / 2 && gap > -0.2 * line.height && gap < line.height) {
-        line.text += (gap > 0.1 * line.height ? ' ' : '') + word[0];
-        line.width = box.left + box.width - line.left;
-      } else {
-        lines.push({ text: word[0], ...box });
-      }
-    }
-  }
-  return lines;
-}
-
-export function drawInvisibleText(page: PDFPage, font: PDFRef, lines: TextLine[]) {
-  const fontName = page.node.newFontDictionary('GlyphLessFont', font);
-  const pageHeight = page.getHeight();
-  const ops = [pushGraphicsState(), beginText(), setTextRenderingMode(TextRenderingMode.Invisible)];
-  for (const line of lines) {
-    const hex = Array.from({ length: line.text.length }, (_, i) => line.text.charCodeAt(i).toString(16).padStart(4, '0')).join('');
-    ops.push(
-      setFontAndSize(fontName, line.height),
-      // Stretch the text horizontally so selections match the rendered words
-      setCharacterSqueeze((100 * line.width) / (line.text.length * line.height * GLYPH_WIDTH)),
-      setTextMatrix(1, 0, 0, 1, line.left, pageHeight - line.top - line.height),
-      showText(PDFHexString.of(hex))
-    );
-  }
-  ops.push(endText(), popGraphicsState());
-  page.pushOperators(...ops);
+// Encodes text for the invisible font: one glyph per UTF-16 code unit
+export function encodeInvisibleText(text: string) {
+  return PDFHexString.of(Array.from({ length: text.length }, (_, i) => text.charCodeAt(i).toString(16).padStart(4, '0')).join(''));
 }

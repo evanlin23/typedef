@@ -1,4 +1,5 @@
 // vite.config.ts
+/// <reference types="vitest/config" />
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite'; // Assuming you still need this
@@ -18,5 +19,9 @@ export default defineConfig({
   },
   optimizeDeps: {
     exclude: ['@ffmpeg/ffmpeg', '@ffmpeg/util'],
+  },
+  test: {
+    // The PPTX conversion code parses XML with the browser's DOMParser
+    environment: 'jsdom',
   },
 });
