@@ -1,13 +1,14 @@
 import JSZip from 'jszip';
 import { PDFDocument } from 'pdf-lib';
 import { parse, type Slide } from 'pptxtojson';
+import { writeLinks, type Link } from '../pdfLinks';
 import { readCharts, stubCharts } from './chartXml';
 import { drawSlide, drawUnreadableSlide, loadLayoutFonts } from './drawSlide';
 import { FontEmbedder } from './fonts';
 import { ImageCache } from './images';
-import { layoutSlide } from './layoutSlide';
+import { layoutSlide, placeLineSpacing } from './layoutSlide';
 import { Painter } from './painter';
-import { preparePptx } from './preprocess';
+import { LINK_PREFIX, preparePptx } from './preprocess';
 import { embedInvisibleFont } from './textLayer';
 
 // PowerPoint's single line spacing is about 1.2x the font size
@@ -44,6 +45,35 @@ async function parseSlides(zip: JSZip): Promise<{ size: { width: number; height:
   }
 }
 
+// A link's target on the page it's on: decodes the targets preprocessing
+// passed through pptxtojson, and turns slide jumps into pages
+function linkTarget(href: string, page: number, pageCount: number): Link['target'] | null {
+  const target = href.startsWith(LINK_PREFIX) ? decodeURIComponent(href.slice(LINK_PREFIX.length)) : href;
+  const slide = target.match(/^slide:(\d+)$/);
+  if (slide) return { page: Number(slide[1]) - 1 };
+  const jump = target.match(/^jump:(\w+)$/)?.[1];
+  if (jump) {
+    const pages: Record<string, number> = { nextslide: page + 1, previousslide: page - 1, firstslide: 0, lastslide: pageCount - 1 };
+    return pages[jump] !== undefined && pages[jump] >= 0 && pages[jump] < pageCount ? { page: pages[jump] } : null;
+  }
+  return /^(https?|mailto|ftp):/i.test(target) ? { uri: target } : null;
+}
+
+// Copies the title, author, subject and keywords from the presentation's properties
+async function setMetadata(doc: PDFDocument, zip: JSZip, fileName: string) {
+  const text = await zip.file('docProps/core.xml')?.async('text');
+  const core = text ? new DOMParser().parseFromString(text, 'application/xml') : null;
+  const field = (name: string) => core?.getElementsByTagNameNS('*', name)[0]?.textContent?.trim() || undefined;
+  doc.setTitle(field('title') ?? fileName.replace(/\.pptx$/i, ''), { showInWindowTitleBar: true });
+  const author = field('creator');
+  if (author) doc.setAuthor(author);
+  const subject = field('subject') ?? field('description');
+  if (subject) doc.setSubject(subject);
+  const keywords = field('keywords');
+  if (keywords) doc.setKeywords(keywords.split(/[,;]\s*/).filter(Boolean));
+  doc.setCreator('ioctl PPTX to PDF');
+}
+
 // Converts a .pptx file into a PDF with one page per slide, entirely in the
 // browser. The browser lays out each slide's text with the bundled fonts, and
 // the slide is drawn into the PDF as vector graphics with those fonts embedded.
@@ -62,6 +92,8 @@ export async function pptxToPdf(file: File, onProgress?: (slide: number, total: 
   const { width, height } = pptx.size;
 
   const doc = await PDFDocument.create();
+  await setMetadata(doc, zip, file.name);
+  const links: Link[][] = [];
   const fonts = new FontEmbedder(doc);
   const images = new ImageCache(doc);
   const invisibleFont = embedInvisibleFont(doc);
@@ -80,15 +112,23 @@ export async function pptxToPdf(file: File, onProgress?: (slide: number, total: 
         const layout = layoutSlide(slide, pptx.size, slideNumbers[index] ?? index + 1);
         host.replaceChildren(layout.root);
         await loadLayoutFonts(layout.root);
+        placeLineSpacing(layout.root);
         ctx.ptPerPx = width / layout.root.getBoundingClientRect().width;
         await drawSlide(ctx, slide, layout, pptx.size);
       } else {
         await drawUnreadableSlide(ctx, pptx.size);
       }
       painter.finish();
+      links.push(
+        painter.links.flatMap((link) => {
+          const target = linkTarget(link.target, index, pptx.slides.length);
+          return target ? [{ rect: link.rect, target }] : [];
+        })
+      );
     }
   } finally {
     host.remove();
   }
+  writeLinks(doc, links);
   return doc;
 }

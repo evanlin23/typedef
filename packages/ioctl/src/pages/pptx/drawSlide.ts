@@ -1,12 +1,13 @@
 import { LineCapStyle, type PDFRef } from 'pdf-lib';
-import type { Element as SlideElement, Fill, Image as ImageElement, LineEnd, Shadow, Slide } from 'pptxtojson';
+import type { Element as SlideElement, Fill, Image as ImageElement, LineEnd, Shadow, Shape as ShapeElement, Slide } from 'pptxtojson';
 import { drawChart } from './chart';
 import type { ChartFrame } from './chartXml';
-import { FontEmbedder, baselineRatio, faceStyle, familyFor, loadFace, type Face } from './fonts';
+import { FontEmbedder, baselineRatio, faceStyle, familyFor, kernedText, loadFace, type Face } from './fonts';
 import { ImageCache } from './images';
 import { WORD_JOINER, textNodesIn, type SlideLayout } from './layoutSlide';
 import { decodeDib, metafileFonts, parseMetafile, type MetafileFont } from './metafile';
 import { Painter, parseColor, type Rgba } from './painter';
+import { adjustValues, presetGeometry, type FillMode } from './presetGeometry';
 import { ellipsePath, parseSvgPath, pathEnds, rectPath, roundRectPath, scaleSegments, segmentsToSvg, type Point, type Segment } from './svgPath';
 import { symbolCode } from './symbolFont';
 import { SYMBOL_BOXES } from './symbolMetrics';
@@ -37,10 +38,24 @@ const LINE_END_SIZES = { sm: 2, med: 3, lg: 5 };
 
 const mix = (a: Rgba, b: Rgba): Rgba => ({ r: (a.r + b.r) / 2, g: (a.g + b.g) / 2, b: (a.b + b.b) / 2, a: (a.a + b.a) / 2 });
 
-function dashPattern(type: string | undefined, width: number) {
-  if (type === 'dashed') return [width * 4, width * 3];
-  if (type === 'dotted') return [width, width * 2];
-  return undefined;
+// PowerPoint's dash styles in multiples of the line width, by the dash
+// pattern pptxtojson reports for each of them
+const DASHES: Record<string, number[]> = {
+  '5': [4, 3], // dash
+  '5, 5, 1, 5': [4, 3, 1, 3], // dashDot
+  '1, 5': [1, 3], // dot
+  '10, 5': [8, 3], // lgDash
+  '10, 5, 1, 5, 1, 5': [8, 3, 1, 3, 1, 3], // lgDashDotDot
+  '5, 2': [3, 1], // sysDash
+  '5, 2, 1, 5': [3, 1, 1, 1], // sysDashDot
+  '5, 2, 1, 5, 1, 5': [3, 1, 1, 1, 1, 1], // sysDashDotDot
+  '2, 5': [1, 1], // sysDot
+};
+
+// `pattern` is pptxtojson's dash pattern; `type` its coarser dashed/dotted style (as in tables)
+function dashPattern(type: string | undefined, width: number, pattern?: string) {
+  const dash = (pattern ? DASHES[pattern] : undefined) ?? (type === 'dashed' ? DASHES['5'] : type === 'dotted' ? DASHES['2, 5'] : undefined);
+  return dash?.map((d) => d * width);
 }
 
 // Loads the faces a laid-out slide uses (and the symbol font where those lack characters)
@@ -181,6 +196,7 @@ async function drawText(ctx: DrawContext, container: HTMLElement, origin: DOMRec
     const size = parseFloat(style.fontSize) * ptPerPx;
     const color = parseColor(style.color) ?? BLACK;
     const charSpacing = style.letterSpacing === 'normal' ? 0 : parseFloat(style.letterSpacing) * ptPerPx || 0;
+    const kerning = style.fontKerning !== 'none';
     // Range rects span the primary font's ascent and descent, whatever fonts the characters use
     const baselineOffset = baselineRatio(primary, ctx.host) * size;
 
@@ -205,7 +221,8 @@ async function drawText(ctx: DrawContext, container: HTMLElement, origin: DOMRec
           if (!text.trim()) continue;
           if (run.face) {
             const font = await ctx.fonts.embed(run.face);
-            painter.drawText(font, size, box.left, box.top + baselineOffset, font.encodeText(text), color, charSpacing);
+            const content = kerning ? kernedText(run.face, font, text) : font.encodeText(text);
+            painter.drawText(font, size, box.left, box.top + baselineOffset, content, color, charSpacing);
           } else {
             await drawFallbackText(ctx, text, box, style, baselineOffset);
           }
@@ -229,6 +246,56 @@ async function drawText(ctx: DrawContext, container: HTMLElement, origin: DOMRec
       }
     }
   }
+
+  // Hyperlinks, one area per line of linked text
+  for (const anchor of container.querySelectorAll('a[href]')) {
+    for (const rect of anchor.getClientRects()) {
+      const box = local(rect);
+      painter.addLink(box.left, box.top, box.width, box.height, anchor.getAttribute('href')!);
+    }
+  }
+}
+
+// Draws a text box's text; vertical text was laid out turned a quarter turn
+// around the box's center, so it's rotated back into place
+async function drawTextBox(ctx: DrawContext, node: HTMLElement, size: Size) {
+  await drawTurnedText(ctx, node, node.getBoundingClientRect(), { x: size.width / 2, y: size.height / 2 });
+}
+
+// Draws text measured relative to `origin`, rotated around `center` if it was laid out turned
+async function drawTurnedText(ctx: DrawContext, container: HTMLElement, origin: DOMRect, center: Point) {
+  const rotation = Number(container.querySelector<HTMLElement>('[data-rotate]')?.dataset.rotate ?? 0);
+  if (!rotation) return drawText(ctx, container, origin);
+  const { painter } = ctx;
+  painter.save();
+  const radians = (rotation * Math.PI) / 180;
+  painter.transform(1, 0, 0, 1, center.x, center.y);
+  painter.transform(Math.cos(radians), Math.sin(radians), -Math.sin(radians), Math.cos(radians), 0, 0);
+  painter.transform(1, 0, 0, 1, -center.x, -center.y);
+  await drawText(ctx, container, origin);
+  painter.restore();
+}
+
+// Overlays that darken or lighten parts of preset shapes
+const SHADES: Partial<Record<FillMode, Rgba>> = {
+  darken: { r: 0, g: 0, b: 0, a: 0.4 },
+  darkenLess: { r: 0, g: 0, b: 0, a: 0.2 },
+  lighten: { r: 1, g: 1, b: 1, a: 0.4 },
+  lightenLess: { r: 1, g: 1, b: 1, a: 0.2 },
+};
+
+// A shape's outlines: computed from PowerPoint's definition for preset shapes,
+// or pptxtojson's path for custom ones
+function shapePaths(el: ShapeElement): { paths: { segments: Segment[]; fill: FillMode; stroke: boolean }[]; preset: boolean } {
+  const geometry = presetGeometry(el.shapType, el.width, el.height, adjustValues(el.keypoints));
+  if (geometry) return { paths: geometry.paths, preset: true };
+  if (!el.path) return { paths: [], preset: false };
+  const viewBox = el.pathViewBox ?? { x: 0, y: 0, width: el.width, height: el.height };
+  // The outline is scaled to the shape's size itself (scaling the drawing
+  // would distort line widths, and flatten lines of zero width or height)
+  const sx = viewBox.width ? el.width / viewBox.width : 1;
+  const sy = viewBox.height ? el.height / viewBox.height : 1;
+  return { paths: [{ segments: scaleSegments(parseSvgPath(el.path), sx, sy, -viewBox.x * sx, -viewBox.y * sy), fill: 'norm', stroke: true }], preset: false };
 }
 
 // Draws a shape's soft shadow, as a blurred image (PDF has no blur), in the
@@ -363,7 +430,7 @@ async function drawMetafile(ctx: DrawContext, bytes: Uint8Array, size: Size) {
   painter.restore();
 }
 
-type PictureElement = Box & Partial<Pick<ImageElement, 'rotate' | 'isFlipH' | 'isFlipV' | 'rect' | 'geom' | 'borderColor' | 'borderWidth' | 'borderType'>>;
+type PictureElement = Box & Partial<Pick<ImageElement, 'rotate' | 'isFlipH' | 'isFlipV' | 'rect' | 'geom' | 'borderColor' | 'borderWidth' | 'borderType' | 'borderStrokeDasharray' | 'link'>>;
 
 async function drawPicture(ctx: DrawContext, el: PictureElement, dataUrl: string, key?: string) {
   const { painter } = ctx;
@@ -389,8 +456,9 @@ async function drawPicture(ctx: DrawContext, el: PictureElement, dataUrl: string
     await drawPlaceholder(ctx, el, 'Image not shown');
   }
   if (el.borderWidth) {
-    painter.drawPath(outline, null, parseColor(el.borderColor), { width: el.borderWidth, dash: dashPattern(el.borderType, el.borderWidth) });
+    painter.drawPath(outline, null, parseColor(el.borderColor), { width: el.borderWidth, dash: dashPattern(el.borderType, el.borderWidth, el.borderStrokeDasharray) });
   }
+  if (el.link) painter.addLink(0, 0, w, h, el.link);
 }
 
 async function drawTable(ctx: DrawContext, node: HTMLElement) {
@@ -424,7 +492,10 @@ async function drawTable(ctx: DrawContext, node: HTMLElement) {
       painter.drawPath(path, null, parseColor(style.getPropertyValue(`border-${side.toLowerCase()}-color`)), { width, dash: dashPattern(lineStyle, width) });
     }
   }
-  for (const cell of cells) await drawText(ctx, cell, origin);
+  for (const cell of cells) {
+    const box = boxOf(cell);
+    await drawTurnedText(ctx, cell, origin, { x: box.left + box.width / 2, y: box.top + box.height / 2 });
+  }
 }
 
 async function drawElementContent(ctx: DrawContext, el: SlideElement, layout: SlideLayout) {
@@ -432,44 +503,51 @@ async function drawElementContent(ctx: DrawContext, el: SlideElement, layout: Sl
   switch (el.type) {
     case 'text': {
       painter.boxTransform(el, el.rotate);
+      if (el.link) painter.addLink(0, 0, el.width, el.height, el.link);
       const outline = rectPath(0, 0, el.width, el.height);
       if (el.shadow && el.fill) await drawShadow(ctx, parseSvgPath(outline), el, el.shadow, true, el.borderWidth, { rotate: el.rotate });
       await fillPath(ctx, outline, el, el.fill);
-      if (el.borderWidth) painter.drawPath(outline, null, parseColor(el.borderColor), { width: el.borderWidth, dash: dashPattern(el.borderType, el.borderWidth) });
+      if (el.borderWidth) painter.drawPath(outline, null, parseColor(el.borderColor), { width: el.borderWidth, dash: dashPattern(el.borderType, el.borderWidth, el.borderStrokeDasharray) });
       const node = layout.nodes.get(el);
-      if (node) await drawText(ctx, node, node.getBoundingClientRect());
+      if (node) await drawTextBox(ctx, node, el);
       break;
     }
     case 'shape': {
       painter.boxTransform(el, el.rotate);
-      if (el.path) {
-        const viewBox = el.pathViewBox ?? { x: 0, y: 0, width: el.width, height: el.height };
-        // The outline is scaled to the shape's size itself (scaling the drawing
-        // would distort line widths, and flatten lines of zero width or height)
-        const sx = viewBox.width ? el.width / viewBox.width : 1;
-        const sy = viewBox.height ? el.height / viewBox.height : 1;
-        const outline = scaleSegments(parseSvgPath(el.path), sx, sy, -viewBox.x * sx, -viewBox.y * sy);
+      if (el.link) painter.addLink(0, 0, el.width, el.height, el.link);
+      const { paths, preset } = shapePaths(el);
+      if (paths.length) {
         painter.save();
         // Flips apply to the geometry, not the text
         painter.boxTransform({ left: 0, top: 0, width: el.width, height: el.height }, 0, el.isFlipH, el.isFlipV);
-        const filled = !el.strokeOnly && !!el.fill;
-        if (el.shadow && (filled || el.borderWidth)) {
-          await drawShadow(ctx, outline, el, el.shadow, filled, el.borderWidth, { rotate: el.rotate, flipH: el.isFlipH, flipV: el.isFlipV });
-        }
-        if (!el.strokeOnly) await fillPath(ctx, outline, el, el.fill);
+        // Preset definitions say which parts are filled (arcs and braces have a filled area too)
+        const fillable = !el.fill || (el.strokeOnly && !preset) ? [] : paths.filter((p) => p.fill !== 'none');
+        const stroked = paths.filter((p) => p.stroke);
         const color = parseColor(el.borderColor);
-        if (el.borderWidth && color) {
-          painter.drawPath(outline, null, color, { width: el.borderWidth, dash: dashPattern(el.borderType, el.borderWidth) });
-          const ends = pathEnds(outline);
+        const lineWidth = color ? el.borderWidth : 0;
+        if (el.shadow && (fillable.length || lineWidth)) {
+          const outline = (fillable.length ? fillable : stroked).flatMap((p) => p.segments);
+          await drawShadow(ctx, outline, el, el.shadow, fillable.length > 0, lineWidth, { rotate: el.rotate, flipH: el.isFlipH, flipV: el.isFlipV });
+        }
+        for (const path of fillable) {
+          await fillPath(ctx, path.segments, el, el.fill);
+          // Shaded faces, like the top of a can or the sides of a cube
+          const shade = SHADES[path.fill];
+          if (shade) painter.drawPath(path.segments, shade);
+        }
+        if (lineWidth && color) {
+          const dash = dashPattern(el.borderType, lineWidth, el.borderStrokeDasharray);
+          for (const path of stroked) painter.drawPath(path.segments, null, color, { width: lineWidth, dash });
+          const ends = stroked.length ? pathEnds(stroked[0].segments) : null;
           if (ends) {
-            drawLineEnd(painter, el.headEnd, ends.start, ends.startToward, el.borderWidth, color);
-            drawLineEnd(painter, el.tailEnd, ends.end, ends.endFrom, el.borderWidth, color);
+            drawLineEnd(painter, el.headEnd, ends.start, ends.startToward, lineWidth, color);
+            drawLineEnd(painter, el.tailEnd, ends.end, ends.endFrom, lineWidth, color);
           }
         }
         painter.restore();
       }
       const node = layout.nodes.get(el);
-      if (node) await drawText(ctx, node, node.getBoundingClientRect());
+      if (node) await drawTextBox(ctx, node, el);
       break;
     }
     case 'image':

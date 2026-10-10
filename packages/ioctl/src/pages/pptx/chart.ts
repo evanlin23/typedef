@@ -50,6 +50,13 @@ class ChartDrawer {
     this.painter = ctx.painter;
   }
 
+  // A picture fill, stretched over the area
+  async drawPicture(dataUrl: string | undefined, rect: Rect) {
+    if (!dataUrl) return;
+    const asset = await this.ctx.images.get(dataUrl);
+    if (asset.kind === 'image') this.painter.drawImage(asset.image, rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top);
+  }
+
   // Office's automatic color for the nth series (or point, for varied colors)
   autoColor(n: number, count: number): Rgba {
     const style = ((this.spec.styleNumber - 1) % 8) + 1;
@@ -172,6 +179,7 @@ class ChartDrawer {
   async run(width: number, height: number) {
     const { spec, painter } = this;
     if (spec.areaFill) painter.drawPath(rectPath(0, 0, width, height), spec.areaFill);
+    await this.drawPicture(spec.areaPicture, { left: 0, top: 0, right: width, bottom: height });
     if (spec.areaLine) this.stroke(rectPath(0, 0, width, height), spec.areaLine, AXIS_GRAY);
 
     const region: Rect = { left: PAD, top: PAD, right: width - PAD, bottom: height - PAD };
@@ -397,6 +405,7 @@ class ChartDrawer {
     if (plot.right - plot.left < 4 || plot.bottom - plot.top < 4) return false;
 
     if (this.spec.plotFill) this.painter.drawPath(rectPath(plot.left, plot.top, plot.right - plot.left, plot.bottom - plot.top), this.spec.plotFill);
+    await this.drawPicture(this.spec.plotPicture, plot);
     if (this.spec.plotLine) this.stroke(rectPath(plot.left, plot.top, plot.right - plot.left, plot.bottom - plot.top), this.spec.plotLine, AXIS_GRAY);
 
     // Axis geometry: u runs along the category axis, v along the value axis
@@ -694,6 +703,7 @@ class ChartDrawer {
     }
     if (plot.right - plot.left < 4 || plot.bottom - plot.top < 4) return false;
     if (this.spec.plotFill) this.painter.drawPath(rectPath(plot.left, plot.top, plot.right - plot.left, plot.bottom - plot.top), this.spec.plotFill);
+    await this.drawPicture(this.spec.plotPicture, plot);
     const X = (v: number) => {
       const t = (v - xScale.min) / (xScale.max - xScale.min || 1);
       return plot.left + (xAxis?.reversed ? 1 - t : t) * (plot.right - plot.left);
