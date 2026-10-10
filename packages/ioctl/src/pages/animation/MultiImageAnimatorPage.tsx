@@ -279,7 +279,7 @@ function MultiImageAnimatorPage() {
         const zoomSettings: ZoomSettings = { relativeZoomInFactor, zoomLevelOutEffective };
         
         // Using the shared function
-        const { filterGraph, logData } = generateSingleClipFilterGraph(itemData, zoomSettings);
+        const { filterGraph } = generateSingleClipFilterGraph(itemData, zoomSettings);
         // setFfmpegLog(prev => prev + `\nClip ${i+1} Filter Params: ${JSON.stringify(logData, null, 2)}`); // Verbose
         
         const commandArgs = getDefaultFfmpegCommandArgs(inputFileName, filterGraph, outputClipName);
@@ -365,14 +365,14 @@ function MultiImageAnimatorPage() {
               try { 
                   const dataExists = await ffmpeg.readFile(tempClipNames[k]).then(() => true).catch(() => false);
                   if(dataExists) await ffmpeg.deleteFile(tempClipNames[k]);
-              } catch (e) { /* Gulp */ }
+              } catch { /* Gulp */ }
           }
       }
       if (imageItems.length > 1) {
           for (let k=0; k < imageItems.length - 2; k++) { 
               const intermediateMergedFile = `merged_${k}.mp4`;
               if (intermediateMergedFile !== currentVideoFile) {
-                  try { await ffmpeg.deleteFile(intermediateMergedFile); } catch (e) { /* Gulp */ }
+                  try { await ffmpeg.deleteFile(intermediateMergedFile); } catch { /* Gulp */ }
               }
           }
       }
@@ -498,7 +498,7 @@ function MultiImageAnimatorPage() {
     });
   };
 
-  const handleDragEnd = (e: React.DragEvent<HTMLDivElement>) => {
+  const handleDragEnd = () => {
     if (isLoading) return; setDraggedItemId(null); setDragOverItemId(null);
   };
 

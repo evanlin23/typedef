@@ -1,0 +1,44 @@
+# .github/workflows/ioctl-ci.yml
+# Type-checks, lints, tests and builds ioctl on pull requests that change it
+name: Ioctl CI
+
+on:
+  pull_request:
+    paths:
+      - 'packages/ioctl/**'
+      - 'pnpm-lock.yaml'
+      - '.github/workflows/ioctl-ci.yml'
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup PNPM
+        uses: pnpm/action-setup@v4
+        with:
+          version: '9'
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Type-check
+        run: pnpm --filter ioctl exec tsc --noEmit -p tsconfig.app.json
+
+      - name: Lint
+        run: pnpm --filter ioctl lint
+
+      - name: Test
+        run: pnpm --filter ioctl test
+
+      - name: Build
+        run: pnpm --filter ioctl build
