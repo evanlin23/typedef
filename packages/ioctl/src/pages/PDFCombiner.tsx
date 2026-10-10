@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, type DragEvent as ReactDragEvent, type ChangeEvent } from 'react';
-import { PDFDocument } from 'pdf-lib';
+import { PDFArray, PDFDocument, PDFName, PDFNumber, type PDFPage } from 'pdf-lib';
 import {
   DndContext,
   closestCenter,
@@ -17,6 +17,39 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+
+// Every box that defines a page's geometry. They're all scaled together so the
+// visible region stays aligned with the scaled content.
+const PAGE_BOXES = ['MediaBox', 'CropBox', 'BleedBox', 'TrimBox', 'ArtBox'].map((key) => PDFName.of(key));
+
+// Width of the page as a viewer displays it (the CropBox, accounting for rotation)
+function getDisplayedWidth(page: PDFPage): number {
+  const { width, height } = page.getCropBox();
+  const rotation = ((page.getRotation().angle % 360) + 360) % 360;
+  return rotation === 90 || rotation === 270 ? height : width;
+}
+
+// Uniformly scales a page's boxes, content, and annotations by `factor`
+function scalePage(page: PDFPage, factor: number) {
+  for (const key of PAGE_BOXES) {
+    const box = page.node.lookupMaybe(key, PDFArray);
+    if (!box) continue;
+    const scaled = box.asArray().map((_, i) => box.lookup(i, PDFNumber).asNumber() * factor);
+    page.node.set(key, page.doc.context.obj(scaled));
+  }
+  page.scaleContent(factor, factor);
+  page.scaleAnnotations(factor, factor);
+}
+
+// Scales every page to the width of the widest page, preserving aspect ratios,
+// so pages from differently sized PDFs don't show up tiny or huge
+function normalizePageWidths(pages: PDFPage[]) {
+  const targetWidth = pages.reduce((max, page) => Math.max(max, getDisplayedWidth(page)), 0);
+  for (const page of pages) {
+    const factor = targetWidth / getDisplayedWidth(page);
+    if (Math.abs(factor - 1) > 1e-3) scalePage(page, factor);
+  }
+}
 
 // Interface for tracking uploaded files with a stable ID for dnd
 interface UploadedPdf {
@@ -206,6 +239,7 @@ function PdfCombiner() {
       if (mergedPdf.getPageCount() === 0) {
           throw new Error("No pages could be added to the combined PDF.");
       }
+      normalizePageWidths(mergedPdf.getPages());
       const mergedPdfBytes = await mergedPdf.save();
       const blob = new Blob([mergedPdfBytes], { type: 'application/pdf' });
       const link = document.createElement('a');
@@ -226,6 +260,7 @@ function PdfCombiner() {
       <h2 className="text-2xl font-bold text-orange-400 mb-2">PDF Combiner</h2>
       <p className="text-gray-300 mb-4">
         Upload multiple PDF files, reorder them as needed, and combine them into a single downloadable PDF.
+        Pages are scaled to the same width so slides from different decks line up.
       </p>
       <input
           type="file" className="hidden" ref={fileInputRef} onChange={handleFileSelect}
