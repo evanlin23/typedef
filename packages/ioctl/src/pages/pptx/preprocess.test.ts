@@ -1,6 +1,6 @@
 import JSZip from 'jszip';
 import { describe, expect, it } from 'vitest';
-import { BULLET_END, BULLET_START, LINE_BREAK, preparePptx } from './preprocess';
+import { BULLET_END, BULLET_START, CELL_END, CELL_START, LINE_BREAK, LINK_PREFIX, SPACING_SCALE, VERTICAL_TEXT, preparePptx } from './preprocess';
 
 const NS = {
   a: 'http://schemas.openxmlformats.org/drawingml/2006/main',
@@ -104,6 +104,45 @@ describe('preparePptx', () => {
     const xml = await text(zip, 'ppt/slides/slide2.xml');
     expect(xml).not.toContain('<a:fld');
     expect(xml).toMatch(/<a:r><a:rPr sz="1400"\/><a:t>3<\/a:t><\/a:r>/);
+  });
+
+  it('passes on what pptxtojson leaves out', async () => {
+    const zip = await makePresentation();
+    const textBox = (name: string, bodyPr: string, ...paragraphs: string[]) =>
+      `<p:sp><p:nvSpPr><p:cNvPr id="6" name="${name}"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr><p:spPr/>` +
+      `<p:txBody>${bodyPr}${paragraphs.map((p) => `<a:p>${p}</a:p>`).join('')}</p:txBody></p:sp>`;
+    const table =
+      `<p:graphicFrame><p:nvGraphicFramePr><p:cNvPr id="8" name="Grid"/><p:cNvGraphicFramePr/><p:nvPr/></p:nvGraphicFramePr><p:xfrm/>` +
+      `<a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/table"><a:tbl><a:tr h="370840">` +
+      `<a:tc><a:txBody><a:bodyPr/><a:p><a:r><a:rPr sz="1200"/><a:t>cell</a:t></a:r></a:p></a:txBody><a:tcPr marL="0" vert="vert270"/></a:tc>` +
+      `<a:tc><a:txBody><a:bodyPr/><a:p><a:endParaRPr sz="1000"/></a:p></a:txBody><a:tcPr/></a:tc>` +
+      `</a:tr></a:tbl></a:graphicData></a:graphic></p:graphicFrame>`;
+    const shapes =
+      textBox(
+        'Note',
+        '<a:bodyPr vert="vert270"><a:normAutofit lnSpcReduction="20000"/></a:bodyPr>',
+        '<a:r><a:rPr><a:hlinkClick r:id="" action="ppaction://hlinkshowjump?jump=nextslide"/></a:rPr><a:t>Next</a:t></a:r>',
+        '<a:endParaRPr sz="1400" u="sng"/>'
+      ) +
+      textBox('Blank', '<a:bodyPr/>', '<a:endParaRPr sz="1400"/>') +
+      table;
+    zip.file('ppt/slides/slide3.xml', slide(titleShape('first') + shapes));
+    await preparePptx(zip);
+    const xml = await text(zip, 'ppt/slides/slide1.xml');
+
+    // Vertical text and autofit's 20% spacing reduction go in the shape's name
+    expect(xml).toContain(`name="Note${VERTICAL_TEXT}vert270${SPACING_SCALE}0.8"`);
+    // Slide jumps become links pptxtojson keeps, in the theme's link color
+    const rels = await text(zip, 'ppt/slides/_rels/slide1.xml.rels');
+    expect(rels).toContain(`Target="${LINK_PREFIX}jump%3Anextslide" TargetMode="External"`);
+    expect(xml).toMatch(/<a:rPr u="sng"><a:solidFill><a:schemeClr val="hlink"\/><\/a:solidFill><a:hlinkClick r:id="rIdIoctl\d+"/);
+    // Empty paragraphs get a space sized by their paragraph mark (not underlined)...
+    expect(xml).toContain('<a:r><a:rPr sz="1400"/><a:t> </a:t></a:r><a:endParaRPr sz="1400" u="sng"/>');
+    // ...but text boxes with no text are left alone
+    expect(xml).toContain('<a:p><a:endParaRPr sz="1400"/></a:p>');
+    // Table cells: margins and direction, and empty cells sized like text
+    expect(xml).toContain(`<a:r><a:rPr sz="1200"/><a:t>${CELL_START}0,3.6,7.2,3.6,vert270${CELL_END}</a:t></a:r>`);
+    expect(xml).toContain('<a:r><a:rPr sz="1000"/><a:t> </a:t></a:r><a:endParaRPr sz="1000"/>');
   });
 
   it('defines built-in table styles the presentation uses', async () => {

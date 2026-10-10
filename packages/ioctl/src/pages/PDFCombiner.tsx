@@ -17,6 +17,7 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { detachInternalLinks, reattachInternalLinks } from './pdfLinks';
 import { normalizePageWidths } from './pdfPageSizes';
 import { PPTX_MIME, isPptx } from './pptx/fileTypes';
 
@@ -208,8 +209,10 @@ function PdfCombiner() {
                throw new Error(`File "${uploadedPdf.file.name}" is encrypted and cannot be processed.`);
             }
           }
+          detachInternalLinks(pdfDoc);
           const copiedPages = await mergedPdf.copyPages(pdfDoc, pdfDoc.getPageIndices());
           copiedPages.forEach((page) => mergedPdf.addPage(page));
+          reattachInternalLinks(copiedPages);
         } catch (fileError) {
             console.error(`Error processing file ${uploadedPdf.file.name}:`, fileError);
              if (fileError instanceof Error && fileError.message.includes('encrypted')) {

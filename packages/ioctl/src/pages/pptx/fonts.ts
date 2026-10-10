@@ -1,11 +1,11 @@
 import fontkit from '@pdf-lib/fontkit';
-import type { PDFDocument, PDFFont } from 'pdf-lib';
+import type { PDFDocument, PDFFont, PDFHexString } from 'pdf-lib';
 
 // Slides are laid out by the browser and drawn into the PDF with the same
 // bundled fonts (see fonts/README.md), so text lands exactly where the browser
 // put it. Faces are downloaded only when a slide needs them.
 
-export type FamilyKey = 'carlito' | 'caladea' | 'sans' | 'serif' | 'mono' | 'symbols';
+export type FamilyKey = 'carlito' | 'caladea' | 'gelasio' | 'inconsolata' | 'sans' | 'serif' | 'mono' | 'symbols';
 
 export interface Face {
   key: string;
@@ -20,7 +20,7 @@ const FONT_URLS = import.meta.glob<string>('./fonts/*.ttf', { query: '?url', imp
 
 function fontUrl(family: FamilyKey, bold: boolean, italic: boolean) {
   if (family === 'symbols') return FONT_URLS[bold ? './fonts/DejaVuSans-Bold.ttf' : './fonts/DejaVuSans.ttf'];
-  const name = { carlito: 'Carlito', caladea: 'Caladea', sans: 'LiberationSans', serif: 'LiberationSerif', mono: 'LiberationMono' }[family];
+  const name = { carlito: 'Carlito', caladea: 'Caladea', gelasio: 'Gelasio', inconsolata: 'Inconsolata', sans: 'LiberationSans', serif: 'LiberationSerif', mono: 'LiberationMono' }[family];
   const variant = bold ? (italic ? 'BoldItalic' : 'Bold') : italic ? 'Italic' : 'Regular';
   return FONT_URLS[`./fonts/${name}-${variant}.ttf`];
 }
@@ -37,7 +37,9 @@ export function familyFor(fontName: string): FamilyKey {
   if (name.startsWith('pptx-')) return name.slice(5) as FamilyKey;
   if (name.startsWith('calibri')) return 'carlito';
   if (name.startsWith('cambria')) return 'caladea';
-  if (/courier|consolas|mono|lucida console|menlo|monaco|source code|inconsolata/.test(name)) return 'mono';
+  if (name.startsWith('georgia')) return 'gelasio';
+  if (name.startsWith('consolas') || name.startsWith('inconsolata')) return 'inconsolata';
+  if (/courier|mono|lucida console|menlo|monaco|source code/.test(name)) return 'mono';
   if (/times|georgia|garamond|palatino|book antiqua|bookman|baskerville|constantia|century schoolbook|didot|serif/.test(name) && !/sans/.test(name)) {
     return 'serif';
   }
@@ -150,10 +152,31 @@ export class FontEmbedder {
   embed(face: Face) {
     let font = this.embedded.get(face.key);
     if (!font) {
-      // Kerning and ligatures are off in the slide layout too, so glyph positions match
+      // pdf-lib's own kerning is off: kernedText adds the kerning the layout has
+      // (ligatures are off in the layout)
       font = this.doc.embedFont(face.bytes, { subset: true, features: { liga: false, kern: false } });
       this.embedded.set(face.key, font);
     }
     return font;
   }
+}
+
+// Text with the font's kerning between its characters, as laid out by the
+// browser (the embedded font itself has no kerning)
+export function kernedText(face: Face, font: PDFFont, text: string): (PDFHexString | number)[] {
+  const chars = Array.from(text);
+  const run = face.font.layout(text, { kern: true, liga: false, calt: false, clig: false });
+  if (run.glyphs.length !== chars.length) return [font.encodeText(text)];
+  const items: (PDFHexString | number)[] = [];
+  let pending = '';
+  chars.forEach((char, i) => {
+    pending += char;
+    const adjustment = run.positions[i].xAdvance - run.glyphs[i].advanceWidth;
+    if (adjustment && i < chars.length - 1) {
+      items.push(font.encodeText(pending), (-adjustment * 1000) / face.font.unitsPerEm);
+      pending = '';
+    }
+  });
+  if (pending) items.push(font.encodeText(pending));
+  return items;
 }

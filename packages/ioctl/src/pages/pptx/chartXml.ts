@@ -132,6 +132,9 @@ export interface ChartSpec {
   areaLine: Stroke;
   plotFill: Paint;
   plotLine: Stroke;
+  // Pictures filling the chart area or plot area, as data URLs
+  areaPicture?: string;
+  plotPicture?: string;
   styleNumber: number;
   theme: ColorTheme;
   base: TextStyle;
@@ -428,6 +431,22 @@ async function readXml(zip: JSZip, file: string) {
   return text ? new DOMParser().parseFromString(text, 'application/xml') : null;
 }
 
+const IMAGE_TYPES: Record<string, string> = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', bmp: 'image/bmp', svg: 'image/svg+xml', webp: 'image/webp', tif: 'image/tiff', tiff: 'image/tiff' };
+
+// The pictures filling a chart's area and plot area (parseChart reads color fills)
+async function readPictureFills(zip: JSZip, file: string, doc: Document, spec: ChartSpec) {
+  const rels = await readRels(zip, file);
+  const picture = async (spPr: Element | null) => {
+    const id = at(spPr, 'blipFill', 'blip')?.getAttributeNS('http://schemas.openxmlformats.org/officeDocument/2006/relationships', 'embed');
+    const path = id ? rels.get(id)?.path : undefined;
+    const data = path ? await zip.file(path)?.async('base64') : undefined;
+    return data && `data:${IMAGE_TYPES[path!.split('.').pop()!.toLowerCase()] ?? 'application/octet-stream'};base64,${data}`;
+  };
+  const space = doc.documentElement;
+  spec.areaPicture = await picture(kid(space, 'spPr'));
+  spec.plotPicture = await picture(at(space, 'chart', 'plotArea', 'spPr'));
+}
+
 async function readRels(zip: JSZip, file: string) {
   const dir = file.slice(0, file.lastIndexOf('/'));
   const rels = await readXml(zip, `${dir}/_rels/${file.slice(dir.length + 1)}.rels`);
@@ -475,6 +494,7 @@ export async function readCharts(zip: JSZip): Promise<ChartFrame[][]> {
       const doc = chartFile ? await readXml(zip, chartFile) : null;
       const spec = doc && parseChart(doc, theme, minorFont);
       if (!spec || !ext) continue;
+      await readPictureFills(zip, chartFile!, doc, spec);
       frames.push({ width: Number(ext.getAttribute('cx')) / EMU_PER_PT, height: Number(ext.getAttribute('cy')) / EMU_PER_PT, spec });
     }
   }

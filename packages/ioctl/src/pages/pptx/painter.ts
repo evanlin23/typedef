@@ -1,8 +1,10 @@
 import {
   LineCapStyle,
   LineJoinStyle,
+  PDFArray,
   PDFDict,
   PDFName,
+  PDFNumber,
   PDFOperator,
   PDFOperatorNames,
   TextRenderingMode,
@@ -78,8 +80,20 @@ export interface StrokeStyle {
   join?: LineJoinStyle;
 }
 
+type Matrix = [number, number, number, number, number, number];
+
+// A clickable area on the page, in PDF coordinates (y up)
+export interface PageLink {
+  rect: [number, number, number, number];
+  target: string;
+}
+
 export class Painter {
   private ops: PDFOperator[] = [];
+  // The current transformation, tracked to place link areas on the page
+  private ctm: Matrix;
+  private ctmStack: Matrix[] = [];
+  links: PageLink[] = [];
   private fonts = new Map<PDFFont, PDFName>();
   private alphas = new Map<string, PDFName>();
   private nextShading = 0;
@@ -89,19 +103,39 @@ export class Painter {
   constructor(page: PDFPage, doc: PDFDocument) {
     this.page = page;
     this.doc = doc;
-    this.ops.push(pushGraphicsState(), concatTransformationMatrix(1, 0, 0, -1, 0, page.getHeight()));
+    this.ctm = [1, 0, 0, -1, 0, page.getHeight()];
+    this.ops.push(pushGraphicsState(), concatTransformationMatrix(...this.ctm));
   }
 
   save() {
     this.ops.push(pushGraphicsState());
+    this.ctmStack.push(this.ctm);
   }
 
   restore() {
     this.ops.push(popGraphicsState());
+    this.ctm = this.ctmStack.pop() ?? this.ctm;
   }
 
   transform(a: number, b: number, c: number, d: number, e: number, f: number) {
     this.ops.push(concatTransformationMatrix(a, b, c, d, e, f));
+    const [A, B, C, D, E, F] = this.ctm;
+    this.ctm = [a * A + b * C, a * B + b * D, c * A + d * C, c * B + d * D, e * A + f * C + E, e * B + f * D + F];
+  }
+
+  // Makes a box (in the current coordinates) a link to `target`
+  addLink(x: number, y: number, width: number, height: number, target: string) {
+    if (!(width > 0) || !(height > 0)) return;
+    const [a, b, c, d, e, f] = this.ctm;
+    const corners = [
+      [x, y + height],
+      [x + width, y + height],
+      [x + width, y],
+      [x, y],
+    ].map(([px, py]) => [a * px + c * py + e, b * px + d * py + f]);
+    const xs = corners.map((p) => p[0]);
+    const ys = corners.map((p) => p[1]);
+    this.links.push({ rect: [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)], target });
   }
 
   // Moves to a box's top-left corner, then rotates (degrees) and flips around its center
@@ -151,11 +185,14 @@ export class Painter {
 
   // Position in the drawing, to undo everything drawn after it (see rollback)
   mark() {
-    return this.ops.length;
+    return { ops: this.ops.length, links: this.links.length, ctm: this.ctm, stack: [...this.ctmStack] };
   }
 
-  rollback(mark: number) {
-    this.ops.length = mark;
+  rollback(mark: ReturnType<Painter['mark']>) {
+    this.ops.length = mark.ops;
+    this.links.length = mark.links;
+    this.ctm = mark.ctm;
+    this.ctmStack = [...mark.stack];
   }
 
   // Fills and/or strokes a path given as SVG path data or parsed segments
@@ -253,16 +290,26 @@ export class Painter {
   }
 
   // Draws text with its baseline starting at (x, baseline)
-  drawText(font: PDFFont, size: number, x: number, baseline: number, encoded: PDFHexString, color: Rgba, charSpacing = 0) {
+  // `text` is encoded text, or a list of encoded pieces with position
+  // adjustments between them (in thousandths of the font size; positive moves left)
+  drawText(font: PDFFont, size: number, x: number, baseline: number, text: PDFHexString | (PDFHexString | number)[], color: Rgba, charSpacing = 0) {
     this.save();
     this.setAlpha(color.a, 1);
+    let show: PDFOperator;
+    if (Array.isArray(text)) {
+      const array = PDFArray.withContext(this.doc.context);
+      for (const item of text) array.push(typeof item === 'number' ? PDFNumber.of(item) : item);
+      show = PDFOperator.of(PDFOperatorNames.ShowTextAdjusted, [array]);
+    } else {
+      show = showText(text);
+    }
     this.ops.push(
       setFillingRgbColor(color.r, color.g, color.b),
       beginText(),
       setFontAndSize(this.fontName(font), size),
       setCharacterSpacing(charSpacing),
       setTextMatrix(1, 0, 0, -1, x, baseline),
-      showText(encoded),
+      show,
       endText()
     );
     this.restore();

@@ -12,17 +12,28 @@ import { builtInTableStyle } from './tableStyles';
 // - bullets inherited from the layout/master are written into each paragraph
 // - text boxes take their defaults from the presentation's default text style
 // - line breaks and tabs become marker characters (pptxtojson turns them into spaces)
+// - empty paragraphs get a space, so they take the size of their paragraph mark
 // - markup-compatibility alternatives are resolved to their fallback content
 // - embedded objects, like MathType equations, are replaced by their preview picture
 // - fills, outlines and shadows that shapes take from the theme are written out
 // - colors with modifiers (tints, shades, hue offsets) are resolved
 // - picture effects (recoloring, tiling) are baked into new images
 // - all-caps and small-caps text is capitalized
+// - text rotated a quarter turn, autofit's spacing reduction, and table cell
+//   margins are passed on to the layout
 // The markers are private-use characters that renderSlide turns back into markup.
 export const BULLET_START = '\uE000';
 export const BULLET_END = '\uE001';
 export const LINE_BREAK = '\uE002';
 export const TAB = '\uE003';
+// Added to the names of shapes with vertical text, followed by the direction
+export const VERTICAL_TEXT = '\uE010';
+// Added to the names of shapes whose autofit shrinks line and paragraph spacing,
+// followed by the fraction of the spacing that's left (like 0.9)
+export const SPACING_SCALE = '\uE013';
+// Around a table cell's margins and text direction, at the start of its text
+export const CELL_START = '\uE011';
+export const CELL_END = '\uE012';
 
 const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
 const SLIDE_TYPE = 'application/vnd.openxmlformats-officedocument.presentationml.slide+xml';
@@ -282,6 +293,73 @@ function formatAutoNumber(scheme: string, n: number) {
   return `${value}.`;
 }
 
+const EMU_PER_PT = 12700;
+
+// pptxtojson ignores table cell margins and vertical text, so they're added
+// to the start of each cell's text ("left,top,right,bottom,direction" in
+// points) for layoutSlide to read
+function markTableCells(doc: Document) {
+  for (const cell of Array.from(doc.getElementsByTagNameNS(A, 'tc'))) {
+    const tcPr = child(cell, A, 'tcPr');
+    const firstParagraph = path(cell, [A, 'txBody'], [A, 'p']);
+    if (!tcPr || !firstParagraph) continue;
+    const margin = (name: string, fallback: number) => Number(tcPr.getAttribute(name) ?? fallback) / EMU_PER_PT;
+    const margins = [margin('marL', 91440), margin('marT', 45720), margin('marR', 91440), margin('marB', 45720)];
+    const vert = tcPr.getAttribute('vert');
+    const direction = vert && VERTICAL_DIRECTIONS.includes(vert) ? vert : '';
+    if (!direction && margins.join() === '7.2,3.6,7.2,3.6') continue;
+    // Styled like the first run, so it doesn't change the line's height
+    const firstRun = Array.from(firstParagraph.children).find((c) => c.localName === 'r');
+    const run = doc.createElementNS(A, 'a:r');
+    const rPr = child(firstRun, A, 'rPr') ?? child(firstParagraph, A, 'endParaRPr');
+    if (rPr) {
+      const copy = doc.createElementNS(A, 'a:rPr');
+      for (const attr of Array.from(rPr.attributes)) copy.setAttribute(attr.name, attr.value);
+      run.append(copy);
+    }
+    const text = doc.createElementNS(A, 'a:t');
+    text.textContent = `${CELL_START}${margins.map((m) => Math.round(m * 100) / 100).join(',')},${direction}${CELL_END}`;
+    run.append(text);
+    const pPr = child(firstParagraph, A, 'pPr');
+    if (pPr) pPr.after(run);
+    else firstParagraph.prepend(run);
+  }
+}
+
+const VERTICAL_DIRECTIONS = ['vert', 'vert270', 'eaVert', 'wordArtVert', 'wordArtVertRtl', 'mongolianVert'];
+
+// Text rotated a quarter turn (bodyPr vert="vert" or "vert270", here or on
+// the placeholder it inherits from) is laid out horizontally and rotated when
+// drawn. pptxtojson only knows East Asian vertical text, so the direction is
+// passed on in the shape's name and the text is marked horizontal.
+function markVerticalText(doc: Document, layout: Document | null, master: Document | null) {
+  for (const sp of Array.from(doc.getElementsByTagNameNS(P, 'sp'))) {
+    const bodyPr = path(sp, [P, 'txBody'], [A, 'bodyPr']);
+    const cNvPr = path(sp, [P, 'nvSpPr'], [P, 'cNvPr']);
+    if (!bodyPr || !cNvPr || (cNvPr.getAttribute('name') ?? '').includes(VERTICAL_TEXT)) continue;
+    const ph = placeholderOf(sp);
+    const inherited = ph ? [findPlaceholder(layout, ph, true), findPlaceholder(master, ph, false)].map((s) => path(s, [P, 'txBody'], [A, 'bodyPr'])?.getAttribute('vert')) : [];
+    const direction = [bodyPr.getAttribute('vert'), ...inherited].find((v) => v);
+    if (!direction || !VERTICAL_DIRECTIONS.includes(direction)) continue;
+    cNvPr.setAttribute('name', `${cNvPr.getAttribute('name') ?? ''}${VERTICAL_TEXT}${direction}`);
+    bodyPr.setAttribute('vert', 'horz');
+  }
+}
+
+// PowerPoint's autofit shrinks line and paragraph spacing (lnSpcReduction) as
+// well as text, and pptxtojson only reads the text shrinking
+function markSpacingReduction(doc: Document) {
+  for (const sp of Array.from(doc.getElementsByTagNameNS(P, 'sp'))) {
+    const value = path(sp, [P, 'txBody'], [A, 'bodyPr'], [A, 'normAutofit'])?.getAttribute('lnSpcReduction');
+    const cNvPr = path(sp, [P, 'nvSpPr'], [P, 'cNvPr']);
+    if (!value || !cNvPr) continue;
+    // In thousandths of a percent, or a percentage like "10%"
+    const reduction = value.endsWith('%') ? parseFloat(value) / 100 : Number(value) / 100000;
+    if (!(reduction > 0 && reduction < 1)) continue;
+    cNvPr.setAttribute('name', `${cNvPr.getAttribute('name') ?? ''}${SPACING_SCALE}${Math.round((1 - reduction) * 100000) / 100000}`);
+  }
+}
+
 // Capitalizes runs set to all caps or small caps (here or inherited), which
 // pptxtojson shows in their original case. Small caps are capitals at 80% size
 // for the lowercase letters.
@@ -329,13 +407,23 @@ function applyDefaultTextStyle(doc: Document, defaultTextStyle: Element | null) 
       if (bodyPr) bodyPr.after(lstStyle);
       else txBody.prepend(lstStyle);
     }
+    // A shape's style (<p:style><a:fontRef>) sets its text color and font, above the default text style
+    const fontRef = path(sp, [P, 'style'], [A, 'fontRef']);
     for (let level = 1; level <= 9; level++) {
       const own = child(lstStyle, A, `lvl${level}pPr`);
       const fallback = child(defaultTextStyle, A, `lvl${level}pPr`);
       if (own || !fallback) continue;
+      const copy = doc.importNode(fallback, true) as Element;
+      const defaults = child(copy, A, 'defRPr');
+      if (fontRef && defaults) {
+        for (const c of Array.from(defaults.children)) {
+          const setByStyle = c.localName.endsWith('Fill') ? !!fontRef.firstElementChild : ['latin', 'ea', 'cs'].includes(c.localName) && fontRef.getAttribute('idx') !== 'none';
+          if (setByStyle) c.remove();
+        }
+      }
       // Levels go in order
       const next = Array.from(lstStyle.children).find((c) => /^lvl\dpPr$/.test(c.localName) && Number(c.localName[3]) > level);
-      lstStyle.insertBefore(doc.importNode(fallback, true), next ?? null);
+      lstStyle.insertBefore(copy, next ?? null);
     }
   }
 }
@@ -424,6 +512,33 @@ function markTabs(doc: Document) {
   }
 }
 
+// pptxtojson gives empty paragraphs the first level's font size, while
+// PowerPoint sizes them by their end-of-paragraph properties or their level.
+// A space lets pptxtojson size them like text. Text that's all empty paragraphs
+// is left alone (it shows nothing), except in table cells, where it sets the
+// row height.
+function fillEmptyParagraphs(doc: Document) {
+  const isText = (el: Element) => el.namespaceURI === A && ['r', 'fld', 'br'].includes(el.localName);
+  for (const body of Array.from(doc.getElementsByTagNameNS('*', 'txBody'))) {
+    const paragraphs = Array.from(body.children).filter((el) => el.namespaceURI === A && el.localName === 'p');
+    const empty = paragraphs.filter((para) => !Array.from(para.children).some(isText));
+    if (empty.length === paragraphs.length && body.parentElement?.localName !== 'tc') continue;
+    for (const para of empty) {
+      const end = child(para, A, 'endParaRPr');
+      const props = doc.createElementNS(A, 'a:rPr');
+      // The space shouldn't be underlined, struck out or highlighted
+      for (const attr of Array.from(end?.attributes ?? [])) if (attr.name !== 'u' && attr.name !== 'strike') props.setAttribute(attr.name, attr.value);
+      for (const el of Array.from(end?.children ?? [])) if (el.localName !== 'highlight') props.append(el.cloneNode(true));
+      const text = doc.createElementNS(A, 'a:t');
+      text.textContent = ' ';
+      const run = doc.createElementNS(A, 'a:r');
+      run.append(props, text);
+      if (end) end.before(run);
+      else para.append(run);
+    }
+  }
+}
+
 function markLineBreaks(doc: Document) {
   for (const br of Array.from(doc.getElementsByTagNameNS(A, 'br'))) {
     const run = doc.createElementNS(A, 'a:r');
@@ -447,6 +562,50 @@ function resolveAlternateContent(doc: Document) {
     if (choice?.getElementsByTagNameNS(A14, 'm').length) continue;
     const fallback = child(alternate, MC, 'Fallback');
     alternate.replaceWith(...Array.from(fallback?.childNodes ?? []));
+  }
+}
+
+const HYPERLINK_REL = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink';
+// pptxtojson only keeps web links on shapes, and drops slide jumps. Other link
+// targets are passed through it inside this (never resolvable) web address.
+export const LINK_PREFIX = 'https://ioctl.invalid/link?to=';
+
+// Link targets: a URL, "slide:N" for a slide, or "jump:nextslide" and similar
+async function prepareLinks(zip: JSZip, file: string, doc: Document) {
+  for (const link of Array.from(doc.getElementsByTagNameNS(A, 'hlinkClick'))) {
+    const action = link.getAttribute('action') ?? '';
+    const id = link.getAttributeNS(R, 'id');
+    let target: string | null = null;
+    if (action.startsWith('ppaction://hlinkshowjump?jump=')) {
+      target = `jump:${action.slice(action.indexOf('=') + 1)}`;
+    } else if (id) {
+      const rel = await relationship(zip, file, id);
+      const slide = rel && !rel.external && rel.target.match(/^ppt\/slides\/slide(\d+)\.xml$/);
+      if (slide) target = `slide:${slide[1]}`;
+      else if (rel?.external && /^(https?|mailto|ftp):/i.test(rel.target)) target = rel.target;
+    }
+    if (!target) {
+      // Program, macro and file links don't work in a PDF
+      link.removeAttributeNS(R, 'id');
+      continue;
+    }
+    if (!/^https?:/i.test(target)) {
+      link.setAttributeNS(R, 'r:id', await addRelationship(zip, file, HYPERLINK_REL, LINK_PREFIX + encodeURIComponent(target), true));
+    }
+    // PowerPoint shows linked text underlined in the theme's link color,
+    // unless the link is set to keep the text's own color
+    const rPr = link.parentElement;
+    const keepsColor = Array.from(link.getElementsByTagName('*')).some((el) => el.localName === 'hlinkClr' && el.getAttribute('val') === 'tx');
+    if (rPr?.localName === 'rPr' && !keepsColor) {
+      for (const fill of Array.from(rPr.children).filter((c) => c.localName.endsWith('Fill'))) fill.remove();
+      const fill = doc.createElementNS(A, 'a:solidFill');
+      const color = doc.createElementNS(A, 'a:schemeClr');
+      color.setAttribute('val', 'hlink');
+      fill.append(color);
+      // Fills come before the fonts and links in a run's properties
+      rPr.insertBefore(fill, Array.from(rPr.children).find((c) => !['ln'].includes(c.localName)) ?? null);
+      if (!rPr.hasAttribute('u')) rPr.setAttribute('u', 'sng');
+    }
   }
 }
 
@@ -532,16 +691,37 @@ function insertInSpPr(spPr: Element, el: Element, after: string[]) {
 //   width of the theme's line style, and outlines that are only in the style
 //   lose its color
 // - theme shadows (effect styles) are ignored
+// Theme styles use a placeholder color (phClr) that the referring shape
+// supplies; the placeholder's own modifiers apply on top of that color
+function fillPlaceholderColor(doc: Document, el: Element, color: Element | null | undefined) {
+  if (!color) return;
+  for (const placeholder of Array.from(el.getElementsByTagNameNS(A, 'schemeClr')).filter((c) => c.getAttribute('val') === 'phClr')) {
+    const resolved = doc.importNode(color, true) as Element;
+    for (const modifier of Array.from(placeholder.children)) resolved.append(modifier);
+    placeholder.replaceWith(resolved);
+  }
+}
+
 function applyShapeStyles(doc: Document, theme: Document | null) {
   const themeLines = Array.from(theme?.getElementsByTagNameNS(A, 'lnStyleLst')[0]?.children ?? []);
   const themeEffects = Array.from(theme?.getElementsByTagNameNS(A, 'effectStyleLst')[0]?.children ?? []);
+  const themeFills = Array.from(theme?.getElementsByTagNameNS(A, 'fillStyleLst')[0]?.children ?? []);
+  const themeBackgroundFills = Array.from(theme?.getElementsByTagNameNS(A, 'bgFillStyleLst')[0]?.children ?? []);
   for (const style of Array.from(doc.getElementsByTagNameNS(P, 'style'))) {
     const shape = style.parentElement;
     const spPr = child(shape, P, 'spPr');
     if (!shape || !spPr) continue;
     const index = (name: string) => Number(child(style, A, name)?.getAttribute('idx') ?? 0);
     const hasFill = Array.from(spPr.children).some((c) => FILLS.includes(c.localName));
-    if (!hasFill && (index('fillRef') === 0 || shape.localName === 'cxnSp')) insertInSpPr(spPr, doc.createElementNS(A, 'a:noFill'), ['xfrm', 'custGeom', 'prstGeom']);
+    const fillIndex = index('fillRef');
+    if (!hasFill && (fillIndex === 0 || shape.localName === 'cxnSp')) insertInSpPr(spPr, doc.createElementNS(A, 'a:noFill'), ['xfrm', 'custGeom', 'prstGeom']);
+    // The theme's fill style (often a gradient); pptxtojson only uses the style's color
+    const themeFill = !hasFill && fillIndex > 0 ? (fillIndex >= 1001 ? themeBackgroundFills[fillIndex - 1001] : themeFills[fillIndex - 1]) : undefined;
+    if (themeFill && ['solidFill', 'gradFill', 'pattFill'].includes(themeFill.localName) && shape.localName !== 'cxnSp') {
+      const copy = doc.importNode(themeFill, true) as Element;
+      fillPlaceholderColor(doc, copy, child(style, A, 'fillRef')?.firstElementChild);
+      insertInSpPr(spPr, copy, ['xfrm', 'custGeom', 'prstGeom']);
+    }
     let line = child(spPr, A, 'ln');
     if (!line) {
       line = doc.createElementNS(A, 'a:ln');
@@ -560,10 +740,7 @@ function applyShapeStyles(doc: Document, theme: Document | null) {
     if (effects && !child(spPr, A, 'effectLst') && !child(spPr, A, 'effectDag') && child(effects, A, 'outerShdw')) {
       // Theme effects use the style's color as their placeholder color (phClr)
       const copy = doc.importNode(effects, true) as Element;
-      const color = child(style, A, 'effectRef')?.firstElementChild;
-      for (const placeholder of Array.from(copy.getElementsByTagNameNS(A, 'schemeClr')).filter((c) => c.getAttribute('val') === 'phClr')) {
-        if (color) placeholder.replaceWith(doc.importNode(color, true));
-      }
+      fillPlaceholderColor(doc, copy, child(style, A, 'effectRef')?.firstElementChild);
       insertInSpPr(spPr, copy, [...BEFORE_LINE, 'ln']);
     }
   }
@@ -614,6 +791,7 @@ export async function preparePptx(zip: JSZip): Promise<{ slideNumbers: number[] 
       if (doc) styled.add(doc);
     }
     if (slide) addBullets(slide, layout, master, defaultTextStyle);
+    if (slide) markVerticalText(slide, layout, master);
     const diagrams = await relatedFiles(zip, slideFile, '/diagramDrawing');
     for (const file of [slideFile, layoutFile, masterFile, ...diagrams]) {
       if (file && !parts.has(file)) parts.set(file, { theme, themeFile, master });
@@ -627,8 +805,14 @@ export async function preparePptx(zip: JSZip): Promise<{ slideNumbers: number[] 
     if (!doc) continue;
     const slideIndex = SLIDE_FILE.test(file) ? Number(file.match(/(\d+)\.xml$/)![1]) - 1 : -1;
     convertFields(doc, slideIndex >= 0 ? slideNumbers[slideIndex] ?? slideIndex + 1 : undefined);
+    await prepareLinks(zip, file, doc);
+    markTableCells(doc);
+    // Slides were done above, with their placeholders
+    if (!SLIDE_FILE.test(file)) markVerticalText(doc, null, null);
+    markSpacingReduction(doc);
     markLineBreaks(doc);
     markTabs(doc);
+    fillEmptyParagraphs(doc);
     replaceEmbeddedObjects(doc);
     applyShapeStyles(doc, theme);
     await resolveBackgroundRef(zip, file, doc, themeFile, theme);
