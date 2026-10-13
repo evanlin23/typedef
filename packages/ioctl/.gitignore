@@ -22,3 +22,10 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Reproducible, pinned runtime assets prepared before dev/build
+/public/libreoffice/
+/public/coi-serviceworker.js
+
+/test-results/
+/playwright-report/
