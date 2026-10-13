@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useRef, type DragEvent as ReactDragEvent, type ChangeEvent } from 'react';
 import { PPTX_MIME, isPptx } from './pptx/fileTypes';
+import PresentationFonts from './pptx/PresentationFonts';
 
 interface Conversion {
   id: string;
@@ -16,6 +17,7 @@ function PptxConverter() {
   const [conversions, setConversions] = useState<Conversion[]>([]);
   const [isDraggingOverZone, setIsDraggingOverZone] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [fontFiles, setFontFiles] = useState<File[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   // Files are converted one at a time; each conversion is chained onto this
   const queue = useRef(Promise.resolve());
@@ -59,7 +61,7 @@ function PptxConverter() {
         updateConversion(id, { status: 'converting' });
         try {
           const { pptxToPdf } = await import('./pptx/pptxToPdf');
-          const pdf = await pptxToPdf(file, (message) => updateConversion(id, { progress: message }));
+          const pdf = await pptxToPdf(file, (message) => updateConversion(id, { progress: message }), fontFiles);
           if (!mounted.current) return;
           const pdfUrl = URL.createObjectURL(new Blob([pdf], { type: 'application/pdf' }));
           pdfUrls.current.push(pdfUrl);
@@ -70,7 +72,7 @@ function PptxConverter() {
         }
       });
     }
-  }, []);
+  }, [fontFiles]);
 
   const handleZoneDragOver = useCallback((event: ReactDragEvent<HTMLDivElement>) => {
     event.preventDefault(); event.stopPropagation(); event.dataTransfer.dropEffect = 'copy'; setIsDraggingOverZone(true);
@@ -96,6 +98,8 @@ function PptxConverter() {
         Convert PowerPoint (.pptx) files to searchable PDFs. Everything runs in your browser, so your files are never uploaded.
         LibreOffice handles the conversion. Fonts and some PowerPoint features can still look different; export a PDF from PowerPoint when an exact match is required. The conversion engine loads on first use (about 80 MB).
       </p>
+      <PresentationFonts files={fontFiles} onChange={setFontFiles}
+        disabled={conversions.some((conversion) => conversion.status === 'waiting' || conversion.status === 'converting')} />
       <input type="file" className="hidden" ref={fileInputRef} onChange={handleFileSelect} multiple accept={`${PPTX_MIME},.pptx`} />
 
       <div

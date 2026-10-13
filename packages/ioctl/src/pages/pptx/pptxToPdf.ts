@@ -1,9 +1,10 @@
 import { officeEngine } from './officeEngine';
 import { isPptx } from './fileTypes';
 import JSZip from 'jszip';
+import { loadPresentationFonts } from './presentationFonts';
 
 // Files stay in the worker's memory. There is no upload or rendering fallback.
-export async function pptxToPdf(file: File, onProgress?: (message: string) => void): Promise<Uint8Array<ArrayBuffer>> {
+export async function pptxToPdf(file: File, onProgress?: (message: string) => void, fontFiles: File[] = []): Promise<Uint8Array<ArrayBuffer>> {
   if (!isPptx(file)) throw new Error('Please select a .pptx presentation.');
   const input = new Uint8Array(await file.arrayBuffer());
   if (input.length === 0) throw new Error(`"${file.name}" is empty.`);
@@ -20,5 +21,6 @@ export async function pptxToPdf(file: File, onProgress?: (message: string) => vo
   } catch {
     throw new Error(`"${file.name}" is not a readable PPTX presentation. It may be damaged or password-protected. Export it as PDF from PowerPoint instead.`);
   }
-  return new Uint8Array(await officeEngine.convert(input, onProgress));
+  const fonts = await loadPresentationFonts(fontFiles);
+  return new Uint8Array(await officeEngine.convert(input, onProgress, fonts));
 }

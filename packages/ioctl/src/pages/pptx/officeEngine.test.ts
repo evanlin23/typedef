@@ -7,14 +7,16 @@ class FakeWorker {
   onmessage?: (event: { data: unknown }) => void;
   onerror?: () => void;
   terminate = vi.fn();
-  messages: { type: string; id: number }[] = [];
+  messages: { type: string; id: number; fonts?: unknown[] }[] = [];
+  private finished = false;
   constructor() {
     FakeWorker.instances.push(this);
     queueMicrotask(() => this.onmessage?.({ data: { type: 'loaded' } }));
   }
-  postMessage(message: { type: string; id: number }) {
+  postMessage(message: { type: string; id: number; fonts?: unknown[] }) {
     this.messages.push(message);
-    if (FakeWorker.stall) return;
+    // A real worker can publish its result and then stall in documentDestroy.
+    if (FakeWorker.stall || this.finished) return;
     queueMicrotask(() => {
       if (message.type === 'init') {
         this.onmessage?.({ data: { type: 'ready', id: message.id } });
@@ -22,6 +24,7 @@ class FakeWorker {
         FakeWorker.failNext = false;
         this.onmessage?.({ data: { type: 'error', id: message.id, error: 'Damaged presentation' } });
       } else {
+        this.finished = true;
         this.onmessage?.({ data: { type: 'result', id: message.id, data: new TextEncoder().encode('%PDF-test') } });
       }
     });
@@ -45,14 +48,13 @@ afterEach(() => {
 });
 
 describe('Office engine lifecycle', () => {
-  it('serializes concurrent requests from both tools and initializes only once', async () => {
+  it('serializes requests and releases each runtime after its result, even if native cleanup stalls', async () => {
     const { officeEngine } = await import('./officeEngine');
     const results = await Promise.all([officeEngine.convert(new Uint8Array([1])), officeEngine.convert(new Uint8Array([2]))]);
     expect(results).toHaveLength(2);
-    expect(FakeWorker.instances).toHaveLength(1);
-    expect(FakeWorker.instances[0].messages.map((m) => m.type)).toEqual(['init', 'convert', 'convert']);
-    await vi.advanceTimersByTimeAsync(120_000);
-    expect(FakeWorker.instances[0].terminate).toHaveBeenCalledOnce();
+    expect(FakeWorker.instances).toHaveLength(2);
+    expect(FakeWorker.instances.flatMap((worker) => worker.messages.map((m) => m.type))).toEqual(['init', 'convert', 'init', 'convert']);
+    for (const worker of FakeWorker.instances) expect(worker.terminate).toHaveBeenCalledOnce();
   });
 
   it('rejects a failed conversion, then retries the next file in a fresh worker', async () => {
@@ -64,6 +66,15 @@ describe('Office engine lifecycle', () => {
     expect(new TextDecoder().decode(await second)).toBe('%PDF-test');
     expect(FakeWorker.instances).toHaveLength(2);
     expect(FakeWorker.instances[0].terminate).toHaveBeenCalledOnce();
+  });
+
+  it('installs supplied fonts during initialization for every new runtime', async () => {
+    const { officeEngine } = await import('./officeEngine');
+    const fonts = [{ filename: 'font.ttf', data: new Uint8Array([1]) }];
+    await officeEngine.convert(new Uint8Array([1]), undefined, fonts);
+    await officeEngine.convert(new Uint8Array([2]), undefined, fonts);
+    for (const worker of FakeWorker.instances) expect(worker.messages[0].fonts).toBe(fonts);
+    expect(fonts[0].data.length).toBe(1);
   });
 
   it('terminates an unresponsive initialization and permits another attempt', async () => {

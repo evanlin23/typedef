@@ -50,7 +50,7 @@ describe('combineDocuments', () => {
     const result = await PDFDocument.load(await combineDocuments([
       presentation, file('notes.pdf', await (await pdf([612, 792])).save()),
     ]));
-    expect(convert).toHaveBeenCalledWith(presentation, expect.any(Function));
+    expect(convert).toHaveBeenCalledWith(presentation, expect.any(Function), []);
     expect(result.getPageCount()).toBe(3);
     expect(result.getPage(2).getSize()).toEqual({ width: 612, height: 792 });
   });
