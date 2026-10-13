@@ -19,7 +19,7 @@ export default function Home() {
         />
         <UtilCard
           title="PPTX to PDF"
-          description="Convert PowerPoint files to searchable PDFs, right in your browser."
+          description="Convert PowerPoint files locally or with your own CloudConvert account."
           linkTo="/pptx-to-pdf"
           linkText="Open PPTX to PDF"
         />

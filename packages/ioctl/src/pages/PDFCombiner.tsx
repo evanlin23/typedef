@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, type DragEvent as ReactDragEvent, type ChangeEvent } from 'react';
+import { useState, useCallback, useRef, useEffect, type DragEvent as ReactDragEvent, type ChangeEvent } from 'react';
 import {
   DndContext,
   closestCenter,
@@ -18,6 +18,8 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { combineDocuments } from './combineDocuments';
 import { PPTX_MIME, isPptx } from './pptx/fileTypes';
+import ConversionSettings from './pptx/ConversionSettings';
+import type { ConversionBackend } from './pptx/conversionBackend';
 
 const isPdf = (file: File) => file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
 
@@ -103,7 +105,10 @@ function PdfCombiner() {
   const [progress, setProgress] = useState<string | null>(null);
   const [outputFileName, setOutputFileName] = useState('combined_document');
   const [normalizeWidths, setNormalizeWidths] = useState(false);
+  const [backend, setBackend] = useState<ConversionBackend>({ kind: 'browser' });
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const operation = useRef<AbortController | null>(null);
+  useEffect(() => () => operation.current?.abort(), []);
 
   const generateUniqueId = () => `pdf-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
 
@@ -189,10 +194,15 @@ function PdfCombiner() {
       return;
     }
     setIsProcessing(true); setError(null);
+    const controller = new AbortController();
+    operation.current = controller;
     try {
       const mergedPdfBytes = await combineDocuments(uploadedFiles.map(({ file }) => file), {
-        normalizeWidths, onProgress: setProgress,
+        normalizeWidths, onProgress: (message) => {
+          if (!controller.signal.aborted) setProgress(message);
+        }, backend, signal: controller.signal,
       });
+      if (controller.signal.aborted) return;
       const blob = new Blob([mergedPdfBytes], { type: 'application/pdf' });
       const link = document.createElement('a');
       link.href = URL.createObjectURL(blob);
@@ -200,13 +210,16 @@ function PdfCombiner() {
       document.body.appendChild(link); link.click(); document.body.removeChild(link);
       URL.revokeObjectURL(link.href);
     } catch (err) {
-      console.error("Error combining PDFs:", err);
+      if (controller.signal.aborted) return;
       setError(`Failed to combine PDFs: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
-      setIsProcessing(false);
-      setProgress(null);
+      if (!controller.signal.aborted) {
+        setIsProcessing(false);
+        setProgress(null);
+      }
+      if (operation.current === controller) operation.current = null;
     }
-  }, [uploadedFiles, outputFileName, normalizeWidths]);
+  }, [uploadedFiles, outputFileName, normalizeWidths, backend]);
 
   return (
     <div className="max-w-4xl mx-auto p-6 bg-gray-700 shadow-lg rounded-lg text-gray-200">
@@ -214,8 +227,11 @@ function PdfCombiner() {
       <p className="text-gray-300 mb-4">
         Upload PDF or PowerPoint (.pptx) files, reorder them as needed, and combine them into a single downloadable PDF.
         Original page sizes are preserved unless you choose to match widths.
-        PowerPoint files are converted locally with LibreOffice (about 80 MB on first use). For an exact PowerPoint appearance, export a PDF from PowerPoint first.
+        PDF files stay on your device. For PowerPoint files, choose browser conversion or connect your own CloudConvert account.
+        For an exact PowerPoint appearance, export a PDF from PowerPoint first.
       </p>
+      {uploadedFiles.some(({ file }) => isPptx(file)) &&
+        <ConversionSettings value={backend} onChange={setBackend} disabled={isProcessing} />}
       <input
           type="file" className="hidden" ref={fileInputRef} onChange={handleFileSelect}
           multiple accept={`application/pdf,.pdf,${PPTX_MIME},.pptx`}

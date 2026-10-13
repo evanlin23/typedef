@@ -2,21 +2,23 @@ import { PDFDocument } from 'pdf-lib';
 import { detachInternalLinks, reattachInternalLinks } from './pdfLinks';
 import { normalizePageWidths } from './pdfPageSizes';
 import { isPptx } from './pptx/fileTypes';
+import type { ConversionOptions } from './pptx/conversionBackend';
 
-interface CombineOptions {
+interface CombineOptions extends ConversionOptions {
   normalizeWidths?: boolean;
   onProgress?: (message: string) => void;
 }
 
-export async function combineDocuments(files: File[], { normalizeWidths = false, onProgress }: CombineOptions = {}) {
+export async function combineDocuments(files: File[], { normalizeWidths = false, onProgress, backend, signal }: CombineOptions = {}) {
   if (files.length < 2) throw new Error('Please upload at least two files to combine.');
   const merged = await PDFDocument.create();
   for (const file of files) {
+    signal?.throwIfAborted();
     try {
       let bytes: ArrayBuffer | Uint8Array;
       if (isPptx(file)) {
         const { pptxToPdf } = await import('./pptx/pptxToPdf');
-        bytes = await pptxToPdf(file, (message) => onProgress?.(`"${file.name}": ${message}`));
+        bytes = await pptxToPdf(file, (message) => onProgress?.(`"${file.name}": ${message}`), { backend, signal });
       } else {
         onProgress?.(`Adding "${file.name}"…`);
         bytes = await file.arrayBuffer();

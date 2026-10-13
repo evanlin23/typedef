@@ -1,5 +1,7 @@
 import { useState, useCallback, useEffect, useRef, type DragEvent as ReactDragEvent, type ChangeEvent } from 'react';
 import { PPTX_MIME, isPptx } from './pptx/fileTypes';
+import ConversionSettings from './pptx/ConversionSettings';
+import type { ConversionBackend } from './pptx/conversionBackend';
 
 interface Conversion {
   id: string;
@@ -16,16 +18,20 @@ function PptxConverter() {
   const [conversions, setConversions] = useState<Conversion[]>([]);
   const [isDraggingOverZone, setIsDraggingOverZone] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [backend, setBackend] = useState<ConversionBackend>({ kind: 'browser' });
   const fileInputRef = useRef<HTMLInputElement>(null);
   // Files are converted one at a time; each conversion is chained onto this
   const queue = useRef(Promise.resolve());
   const pdfUrls = useRef<string[]>([]);
   const mounted = useRef(false);
+  const controllers = useRef(new Set<AbortController>());
 
   useEffect(() => {
     mounted.current = true;
+    const activeControllers = controllers.current;
     return () => {
       mounted.current = false;
+      activeControllers.forEach((controller) => controller.abort());
       pdfUrls.current.forEach((url) => URL.revokeObjectURL(url));
       pdfUrls.current = [];
     };
@@ -37,6 +43,10 @@ function PptxConverter() {
   const addFiles = useCallback((newFiles: FileList | File[]) => {
     const files = Array.from(newFiles);
     const pptxFiles = files.filter(isPptx);
+    if (backend.kind === 'cloudconvert' && !backend.apiKey.trim()) {
+      setError('Enter your CloudConvert API key before selecting presentations.');
+      return;
+    }
     if (pptxFiles.length === 0) {
       const hasPpt = files.some((file) => file.name.toLowerCase().endsWith('.ppt'));
       setError(hasPpt
@@ -54,23 +64,26 @@ function PptxConverter() {
     setConversions((list) => [...list, ...added]);
 
     for (const { id, file } of added) {
+      const controller = new AbortController();
+      controllers.current.add(controller);
       queue.current = queue.current.then(async () => {
-        if (!mounted.current) return;
+        if (!mounted.current) { controllers.current.delete(controller); return; }
         updateConversion(id, { status: 'converting' });
         try {
           const { pptxToPdf } = await import('./pptx/pptxToPdf');
-          const pdf = await pptxToPdf(file, (message) => updateConversion(id, { progress: message }));
+          const pdf = await pptxToPdf(file, (message) => updateConversion(id, { progress: message }), { backend, signal: controller.signal });
           if (!mounted.current) return;
           const pdfUrl = URL.createObjectURL(new Blob([pdf], { type: 'application/pdf' }));
           pdfUrls.current.push(pdfUrl);
           updateConversion(id, { status: 'done', pdfUrl });
         } catch (err) {
-          console.error(`Error converting ${file.name}:`, err);
-          updateConversion(id, { status: 'error', error: err instanceof Error ? err.message : String(err) });
+          if (mounted.current) updateConversion(id, { status: 'error', error: err instanceof Error ? err.message : String(err) });
+        } finally {
+          controllers.current.delete(controller);
         }
       });
     }
-  }, []);
+  }, [backend]);
 
   const handleZoneDragOver = useCallback((event: ReactDragEvent<HTMLDivElement>) => {
     event.preventDefault(); event.stopPropagation(); event.dataTransfer.dropEffect = 'copy'; setIsDraggingOverZone(true);
@@ -93,9 +106,11 @@ function PptxConverter() {
     <div className="max-w-4xl mx-auto p-6 bg-gray-700 shadow-lg rounded-lg text-gray-200">
       <h2 className="text-2xl font-bold text-orange-400 mb-2">PPTX to PDF</h2>
       <p className="text-gray-300 mb-4">
-        Convert PowerPoint (.pptx) files to searchable PDFs. Everything runs in your browser, so your files are never uploaded.
-        LibreOffice handles the conversion. Fonts and some PowerPoint features can still look different; export a PDF from PowerPoint when an exact match is required. The conversion engine loads on first use (about 80 MB).
+        Convert PowerPoint (.pptx) files to searchable PDFs. Choose local conversion or connect your own CloudConvert account.
+        For an exact match, export a PDF from PowerPoint.
       </p>
+      <ConversionSettings value={backend} onChange={setBackend}
+        disabled={conversions.some((conversion) => conversion.status === 'waiting' || conversion.status === 'converting')} />
       <input type="file" className="hidden" ref={fileInputRef} onChange={handleFileSelect} multiple accept={`${PPTX_MIME},.pptx`} />
 
       <div

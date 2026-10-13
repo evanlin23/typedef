@@ -50,7 +50,7 @@ describe('combineDocuments', () => {
     const result = await PDFDocument.load(await combineDocuments([
       presentation, file('notes.pdf', await (await pdf([612, 792])).save()),
     ]));
-    expect(convert).toHaveBeenCalledWith(presentation, expect.any(Function));
+    expect(convert).toHaveBeenCalledWith(presentation, expect.any(Function), { backend: undefined, signal: undefined });
     expect(result.getPageCount()).toBe(3);
     expect(result.getPage(2).getSize()).toEqual({ width: 612, height: 792 });
   });
@@ -60,5 +60,27 @@ describe('combineDocuments', () => {
       file('valid.pdf', await (await pdf([100, 200])).save()),
       file('damaged.pdf', new Uint8Array([1, 2, 3])),
     ])).rejects.toThrow('Could not process "damaged.pdf"');
+  });
+
+  it('uses hosted conversion only for PPTX, preserving local PDFs and the selected backend', async () => {
+    const backend = { kind: 'cloudconvert', apiKey: 'key' } as const;
+    const signal = new AbortController().signal;
+    convert.mockResolvedValueOnce(await (await pdf([960, 540], 2)).save());
+    const presentation = file('slides.pptx', new Uint8Array([1]));
+    const result = await PDFDocument.load(await combineDocuments([
+      file('notes.pdf', await (await pdf([300, 400])).save()), presentation,
+    ], { backend, signal }));
+    expect(convert).toHaveBeenLastCalledWith(presentation, expect.any(Function), { backend, signal });
+    expect(result.getPages().map((page) => page.getSize())).toEqual([
+      { width: 300, height: 400 }, { width: 960, height: 540 }, { width: 960, height: 540 },
+    ]);
+  });
+
+  it('merges PDF-only inputs without requiring a hosted key', async () => {
+    const result = await PDFDocument.load(await combineDocuments([
+      file('one.pdf', await (await pdf([300, 400])).save()),
+      file('two.pdf', await (await pdf([500, 600])).save()),
+    ], { backend: { kind: 'cloudconvert', apiKey: '' } }));
+    expect(result.getPageCount()).toBe(2);
   });
 });
