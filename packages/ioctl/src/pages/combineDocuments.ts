@@ -6,9 +6,10 @@ import { isPptx } from './pptx/fileTypes';
 interface CombineOptions {
   normalizeWidths?: boolean;
   onProgress?: (message: string) => void;
+  fontFiles?: File[];
 }
 
-export async function combineDocuments(files: File[], { normalizeWidths = false, onProgress }: CombineOptions = {}) {
+export async function combineDocuments(files: File[], { normalizeWidths = false, onProgress, fontFiles = [] }: CombineOptions = {}) {
   if (files.length < 2) throw new Error('Please upload at least two files to combine.');
   const merged = await PDFDocument.create();
   for (const file of files) {
@@ -16,7 +17,7 @@ export async function combineDocuments(files: File[], { normalizeWidths = false,
       let bytes: ArrayBuffer | Uint8Array;
       if (isPptx(file)) {
         const { pptxToPdf } = await import('./pptx/pptxToPdf');
-        bytes = await pptxToPdf(file, (message) => onProgress?.(`"${file.name}": ${message}`));
+        bytes = await pptxToPdf(file, (message) => onProgress?.(`"${file.name}": ${message}`), fontFiles);
       } else {
         onProgress?.(`Adding "${file.name}"…`);
         bytes = await file.arrayBuffer();

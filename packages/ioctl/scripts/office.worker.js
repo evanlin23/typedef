@@ -6,6 +6,21 @@ const importRuntimeScripts = globalThis.importScripts.bind(globalThis);
 globalThis.importScripts = (...urls) => {
   if (urls.some((url) => new URL(url, globalThis.location.href).pathname.endsWith('/soffice.js'))) {
     globalThis.Module.noInitialRun = true;
+    const existing = globalThis.Module.preRun;
+    globalThis.Module.preRun = [
+      ...(Array.isArray(existing) ? existing : existing ? [existing] : []),
+      () => {
+        // Native import/export can synchronously wait for background threads.
+        // Creating a pthread at that point needs this worker's JS event loop,
+        // which is blocked by the native call. Populate the pool before the
+        // pinned Emscripten loader loads all workers and starts LibreOffice.
+        const threads = globalThis.PThread;
+        if (!threads?.unusedWorkers || typeof threads.allocateUnusedWorker !== 'function') {
+          throw new Error('This conversion runtime does not support preloading its worker threads.');
+        }
+        while (threads.unusedWorkers.length < 16) threads.allocateUnusedWorker();
+      },
+    ];
   }
   importRuntimeScripts(...urls);
 };

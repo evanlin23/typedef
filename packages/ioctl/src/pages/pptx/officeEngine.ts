@@ -1,5 +1,6 @@
 // Classic worker protocol pinned to @matbee/libreoffice-converter 2.7.2.
 // Own the worker so a crashed/timed-out WASM runtime can be terminated.
+import type { PresentationFont } from './presentationFonts';
 interface OfficeMessage {
   type: 'loaded' | 'ready' | 'result' | 'error' | 'progress';
   id?: number;
@@ -10,7 +11,6 @@ interface OfficeMessage {
 type Progress = (message: string) => void;
 const INITIALIZE_TIMEOUT = 300_000;
 const CONVERT_TIMEOUT = 120_000;
-const IDLE_TIMEOUT = 120_000;
 const ASSET_PATH = `${import.meta.env.BASE_URL}libreoffice/`;
 
 class OfficeEngine {
@@ -18,7 +18,6 @@ class OfficeEngine {
   private ready: Promise<void> | undefined;
   private nextId = 0;
   private progress: Progress | undefined;
-  private idleTimer: ReturnType<typeof setTimeout> | undefined;
   private loadTimer: ReturnType<typeof setTimeout> | undefined;
   private queue: Promise<unknown> = Promise.resolve();
   private requests = new Map<number, {
@@ -28,15 +27,16 @@ class OfficeEngine {
   }>();
   private loadReject: ((error: Error) => void) | undefined;
 
-  convert(input: Uint8Array, onProgress?: Progress): Promise<Uint8Array> {
-    // Both tools share this queue and one runtime, including across routes.
+  convert(input: Uint8Array, onProgress?: Progress, fonts: PresentationFont[] = []): Promise<Uint8Array> {
+    // Both tools share this queue, including across routes. Each presentation
+    // gets a fresh runtime: upstream posts the PDF before native document
+    // destruction, which can hang and prevent the next request from starting.
     const operation = this.queue.then(async () => {
-      clearTimeout(this.idleTimer);
       this.progress = onProgress;
       try {
         this.assertSupported();
         this.progress?.('Loading conversion engine (first download is about 80 MB)…');
-        await this.initialize();
+        await this.initialize(fonts);
         this.progress?.('Converting presentation…');
         const data = await this.request('convert', {
           inputData: input, inputExt: 'pptx', outputFormat: 'pdf',
@@ -45,12 +45,9 @@ class OfficeEngine {
           throw new Error('The conversion engine did not return a PDF.');
         }
         return data;
-      } catch (error) {
-        this.reset(error instanceof Error ? error : new Error(String(error)));
-        throw error;
       } finally {
         this.progress = undefined;
-        if (this.worker) this.idleTimer = setTimeout(() => this.reset(), IDLE_TIMEOUT);
+        this.reset();
       }
     });
     this.queue = operation.catch(() => undefined);
@@ -66,7 +63,7 @@ class OfficeEngine {
     }
   }
 
-  private initialize(): Promise<void> {
+  private initialize(fonts: PresentationFont[]): Promise<void> {
     if (this.ready) return this.ready;
     const worker = new Worker(new URL(`${ASSET_PATH}office.worker.js`, location.href));
     this.worker = worker;
@@ -83,6 +80,9 @@ class OfficeEngine {
             sofficeData: url('soffice.data.gz'), sofficeWorkerJs: url('soffice.worker.js'),
             // Upstream warns progress interception can break stream compilation.
             enableProgressTracking: false,
+            // Upstream installs these before LibreOffice's initial font scan.
+            // Copy rather than transfer: another file can reuse the same fonts.
+            fonts,
           }, INITIALIZE_TIMEOUT).then(() => {
             this.loadReject = undefined;
             resolve();
@@ -121,7 +121,6 @@ class OfficeEngine {
   }
 
   private reset(error = new Error('The conversion engine was released.')) {
-    clearTimeout(this.idleTimer);
     clearTimeout(this.loadTimer);
     this.worker?.terminate();
     this.worker = undefined;

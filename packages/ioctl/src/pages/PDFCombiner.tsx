@@ -18,6 +18,7 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { combineDocuments } from './combineDocuments';
 import { PPTX_MIME, isPptx } from './pptx/fileTypes';
+import PresentationFonts from './pptx/PresentationFonts';
 
 const isPdf = (file: File) => file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
 
@@ -103,6 +104,7 @@ function PdfCombiner() {
   const [progress, setProgress] = useState<string | null>(null);
   const [outputFileName, setOutputFileName] = useState('combined_document');
   const [normalizeWidths, setNormalizeWidths] = useState(false);
+  const [fontFiles, setFontFiles] = useState<File[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const generateUniqueId = () => `pdf-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
@@ -191,7 +193,7 @@ function PdfCombiner() {
     setIsProcessing(true); setError(null);
     try {
       const mergedPdfBytes = await combineDocuments(uploadedFiles.map(({ file }) => file), {
-        normalizeWidths, onProgress: setProgress,
+        normalizeWidths, onProgress: setProgress, fontFiles,
       });
       const blob = new Blob([mergedPdfBytes], { type: 'application/pdf' });
       const link = document.createElement('a');
@@ -206,7 +208,7 @@ function PdfCombiner() {
       setIsProcessing(false);
       setProgress(null);
     }
-  }, [uploadedFiles, outputFileName, normalizeWidths]);
+  }, [uploadedFiles, outputFileName, normalizeWidths, fontFiles]);
 
   return (
     <div className="max-w-4xl mx-auto p-6 bg-gray-700 shadow-lg rounded-lg text-gray-200">
@@ -216,6 +218,8 @@ function PdfCombiner() {
         Original page sizes are preserved unless you choose to match widths.
         PowerPoint files are converted locally with LibreOffice (about 80 MB on first use). For an exact PowerPoint appearance, export a PDF from PowerPoint first.
       </p>
+      {uploadedFiles.some(({ file }) => isPptx(file)) &&
+        <PresentationFonts files={fontFiles} onChange={setFontFiles} disabled={isProcessing} />}
       <input
           type="file" className="hidden" ref={fileInputRef} onChange={handleFileSelect}
           multiple accept={`application/pdf,.pdf,${PPTX_MIME},.pptx`}

@@ -46,5 +46,11 @@ jobs:
       - name: Install browser for conversion tests
         run: pnpm --filter ioctl exec playwright install --with-deps chromium
 
+      - name: Fetch pinned university lecture regression fixtures
+        working-directory: packages/ioctl
+        run: node scripts/fetch-lecture-fixtures.mjs "$RUNNER_TEMP/ioctl-lectures"
+
       - name: Test browser-only PPTX conversion and PDF combination
+        env:
+          IOCTL_LECTURE_FIXTURES_DIR: ${{ runner.temp }}/ioctl-lectures
         run: pnpm --filter ioctl exec playwright test

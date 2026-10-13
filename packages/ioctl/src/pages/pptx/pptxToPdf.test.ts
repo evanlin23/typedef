@@ -29,3 +29,15 @@ it('accepts namespace-prefixed content types and passes original bytes to the en
   await pptxToPdf(file(bytes));
   expect(Array.from(convert.mock.calls[0][0])).toEqual(Array.from(bytes));
 });
+
+it('passes selected local fonts to LibreOffice along with the validated presentation', async () => {
+  const zip = new JSZip();
+  zip.file('[Content_Types].xml', '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Override PartName="/ppt/presentation.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml"/></Types>');
+  zip.file('ppt/presentation.xml', '<presentation/>');
+  const bytes = new Uint8Array([0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+  const fontFile = { name: 'local.ttf', size: bytes.length, arrayBuffer: async () => bytes.buffer } as File;
+  convert.mockResolvedValue(new TextEncoder().encode('%PDF-valid'));
+  await pptxToPdf(file(await zip.generateAsync({ type: 'uint8array' })), undefined, [fontFile]);
+  expect(convert.mock.calls[0][2][0].filename).toBe('presentation-0.ttf');
+  expect(Array.from(convert.mock.calls[0][2][0].data)).toEqual(Array.from(bytes));
+});
