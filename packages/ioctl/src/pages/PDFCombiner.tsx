@@ -1,5 +1,4 @@
 import { useState, useCallback, useRef, type DragEvent as ReactDragEvent, type ChangeEvent } from 'react';
-import { PDFDocument } from 'pdf-lib';
 import {
   DndContext,
   closestCenter,
@@ -17,8 +16,7 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { detachInternalLinks, reattachInternalLinks } from './pdfLinks';
-import { normalizePageWidths } from './pdfPageSizes';
+import { combineDocuments } from './combineDocuments';
 import { PPTX_MIME, isPptx } from './pptx/fileTypes';
 
 const isPdf = (file: File) => file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
@@ -104,6 +102,7 @@ function PdfCombiner() {
   const [error, setError] = useState<string | null>(null);
   const [progress, setProgress] = useState<string | null>(null);
   const [outputFileName, setOutputFileName] = useState('combined_document');
+  const [normalizeWidths, setNormalizeWidths] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const generateUniqueId = () => `pdf-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
@@ -191,42 +190,9 @@ function PdfCombiner() {
     }
     setIsProcessing(true); setError(null);
     try {
-      const mergedPdf = await PDFDocument.create();
-      for (const uploadedPdf of uploadedFiles) {
-        try {
-          let pdfDoc: PDFDocument;
-          if (isPptx(uploadedPdf.file)) {
-            // Loaded on demand so PDF-only use doesn't download the PowerPoint renderer
-            const { pptxToPdf } = await import('./pptx/pptxToPdf');
-            pdfDoc = await pptxToPdf(uploadedPdf.file, (slide, total) =>
-              setProgress(`Converting "${uploadedPdf.file.name}" (slide ${slide} of ${total})...`)
-            );
-          } else {
-            setProgress(`Adding "${uploadedPdf.file.name}"...`);
-            const arrayBuffer = await uploadedPdf.file.arrayBuffer();
-            pdfDoc = await PDFDocument.load(arrayBuffer, { ignoreEncryption: true });
-            if (pdfDoc.isEncrypted) {
-               throw new Error(`File "${uploadedPdf.file.name}" is encrypted and cannot be processed.`);
-            }
-          }
-          detachInternalLinks(pdfDoc);
-          const copiedPages = await mergedPdf.copyPages(pdfDoc, pdfDoc.getPageIndices());
-          copiedPages.forEach((page) => mergedPdf.addPage(page));
-          reattachInternalLinks(copiedPages);
-        } catch (fileError) {
-            console.error(`Error processing file ${uploadedPdf.file.name}:`, fileError);
-             if (fileError instanceof Error && fileError.message.includes('encrypted')) {
-                 throw new Error(`Could not process "${uploadedPdf.file.name}" as it appears to be encrypted.`);
-             } else {
-                 throw new Error(`Failed to process file "${uploadedPdf.file.name}". Error: ${fileError instanceof Error ? fileError.message : String(fileError)}`);
-             }
-        }
-      }
-      if (mergedPdf.getPageCount() === 0) {
-          throw new Error("No pages could be added to the combined PDF.");
-      }
-      normalizePageWidths(mergedPdf.getPages());
-      const mergedPdfBytes = await mergedPdf.save();
+      const mergedPdfBytes = await combineDocuments(uploadedFiles.map(({ file }) => file), {
+        normalizeWidths, onProgress: setProgress,
+      });
       const blob = new Blob([mergedPdfBytes], { type: 'application/pdf' });
       const link = document.createElement('a');
       link.href = URL.createObjectURL(blob);
@@ -240,15 +206,15 @@ function PdfCombiner() {
       setIsProcessing(false);
       setProgress(null);
     }
-  }, [uploadedFiles, outputFileName]);
+  }, [uploadedFiles, outputFileName, normalizeWidths]);
 
   return (
     <div className="max-w-4xl mx-auto p-6 bg-gray-700 shadow-lg rounded-lg text-gray-200">
       <h2 className="text-2xl font-bold text-orange-400 mb-2">PDF Combiner</h2>
       <p className="text-gray-300 mb-4">
         Upload PDF or PowerPoint (.pptx) files, reorder them as needed, and combine them into a single downloadable PDF.
-        Pages are scaled to the same width so slides from different decks line up.
-        PowerPoint slides are converted in your browser, so charts, videos, and fonts you don't have installed may look different.
+        Original page sizes are preserved unless you choose to match widths.
+        PowerPoint files are converted locally with LibreOffice (about 80 MB on first use). For an exact PowerPoint appearance, export a PDF from PowerPoint first.
       </p>
       <input
           type="file" className="hidden" ref={fileInputRef} onChange={handleFileSelect}
@@ -308,6 +274,11 @@ function PdfCombiner() {
             <span className="text-gray-400">.pdf</span>
           </div>
 
+          <label className="mt-4 flex items-center justify-center gap-2 text-sm text-gray-300">
+            <input type="checkbox" checked={normalizeWidths} disabled={isProcessing}
+              onChange={(event) => setNormalizeWidths(event.target.checked)} />
+            Match page widths (scales pages)
+          </label>
           <div className="mt-4 text-center">
             <button
               onClick={handleCombinePdfs} disabled={isProcessing || uploadedFiles.length < 2}

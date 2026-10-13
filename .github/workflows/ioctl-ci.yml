@@ -42,3 +42,9 @@ jobs:
 
       - name: Build
         run: pnpm --filter ioctl build
+
+      - name: Install browser for conversion tests
+        run: pnpm --filter ioctl exec playwright install --with-deps chromium
+
+      - name: Test browser-only PPTX conversion and PDF combination
+        run: pnpm --filter ioctl exec playwright test

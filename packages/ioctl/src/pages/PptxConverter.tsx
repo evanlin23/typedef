@@ -20,8 +20,16 @@ function PptxConverter() {
   // Files are converted one at a time; each conversion is chained onto this
   const queue = useRef(Promise.resolve());
   const pdfUrls = useRef<string[]>([]);
+  const mounted = useRef(false);
 
-  useEffect(() => () => pdfUrls.current.forEach((url) => URL.revokeObjectURL(url)), []);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      pdfUrls.current.forEach((url) => URL.revokeObjectURL(url));
+      pdfUrls.current = [];
+    };
+  }, []);
 
   const updateConversion = (id: string, changes: Partial<Conversion>) =>
     setConversions((list) => list.map((c) => (c.id === id ? { ...c, ...changes } : c)));
@@ -47,11 +55,13 @@ function PptxConverter() {
 
     for (const { id, file } of added) {
       queue.current = queue.current.then(async () => {
+        if (!mounted.current) return;
         updateConversion(id, { status: 'converting' });
         try {
           const { pptxToPdf } = await import('./pptx/pptxToPdf');
-          const pdf = await pptxToPdf(file, (slide, total) => updateConversion(id, { progress: `Slide ${slide} of ${total}` }));
-          const pdfUrl = URL.createObjectURL(new Blob([await pdf.save()], { type: 'application/pdf' }));
+          const pdf = await pptxToPdf(file, (message) => updateConversion(id, { progress: message }));
+          if (!mounted.current) return;
+          const pdfUrl = URL.createObjectURL(new Blob([pdf], { type: 'application/pdf' }));
           pdfUrls.current.push(pdfUrl);
           updateConversion(id, { status: 'done', pdfUrl });
         } catch (err) {
@@ -84,7 +94,7 @@ function PptxConverter() {
       <h2 className="text-2xl font-bold text-orange-400 mb-2">PPTX to PDF</h2>
       <p className="text-gray-300 mb-4">
         Convert PowerPoint (.pptx) files to searchable PDFs. Everything runs in your browser, so your files are never uploaded.
-        Charts, videos, and fonts you don't have installed may look different from PowerPoint.
+        LibreOffice handles the conversion. Fonts and some PowerPoint features can still look different; export a PDF from PowerPoint when an exact match is required. The conversion engine loads on first use (about 80 MB).
       </p>
       <input type="file" className="hidden" ref={fileInputRef} onChange={handleFileSelect} multiple accept={`${PPTX_MIME},.pptx`} />
 
