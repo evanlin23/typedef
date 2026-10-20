@@ -4,7 +4,7 @@ import Layout from './components/Layout'
 import Home from './pages/Home'
 import FolderFlattener from './pages/FolderFlattener'
 import PdfCombiner from './pages/PDFCombiner'
-import PptxConverter from './pages/PptxConverter'
+import PresentationExport from './pages/PresentationExport'
 import ImageAnimatorPage from './pages/animation/ImageAnimatorPage'
 import MultiImageAnimatorPage from './pages/animation/MultiImageAnimatorPage'
 
@@ -17,7 +17,7 @@ function App() {
         <Route index element={<Home />} />
         <Route path="folder-flattener" element={<FolderFlattener />} />
         <Route path="pdf-combiner" element={<PdfCombiner />} />
-        <Route path="pptx-to-pdf" element={<PptxConverter />} />
+        <Route path="pptx-to-pdf" element={<PresentationExport />} />
         <Route path="image-animator" element={<ImageAnimatorPage />} />
         <Route path="multi-animator" element={<MultiImageAnimatorPage />} />
         <Route path="*" element={<NotFound />} />

@@ -1,10 +1,8 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { PDFDocument, PDFName, PDFArray, PDFDict } from 'pdf-lib';
 import { combineDocuments } from './combineDocuments';
 import { writeLinks } from './pdfLinks';
 
-const convert = vi.hoisted(() => vi.fn());
-vi.mock('./pptx/pptxToPdf', () => ({ pptxToPdf: convert }));
 const file = (name: string, bytes: Uint8Array) => ({
   name, type: name.endsWith('.pdf') ? 'application/pdf' : '',
   arrayBuffer: async () => bytes.slice().buffer,
@@ -30,7 +28,6 @@ describe('combineDocuments', () => {
     const annotation = result.getPage(1).node.Annots()!.lookup(0, PDFDict);
     const destination = annotation.lookup(PDFName.of('Dest'), PDFArray);
     expect(destination.get(0)).toEqual(result.getPage(2).ref);
-    expect(convert).not.toHaveBeenCalled();
   });
 
   it('scales widths only when explicitly requested', async () => {
@@ -44,15 +41,13 @@ describe('combineDocuments', () => {
     ]);
   });
 
-  it('uses the shared converter for PPTX and adds every slide in the selected order', async () => {
-    convert.mockResolvedValueOnce(await (await pdf([960, 540], 2)).save());
+  it('rejects presentations even when their MIME type claims to be PDF', async () => {
     const presentation = file('slides.pptx', new Uint8Array([1]));
-    const result = await PDFDocument.load(await combineDocuments([
+    presentation.arrayBuffer = () => { throw new Error('Must not read a presentation'); };
+    Object.defineProperty(presentation, 'type', { value: 'application/pdf' });
+    await expect(combineDocuments([
       presentation, file('notes.pdf', await (await pdf([612, 792])).save()),
-    ]));
-    expect(convert).toHaveBeenCalledWith(presentation, expect.any(Function));
-    expect(result.getPageCount()).toBe(3);
-    expect(result.getPage(2).getSize()).toEqual({ width: 612, height: 792 });
+    ])).rejects.toThrow('Export PowerPoint presentations as PDF');
   });
 
   it('fails the whole merge and identifies a damaged source file', async () => {

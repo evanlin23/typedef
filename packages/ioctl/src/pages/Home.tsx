@@ -13,15 +13,9 @@ export default function Home() {
         />
         <UtilCard
           title="PDF Combiner"
-          description="Upload multiple PDF or PowerPoint files, reorder them, and combine them into a single document."
+          description="Upload multiple PDF files, reorder them, and combine them into a single document."
           linkTo="/pdf-combiner"
           linkText="Open PDF Combiner"
-        />
-        <UtilCard
-          title="PPTX to PDF"
-          description="Convert PowerPoint files to searchable PDFs, right in your browser."
-          linkTo="/pptx-to-pdf"
-          linkText="Open PPTX to PDF"
         />
         <UtilCard
           title="Image Animator"
