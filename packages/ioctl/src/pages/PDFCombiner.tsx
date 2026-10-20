@@ -17,9 +17,8 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { combineDocuments } from './combineDocuments';
-import { PPTX_MIME, isPptx } from './pptx/fileTypes';
-
-const isPdf = (file: File) => file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+import { isPdf, PDF_ONLY_MESSAGE } from './pdfFiles';
+import PresentationPdfHelp from '../components/PresentationPdfHelp';
 
 // Interface for tracking uploaded files with a stable ID for dnd
 interface UploadedPdf {
@@ -109,15 +108,9 @@ function PdfCombiner() {
 
   const addFilesToList = useCallback((newFiles: FileList | File[]) => {
     setError(null);
-    const pdfFiles = Array.from(newFiles).filter((file) => isPdf(file) || isPptx(file));
-
-    if (pdfFiles.length === 0 && newFiles.length > 0) {
-      const hasPpt = Array.from(newFiles).some((file) => file.name.toLowerCase().endsWith('.ppt'));
-      setError(hasPpt
-        ? "Old .ppt files aren't supported. Open them in PowerPoint and save them as .pptx first."
-        : "No valid files found. Please select or drop files ending with .pdf or .pptx.");
-      return;
-    }
+    const files = Array.from(newFiles);
+    const pdfFiles = files.filter(isPdf);
+    if (pdfFiles.length !== files.length) setError(PDF_ONLY_MESSAGE);
     if (pdfFiles.length === 0) return;
 
     const newUploadedPdfs: UploadedPdf[] = pdfFiles.map((file) => ({
@@ -212,13 +205,14 @@ function PdfCombiner() {
     <div className="max-w-4xl mx-auto p-6 bg-gray-700 shadow-lg rounded-lg text-gray-200">
       <h2 className="text-2xl font-bold text-orange-400 mb-2">PDF Combiner</h2>
       <p className="text-gray-300 mb-4">
-        Upload PDF or PowerPoint (.pptx) files, reorder them as needed, and combine them into a single downloadable PDF.
+        Upload PDF files, reorder them as needed, and combine them into a single downloadable PDF.
         Original page sizes are preserved unless you choose to match widths.
-        PowerPoint files are converted locally with LibreOffice (about 80 MB on first use). For an exact PowerPoint appearance, export a PDF from PowerPoint first.
+        Files are combined in your browser and are never uploaded.
       </p>
+      <PresentationPdfHelp />
       <input
           type="file" className="hidden" ref={fileInputRef} onChange={handleFileSelect}
-          multiple accept={`application/pdf,.pdf,${PPTX_MIME},.pptx`}
+          multiple accept="application/pdf,.pdf"
       />
 
       <div
@@ -228,13 +222,13 @@ function PdfCombiner() {
         onDragEnter={handleZoneDragEnter} onDragLeave={handleZoneDragLeave}
         onDragOver={handleZoneDragOver} onDrop={handleZoneDrop}
         onClick={handleBrowseClick} role="button" tabIndex={0}
-        title="Drag and drop PDF or PPTX files here, or click to select files"
+        title="Drag and drop PDF files here, or click to select files"
         onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleBrowseClick(); }}
       >
-        {isProcessing ? (<p>{progress ?? 'Combining files...'}</p>) : (<p>Drag & drop PDF or PPTX files here, or click to select</p>)}
+        {isProcessing ? (<p>{progress ?? 'Combining files...'}</p>) : (<p>Drag & drop PDF files here, or click to select</p>)}
       </div>
 
-      {error && <p className="mt-4 p-3 bg-red-900 text-red-100 rounded-md">Error: {error}</p>}
+      {error && <p role="alert" className="mt-4 p-3 bg-red-900 text-red-100 rounded-md">Error: {error}</p>}
 
       {uploadedFiles.length > 0 && (
         <div className="mt-6 bg-gray-800 p-4 rounded-md">

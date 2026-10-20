@@ -1,0 +1,90 @@
+[
+  {
+    "id": "kth-linear-algebra",
+    "source": "https://raw.githubusercontent.com/emilbjornson/multiple_antenna_communications/8e97cf083bc1b625c65fa4235bfc62ad127ddb93/Background1.pptx",
+    "sha256": "aca29be11ee30ebc34caaf5d09a8d7101ae7b03f372d667f6ac6bc0720a6e468",
+    "reference": "https://raw.githubusercontent.com/emilbjornson/multiple_antenna_communications/8e97cf083bc1b625c65fa4235bfc62ad127ddb93/Background1.pdf",
+    "expectedPages": 14,
+    "size": [
+      960.0,
+      540.0
+    ]
+  },
+  {
+    "id": "kth-information-theory",
+    "source": "https://raw.githubusercontent.com/emilbjornson/multiple_antenna_communications/8e97cf083bc1b625c65fa4235bfc62ad127ddb93/Background4.pptx",
+    "sha256": "aab6ee25231f598296459307244111f82afcd6f585baaed767ab307db4d71c00",
+    "reference": "https://raw.githubusercontent.com/emilbjornson/multiple_antenna_communications/8e97cf083bc1b625c65fa4235bfc62ad127ddb93/Background4.pdf",
+    "expectedPages": 12,
+    "size": [
+      960.0,
+      540.0
+    ]
+  },
+  {
+    "id": "kth-beamforming",
+    "source": "https://raw.githubusercontent.com/emilbjornson/multiple_antenna_communications/8e97cf083bc1b625c65fa4235bfc62ad127ddb93/Lecture2.pptx",
+    "sha256": "d56c8b7de80a81c3e993e6786a3c4f983b0d9ca445d99776e320602b1aa2d183",
+    "reference": "https://raw.githubusercontent.com/emilbjornson/multiple_antenna_communications/8e97cf083bc1b625c65fa4235bfc62ad127ddb93/Lecture2.pdf",
+    "expectedPages": 26,
+    "size": [
+      960.0,
+      540.0
+    ]
+  },
+  {
+    "id": "kth-mimo-capacity",
+    "source": "https://raw.githubusercontent.com/emilbjornson/multiple_antenna_communications/8e97cf083bc1b625c65fa4235bfc62ad127ddb93/Lecture4.pptx",
+    "sha256": "c9c90983e62d17320803254afb47300d7ff41bcf55c2911f8c7fc3967033e998",
+    "reference": "https://raw.githubusercontent.com/emilbjornson/multiple_antenna_communications/8e97cf083bc1b625c65fa4235bfc62ad127ddb93/Lecture4.pdf",
+    "expectedPages": 24,
+    "size": [
+      960.0,
+      540.0
+    ]
+  },
+  {
+    "id": "kth-practical-networks",
+    "source": "https://raw.githubusercontent.com/emilbjornson/multiple_antenna_communications/8e97cf083bc1b625c65fa4235bfc62ad127ddb93/Lecture14.pptx",
+    "sha256": "c977c47dff886aa4460ad69f52ba656dbb4ad9ec3db423187d26a8f6ccdf3b5d",
+    "reference": "https://raw.githubusercontent.com/emilbjornson/multiple_antenna_communications/8e97cf083bc1b625c65fa4235bfc62ad127ddb93/Lecture14.pdf",
+    "expectedPages": 21,
+    "size": [
+      960.0,
+      540.0
+    ]
+  },
+  {
+    "id": "liu-fading-channels",
+    "source": "https://raw.githubusercontent.com/emilbjornson/tsks14_multiple_antenna_communications/d363204b1105f052399534ada587ddebd78a10d1/Lecture3.pptx",
+    "sha256": "69d1753c5d6bd8eeb3cb508eec39fb19647741623fea0dfdccc1c9d4e5e95c54",
+    "reference": "https://raw.githubusercontent.com/emilbjornson/tsks14_multiple_antenna_communications/d363204b1105f052399534ada587ddebd78a10d1/Lecture3.pdf",
+    "expectedPages": 26,
+    "size": [
+      960.0,
+      540.0
+    ]
+  },
+  {
+    "id": "liu-practical-networks",
+    "source": "https://raw.githubusercontent.com/emilbjornson/tsks14_multiple_antenna_communications/d363204b1105f052399534ada587ddebd78a10d1/Lecture12.pptx",
+    "sha256": "00817cc1d9143897833764d5a43822ef69350a61d5fcc53c39a113f2d4f4526e",
+    "reference": "https://raw.githubusercontent.com/emilbjornson/tsks14_multiple_antenna_communications/d363204b1105f052399534ada587ddebd78a10d1/Lecture12.pdf",
+    "expectedPages": 21,
+    "size": [
+      960.0,
+      540.0
+    ]
+  },
+  {
+    "id": "iit-opencv",
+    "source": "https://raw.githubusercontent.com/darshitajain/Introduction-to-OpenCV/9a5054df6d63844ea4d12ef082db1cc33b29cc9f/Introduction%20to%20OpenCV.pptx",
+    "sha256": "0abbf801ca90542be86c957df31a22ad2b42ef9dc761d7b3677b1feb96572b17",
+    "reference": null,
+    "expectedPages": 53,
+    "size": [
+      720.0,
+      405.0
+    ]
+  }
+]

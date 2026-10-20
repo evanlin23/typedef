@@ -21,7 +21,6 @@ export default defineConfig({
     exclude: ['@ffmpeg/ffmpeg', '@ffmpeg/util'],
   },
   test: {
-    // The PPTX conversion code parses XML with the browser's DOMParser
     environment: 'jsdom',
     include: ['src/**/*.test.{ts,tsx}'],
   },

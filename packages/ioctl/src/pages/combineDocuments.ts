@@ -1,7 +1,7 @@
 import { PDFDocument } from 'pdf-lib';
 import { detachInternalLinks, reattachInternalLinks } from './pdfLinks';
 import { normalizePageWidths } from './pdfPageSizes';
-import { isPptx } from './pptx/fileTypes';
+import { isPdf, PDF_ONLY_MESSAGE } from './pdfFiles';
 
 interface CombineOptions {
   normalizeWidths?: boolean;
@@ -13,14 +13,9 @@ export async function combineDocuments(files: File[], { normalizeWidths = false,
   const merged = await PDFDocument.create();
   for (const file of files) {
     try {
-      let bytes: ArrayBuffer | Uint8Array;
-      if (isPptx(file)) {
-        const { pptxToPdf } = await import('./pptx/pptxToPdf');
-        bytes = await pptxToPdf(file, (message) => onProgress?.(`"${file.name}": ${message}`));
-      } else {
-        onProgress?.(`Adding "${file.name}"…`);
-        bytes = await file.arrayBuffer();
-      }
+      if (!isPdf(file)) throw new Error(PDF_ONLY_MESSAGE);
+      onProgress?.(`Adding "${file.name}"…`);
+      const bytes = await file.arrayBuffer();
       const source = await PDFDocument.load(bytes, { ignoreEncryption: true });
       if (source.isEncrypted) throw new Error('This file is encrypted. Export an unencrypted PDF first.');
       if (source.getPageCount() === 0) throw new Error('This file has no pages.');
